@@ -113,8 +113,8 @@ func TestUsersNotFoundAndConstraints(t *testing.T) {
 
 	createUser(t, "gabriel")
 	_, err := users.Create(ctx, application.NewUser{Username: "gabriel", Name: "Again", PasswordHash: "h"})
-	if err == nil {
-		t.Error("duplicate Username must be rejected by the database")
+	if !errors.Is(err, application.ErrUsernameTaken) {
+		t.Errorf("duplicate Username: err = %v, want ErrUsernameTaken", err)
 	}
 	if err := users.UpdatePassword(ctx, "not-a-uuid", "h", false); err == nil || errors.Is(err, application.ErrNotFound) {
 		t.Errorf("malformed id should surface a database error, got %v", err)

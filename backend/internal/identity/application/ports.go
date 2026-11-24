@@ -14,6 +14,10 @@ import (
 // ErrNotFound is returned by repositories when a record does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrUsernameTaken is returned by UserRepository.Create when another User
+// already holds the Username.
+var ErrUsernameTaken = errors.New("username already in use")
+
 // NewUser holds what is needed to create a User; the repository assigns the ID.
 type NewUser struct {
 	Username           domain.Username
