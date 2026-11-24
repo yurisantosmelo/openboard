@@ -58,6 +58,13 @@
   overflow-wrap: anywhere;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-100);
+}
+
 .list-pager {
   display: flex;
   gap: var(--space-100);

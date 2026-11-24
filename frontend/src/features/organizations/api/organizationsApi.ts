@@ -219,3 +219,24 @@ export async function addOrganizationMembership(
   });
   return toAddedOrganizationMembership(dto);
 }
+
+export async function updateOrganizationMembership(
+  organizationId: string,
+  userId: string,
+  role: OrganizationRole,
+): Promise<OrganizationMembership> {
+  const path = `/api/v1/organizations/${encodeURIComponent(organizationId)}/memberships/${encodeURIComponent(userId)}`;
+  const dto = await apiRequest<OrganizationMembershipDto>(path, {
+    method: 'PATCH',
+    body: { role },
+  });
+  return toOrganizationMembership(dto);
+}
+
+export async function removeOrganizationMembership(
+  organizationId: string,
+  userId: string,
+): Promise<void> {
+  const path = `/api/v1/organizations/${encodeURIComponent(organizationId)}/memberships/${encodeURIComponent(userId)}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
+}

@@ -694,4 +694,105 @@ describe('Organization Memberships', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add person' })).toBeInTheDocument();
   });
+
+  it('changes a Membership role and refreshes the list', async () => {
+    const ana = membershipDto({
+      user_id: 'u2',
+      username: 'ana',
+      name: 'Ana',
+      role: 'contributor',
+    });
+    let anaRole: 'contributor' | 'owner' = 'contributor';
+    const fetchMock = stubApi({
+      ...routes(),
+      [membershipsUrl()]: () => pageOf([membershipDto(), { ...ana, role: anaRole }]),
+      [`PATCH /api/v1/organizations/${ACME}/memberships/u2`]: () => {
+        anaRole = 'owner';
+        return Response.json({ ...ana, role: 'owner' });
+      },
+      [`PATCH /api/v1/organizations/${ACME}/memberships/u1`]: Response.json(
+        membershipDto({ role: 'contributor' }),
+      ),
+    });
+    const { user } = renderRoute(`/organizations/${ACME}`);
+
+    await user.click(await screen.findByRole('button', { name: 'Make Organization Owner: Ana' }));
+    expect(
+      await screen.findByRole('button', { name: 'Make Organization Contributor: Ana' }),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/organizations/${ACME}/memberships/u2`,
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ role: 'owner' }) }),
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Make Organization Contributor: Administrator' }),
+    );
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/organizations/${ACME}/memberships/u1`,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ role: 'contributor' }),
+        }),
+      );
+    });
+  });
+
+  it('removes a Membership and refreshes the list', async () => {
+    const ana = membershipDto({
+      user_id: 'u2',
+      username: 'ana',
+      name: 'Ana',
+      role: 'contributor',
+    });
+    let removed = false;
+    const fetchMock = stubApi({
+      ...routes(),
+      [membershipsUrl()]: () => pageOf(removed ? [membershipDto()] : [membershipDto(), ana]),
+      [`DELETE /api/v1/organizations/${ACME}/memberships/u2`]: () => {
+        removed = true;
+        return new Response(null, { status: 204 });
+      },
+    });
+    const { user } = renderRoute(`/organizations/${ACME}`);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Ana' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/organizations/${ACME}/memberships/u2`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('reports when the last Organization Owner cannot be demoted or removed', async () => {
+    const lastOwner = problem(
+      409,
+      'last-organization-owner',
+      'An Organization must keep at least one Organization Owner',
+    );
+    stubApi({
+      ...routes(),
+      [`PATCH /api/v1/organizations/${ACME}/memberships/u1`]: lastOwner,
+      [`DELETE /api/v1/organizations/${ACME}/memberships/u1`]: lastOwner,
+    });
+    const { user } = renderRoute(`/organizations/${ACME}`);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Make Organization Contributor: Administrator',
+      }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'An Organization must keep at least one Organization Owner.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Remove Administrator' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'An Organization must keep at least one Organization Owner.',
+    );
+  });
 });

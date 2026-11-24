@@ -8,7 +8,10 @@ import {
   listOrganizationMemberships,
   listOrganizations,
   listWorkspaces,
+  removeOrganizationMembership,
+  updateOrganizationMembership,
   updateWorkspace,
+  type OrganizationRole,
   type WorkspaceChange,
 } from '../api/organizationsApi';
 
@@ -83,5 +86,32 @@ export function useAddOrganizationMembership(organizationId: string) {
   return useMutation({
     mutationFn: addOrganizationMembership,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
+  });
+}
+
+export function useUpdateOrganizationMembership(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: OrganizationRole }) =>
+      updateOrganizationMembership(organizationId, userId, role),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: ['organization', organizationId] }),
+        queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+      ]),
+  });
+}
+
+export function useRemoveOrganizationMembership(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => removeOrganizationMembership(organizationId, userId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: ['organization', organizationId] }),
+        queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+      ]),
   });
 }
