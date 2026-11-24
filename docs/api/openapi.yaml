@@ -372,6 +372,138 @@ paths:
                 instance: /api/v1/organizations/0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/organizations/{organization_id}/memberships:
+    get:
+      tags: [organizations]
+      operationId: listOrganizationMemberships
+      summary: List the Organization Memberships of an Organization
+      description: |
+        Lists the Organization Memberships of an Organization, ordered by name
+        ignoring case and then by Username. Only Organization Owners and
+        Administrators can list them. Organizations that do not exist and those
+        the User cannot see both answer 404 (ADR 0003).
+      parameters:
+        - name: organization_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: One page of Organization Memberships.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/OrganizationMembership"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The signed-in User does not manage the Organization (`forbidden`) or
+            has a pending Temporary Password (`password-change-required`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Organization, or the User cannot see it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "422":
+          $ref: "#/components/responses/InvalidPage"
+    post:
+      tags: [organizations]
+      operationId: addOrganizationMembership
+      summary: Grant an Organization Membership
+      description: |
+        Adds a User to an Organization. Only Organization Owners and
+        Administrators can grant Organization Memberships. An existing User
+        matching the Username is linked as is; an unknown Username creates a
+        new User with a Temporary Password returned once in the response.
+      parameters:
+        - name: organization_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOrganizationMembershipRequest"
+      responses:
+        "201":
+          description: Organization Membership granted.
+          headers:
+            Location:
+              description: The created Organization Membership.
+              schema:
+                type: string
+              example: /api/v1/organizations/0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c/memberships/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddedOrganizationMembership"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The signed-in User does not manage the Organization (`forbidden`),
+            has a pending Temporary Password (`password-change-required`), or
+            the request is cross-origin (`cross-origin-request`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Organization, or the User cannot see it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: The User already holds an Organization Membership in this Organization.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://openboard.dev/problems/organization-membership-exists
+                title: User already belongs to this Organization
+                status: 409
+                instance: /api/v1/organizations/0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c/memberships
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: |
+            The Username is outside the allowed format (`username`/`invalid`),
+            the name is blank or too long (`name`/`invalid`), or the role is
+            not `owner` or `contributor` (`role`/`invalid`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
   /api/v1/workspaces:
     get:
       tags: [workspaces]
@@ -650,6 +782,55 @@ components:
           type: string
           enum: [owner, contributor]
           description: The role the signed-in User acts with. Administrators act as `owner` (ADR 0009).
+    AddOrganizationMembershipRequest:
+      type: object
+      required: [username, name]
+      properties:
+        username:
+          type: string
+          pattern: "^[a-z0-9._-]{3,32}$"
+          description: Normalized to lowercase. Links an existing User as is or creates a new one.
+          example: ana.silva
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Trimmed display name used when creating a new User.
+          example: Ana Silva
+        role:
+          type: string
+          enum: [owner, contributor]
+          default: contributor
+    OrganizationMembership:
+      type: object
+      required: [organization_id, user_id, username, name, role, created_at]
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          example: ana.silva
+        name:
+          type: string
+          example: Ana Silva
+        role:
+          type: string
+          enum: [owner, contributor]
+        created_at:
+          type: string
+          format: date-time
+    AddedOrganizationMembership:
+      allOf:
+        - $ref: "#/components/schemas/OrganizationMembership"
+        - type: object
+          properties:
+            temporary_password:
+              type: string
+              description: Present once when an unknown Username created a new User.
     CreateWorkspaceRequest:
       type: object
       required: [organization_id, name]
