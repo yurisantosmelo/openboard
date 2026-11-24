@@ -41,6 +41,28 @@ type OrganizationMembershipRepository interface {
 	// List returns one page of the Organization's Memberships, ordered by name
 	// ignoring case and then by username, and how many there are in total.
 	List(ctx context.Context, id domain.OrganizationID, page PageRequest) ([]domain.OrganizationMembership, int, error)
+	// UpdateRole changes a User's role in the Organization. It returns
+	// domain.ErrMembershipNotFound when absent and domain.ErrLastOrganizationOwner
+	// when demoting the last Organization Owner.
+	UpdateRole(ctx context.Context, id domain.OrganizationID, userID domain.UserID, role domain.Role) (domain.OrganizationMembership, error)
+	// Delete removes a User's Organization Membership and any Workspace
+	// Memberships they hold in that Organization. It returns
+	// domain.ErrMembershipNotFound when absent and domain.ErrLastOrganizationOwner
+	// when removing the last Organization Owner.
+	Delete(ctx context.Context, id domain.OrganizationID, userID domain.UserID) error
+}
+
+// UpdateOrganizationMembershipInput is the raw request to change a role.
+type UpdateOrganizationMembershipInput struct {
+	OrganizationID string
+	UserID         string
+	Role           string
+}
+
+// RemoveOrganizationMembershipInput identifies an Organization Membership to remove.
+type RemoveOrganizationMembershipInput struct {
+	OrganizationID string
+	UserID         string
 }
 
 // AddOrganizationMembershipInput is the raw request to grant an Organization Membership.
@@ -127,4 +149,47 @@ func (s *MembershipService) requireOwner(ctx context.Context, orgID domain.Organ
 		return domain.ErrForbidden
 	}
 	return nil
+}
+
+// UpdateMembership changes the role of an Organization Membership for an Actor
+// who manages the Organization.
+func (s *MembershipService) UpdateMembership(ctx context.Context, actor domain.Actor, in UpdateOrganizationMembershipInput) (domain.OrganizationMembership, error) {
+	orgID, err := domain.ParseOrganizationID(in.OrganizationID)
+	if err != nil {
+		return domain.OrganizationMembership{}, err
+	}
+	userID, err := domain.ParseMemberUserID(in.UserID)
+	if err != nil {
+		return domain.OrganizationMembership{}, err
+	}
+	role, err := domain.ParseOrganizationRoleChange(in.Role)
+	if err != nil {
+		return domain.OrganizationMembership{}, err
+	}
+	if err := s.requireOwner(ctx, orgID, actor); err != nil {
+		return domain.OrganizationMembership{}, err
+	}
+	return s.memberships.UpdateRole(ctx, orgID, userID, role)
+}
+
+// RemoveMembership removes an Organization Membership. Organization Owners and
+// Administrators may remove anyone; Organization Contributors may only leave
+// by removing their own Membership.
+func (s *MembershipService) RemoveMembership(ctx context.Context, actor domain.Actor, in RemoveOrganizationMembershipInput) error {
+	orgID, err := domain.ParseOrganizationID(in.OrganizationID)
+	if err != nil {
+		return err
+	}
+	userID, err := domain.ParseMemberUserID(in.UserID)
+	if err != nil {
+		return err
+	}
+	role, err := s.memberships.RoleIn(ctx, orgID, scopeOf(actor))
+	if err != nil {
+		return err
+	}
+	if !role.CanManageOrganization() && actor.UserID != userID {
+		return domain.ErrForbidden
+	}
+	return s.memberships.Delete(ctx, orgID, userID)
 }

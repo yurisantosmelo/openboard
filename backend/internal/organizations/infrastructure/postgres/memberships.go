@@ -81,6 +81,85 @@ func (r *Memberships) List(ctx context.Context, id domain.OrganizationID, page a
 	return items, total, nil
 }
 
+// UpdateRole changes a User's role in the Organization inside a transaction
+// that locks the Organization's Organization Owners so the last one can never
+// be demoted concurrently.
+func (r *Memberships) UpdateRole(ctx context.Context, id domain.OrganizationID, userID domain.UserID, role domain.Role) (domain.OrganizationMembership, error) {
+	var updated domain.OrganizationMembership
+	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		if role != domain.RoleOwner {
+			if err := ensureNotLastOwner(ctx, tx, id, userID); err != nil {
+				return err
+			}
+		}
+		var err error
+		updated, err = updateMembershipRole(ctx, tx, id, userID, role)
+		return err
+	})
+	return updated, err
+}
+
+// Delete removes a User's Organization Membership inside a transaction that
+// locks the Organization's Organization Owners so the last one can never be
+// removed. Workspace Memberships in the same Organization cascade automatically.
+func (r *Memberships) Delete(ctx context.Context, id domain.OrganizationID, userID domain.UserID) error {
+	return pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		if err := ensureNotLastOwner(ctx, tx, id, userID); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM organization_memberships WHERE organization_id = $1 AND user_id = $2`,
+			string(id), string(userID))
+		if err != nil {
+			return fmt.Errorf("delete organization membership: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return domain.ErrMembershipNotFound
+		}
+		return nil
+	})
+}
+
+func updateMembershipRole(ctx context.Context, tx pgx.Tx, id domain.OrganizationID, userID domain.UserID, role domain.Role) (domain.OrganizationMembership, error) {
+	row := tx.QueryRow(ctx, `
+		WITH updated AS (
+			UPDATE organization_memberships
+			SET role = $3
+			WHERE organization_id = $1 AND user_id = $2
+			RETURNING organization_id, user_id, role, created_at
+		)
+		SELECT m.organization_id::text, m.user_id::text, u.username, u.name, m.role, m.created_at
+		FROM updated m
+		JOIN users u ON u.id = m.user_id`,
+		string(id), string(userID), string(role))
+	m, err := scanMembership(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.OrganizationMembership{}, domain.ErrMembershipNotFound
+	}
+	if err != nil {
+		return domain.OrganizationMembership{}, fmt.Errorf("update organization membership: %w", err)
+	}
+	return m, nil
+}
+
+func ensureNotLastOwner(ctx context.Context, tx pgx.Tx, id domain.OrganizationID, userID domain.UserID) error {
+	rows, err := tx.Query(ctx, `
+		SELECT user_id::text FROM organization_memberships
+		WHERE organization_id = $1 AND role = 'owner'
+		ORDER BY user_id
+		FOR UPDATE`, string(id))
+	if err != nil {
+		return fmt.Errorf("lock organization owners: %w", err)
+	}
+	owners, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return fmt.Errorf("scan organization owners: %w", err)
+	}
+	if len(owners) == 1 && owners[0] == string(userID) {
+		return domain.ErrLastOrganizationOwner
+	}
+	return nil
+}
+
 func scanMembership(row pgx.Row) (domain.OrganizationMembership, error) {
 	var (
 		m                         domain.OrganizationMembership

@@ -15,6 +15,8 @@ type fakeMembershipRepo struct {
 	roleErr     error
 	createErr   error
 	listErr     error
+	updateErr   error
+	deleteErr   error
 	roleScope   Scope
 	created     NewOrganizationMembership
 	returned    domain.OrganizationMembership
@@ -22,6 +24,11 @@ type fakeMembershipRepo struct {
 	total       int
 	listPage    PageRequest
 	listOrgID   domain.OrganizationID
+	updatedOrg  domain.OrganizationID
+	updatedUser domain.UserID
+	updatedRole domain.Role
+	deletedOrg  domain.OrganizationID
+	deletedUser domain.UserID
 	createCalls int
 }
 
@@ -42,6 +49,16 @@ func (f *fakeMembershipRepo) Create(_ context.Context, m NewOrganizationMembersh
 func (f *fakeMembershipRepo) List(_ context.Context, id domain.OrganizationID, page PageRequest) ([]domain.OrganizationMembership, int, error) {
 	f.listOrgID, f.listPage = id, page
 	return f.items, f.total, f.listErr
+}
+
+func (f *fakeMembershipRepo) UpdateRole(_ context.Context, id domain.OrganizationID, userID domain.UserID, role domain.Role) (domain.OrganizationMembership, error) {
+	f.updatedOrg, f.updatedUser, f.updatedRole = id, userID, role
+	return f.returned, f.updateErr
+}
+
+func (f *fakeMembershipRepo) Delete(_ context.Context, id domain.OrganizationID, userID domain.UserID) error {
+	f.deletedOrg, f.deletedUser = id, userID
+	return f.deleteErr
 }
 
 type fakeProvisioner struct {
@@ -191,6 +208,108 @@ func TestListMembershipsRejections(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			repo := &fakeMembershipRepo{role: tc.role, roleErr: tc.roleErr}
 			if _, _, err := NewMembershipService(repo, &fakeProvisioner{}).ListMemberships(context.Background(), marinaActor, tc.id, PageRequest{Limit: 20}); !errors.Is(err, tc.want) {
+				t.Errorf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestUpdateMembership(t *testing.T) {
+	const (
+		orgID  = "0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c"
+		userID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
+	)
+	want := domain.OrganizationMembership{OrganizationID: orgID, UserID: userID, Username: "ana", Name: "Ana", Role: domain.RoleOwner}
+	repo := &fakeMembershipRepo{role: domain.RoleOwner, returned: want}
+	svc := NewMembershipService(repo, &fakeProvisioner{})
+
+	got, err := svc.UpdateMembership(context.Background(), marinaActor, UpdateOrganizationMembershipInput{
+		OrganizationID: orgID, UserID: userID, Role: "owner",
+	})
+	if err != nil || got != want || repo.updatedOrg != orgID || repo.updatedUser != userID || repo.updatedRole != domain.RoleOwner {
+		t.Fatalf("UpdateMembership = %+v, %v", got, err)
+	}
+}
+
+func TestUpdateMembershipRejections(t *testing.T) {
+	const (
+		orgID  = "0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c"
+		userID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
+	)
+	cases := map[string]struct {
+		in        UpdateOrganizationMembershipInput
+		role      domain.Role
+		roleErr   error
+		updateErr error
+		want      error
+	}{
+		"invalid org":   {UpdateOrganizationMembershipInput{OrganizationID: "x", UserID: userID, Role: "owner"}, domain.RoleOwner, nil, nil, domain.ErrNotFound},
+		"invalid user":  {UpdateOrganizationMembershipInput{OrganizationID: orgID, UserID: "x", Role: "owner"}, domain.RoleOwner, nil, nil, domain.ErrMembershipNotFound},
+		"invalid role":  {UpdateOrganizationMembershipInput{OrganizationID: orgID, UserID: userID, Role: ""}, domain.RoleOwner, nil, nil, domain.ErrInvalidRole},
+		"unseen org":    {UpdateOrganizationMembershipInput{OrganizationID: orgID, UserID: userID, Role: "owner"}, "", domain.ErrNotFound, nil, domain.ErrNotFound},
+		"contributor":   {UpdateOrganizationMembershipInput{OrganizationID: orgID, UserID: userID, Role: "owner"}, domain.RoleContributor, nil, nil, domain.ErrForbidden},
+		"last owner":    {UpdateOrganizationMembershipInput{OrganizationID: orgID, UserID: userID, Role: "contributor"}, domain.RoleOwner, nil, domain.ErrLastOrganizationOwner, domain.ErrLastOrganizationOwner},
+		"absent member": {UpdateOrganizationMembershipInput{OrganizationID: orgID, UserID: userID, Role: "owner"}, domain.RoleOwner, nil, domain.ErrMembershipNotFound, domain.ErrMembershipNotFound},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			repo := &fakeMembershipRepo{role: tc.role, roleErr: tc.roleErr, updateErr: tc.updateErr}
+			if _, err := NewMembershipService(repo, &fakeProvisioner{}).UpdateMembership(context.Background(), marinaActor, tc.in); !errors.Is(err, tc.want) {
+				t.Errorf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestRemoveMembership(t *testing.T) {
+	const (
+		orgID  = "0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c"
+		userID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
+	)
+	cases := map[string]struct {
+		actor  domain.Actor
+		role   domain.Role
+		target string
+	}{
+		"owner removes another":  {marinaActor, domain.RoleOwner, userID},
+		"contributor leaves own": {marinaActor, domain.RoleContributor, marinaID},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			repo := &fakeMembershipRepo{role: tc.role}
+			err := NewMembershipService(repo, &fakeProvisioner{}).RemoveMembership(context.Background(), tc.actor, RemoveOrganizationMembershipInput{
+				OrganizationID: orgID, UserID: tc.target,
+			})
+			if err != nil || repo.deletedOrg != orgID || repo.deletedUser != domain.UserID(tc.target) {
+				t.Fatalf("RemoveMembership err=%v, deleted=(%s, %s)", err, repo.deletedOrg, repo.deletedUser)
+			}
+		})
+	}
+}
+
+func TestRemoveMembershipRejections(t *testing.T) {
+	const (
+		orgID  = "0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c"
+		userID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"
+	)
+	cases := map[string]struct {
+		in        RemoveOrganizationMembershipInput
+		role      domain.Role
+		roleErr   error
+		deleteErr error
+		want      error
+	}{
+		"invalid org":            {RemoveOrganizationMembershipInput{OrganizationID: "x", UserID: userID}, domain.RoleOwner, nil, nil, domain.ErrNotFound},
+		"invalid user":           {RemoveOrganizationMembershipInput{OrganizationID: orgID, UserID: "x"}, domain.RoleOwner, nil, nil, domain.ErrMembershipNotFound},
+		"unseen org":             {RemoveOrganizationMembershipInput{OrganizationID: orgID, UserID: userID}, "", domain.ErrNotFound, nil, domain.ErrNotFound},
+		"contributor other user": {RemoveOrganizationMembershipInput{OrganizationID: orgID, UserID: userID}, domain.RoleContributor, nil, nil, domain.ErrForbidden},
+		"last owner":             {RemoveOrganizationMembershipInput{OrganizationID: orgID, UserID: marinaID}, domain.RoleOwner, nil, domain.ErrLastOrganizationOwner, domain.ErrLastOrganizationOwner},
+		"absent member":          {RemoveOrganizationMembershipInput{OrganizationID: orgID, UserID: userID}, domain.RoleOwner, nil, domain.ErrMembershipNotFound, domain.ErrMembershipNotFound},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			repo := &fakeMembershipRepo{role: tc.role, roleErr: tc.roleErr, deleteErr: tc.deleteErr}
+			if err := NewMembershipService(repo, &fakeProvisioner{}).RemoveMembership(context.Background(), marinaActor, tc.in); !errors.Is(err, tc.want) {
 				t.Errorf("err = %v, want %v", err, tc.want)
 			}
 		})

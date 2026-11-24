@@ -104,3 +104,75 @@ func TestMembershipsRoleInAndListFailures(t *testing.T) {
 		t.Error("invalid Organization ID must fail")
 	}
 }
+
+func TestUpdateOrganizationMembershipRole(t *testing.T) {
+	marina := createUser(t, "marina")
+	julia := addUser(t, "julia")
+	acme := seed(t, marina, "Acme")["Acme"]
+	repo := NewMemberships(pool)
+	ctx := context.Background()
+
+	if _, err := repo.Create(ctx, application.NewOrganizationMembership{
+		OrganizationID: acme.ID, UserID: julia, Role: domain.RoleContributor,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Last Organization Owner cannot be demoted, but keeping owner succeeds.
+	if _, err := repo.UpdateRole(ctx, acme.ID, marina, domain.RoleContributor); !errors.Is(err, domain.ErrLastOrganizationOwner) {
+		t.Fatalf("demote last owner err = %v, want ErrLastOrganizationOwner", err)
+	}
+	kept, err := repo.UpdateRole(ctx, acme.ID, marina, domain.RoleOwner)
+	if err != nil || kept.Role != domain.RoleOwner {
+		t.Fatalf("keep owner = %+v, %v", kept, err)
+	}
+
+	// Promote Julia to Owner, then Marina can be demoted to Contributor.
+	promoted, err := repo.UpdateRole(ctx, acme.ID, julia, domain.RoleOwner)
+	if err != nil || promoted.Role != domain.RoleOwner || promoted.Username != "julia" {
+		t.Fatalf("promote = %+v, %v", promoted, err)
+	}
+	demoted, err := repo.UpdateRole(ctx, acme.ID, marina, domain.RoleContributor)
+	if err != nil || demoted.Role != domain.RoleContributor {
+		t.Fatalf("demote = %+v, %v", demoted, err)
+	}
+}
+
+func TestUpdateOrganizationMembershipErrors(t *testing.T) {
+	marina := createUser(t, "marina")
+	acme := seed(t, marina, "Acme")["Acme"]
+	repo := NewMemberships(pool)
+	ctx := context.Background()
+
+	if _, err := repo.UpdateRole(ctx, acme.ID, "00000000-0000-0000-0000-000000000000", domain.RoleOwner); !errors.Is(err, domain.ErrMembershipNotFound) {
+		t.Errorf("unknown user err = %v, want ErrMembershipNotFound", err)
+	}
+	if _, err := repo.UpdateRole(ctx, "not-a-uuid", marina, domain.RoleContributor); err == nil || errors.Is(err, domain.ErrLastOrganizationOwner) {
+		t.Errorf("invalid org err = %v, want storage error", err)
+	}
+	if _, err := repo.UpdateRole(ctx, acme.ID, marina, "viewer"); err == nil || errors.Is(err, domain.ErrMembershipNotFound) {
+		t.Errorf("invalid role err = %v, want storage error", err)
+	}
+}
+
+func TestDeleteOrganizationMembershipProtectsLastOwnerAndCascadesWorkspaces(t *testing.T) {
+	w := newWorkspaceWorld(t)
+	repo := NewMemberships(pool)
+	ctx := context.Background()
+
+	if err := repo.Delete(ctx, w.acme.ID, w.owner); !errors.Is(err, domain.ErrLastOrganizationOwner) {
+		t.Fatalf("delete last owner err = %v, want ErrLastOrganizationOwner", err)
+	}
+	if err := repo.Delete(ctx, w.acme.ID, w.legalMember); err != nil {
+		t.Fatalf("delete contributor: %v", err)
+	}
+	if got := membershipRole(t, w.legal.ID, w.legalMember); got != "" {
+		t.Errorf("workspace membership role = %q, want removed in cascade", got)
+	}
+	if err := repo.Delete(ctx, w.acme.ID, w.legalMember); !errors.Is(err, domain.ErrMembershipNotFound) {
+		t.Errorf("second delete err = %v, want ErrMembershipNotFound", err)
+	}
+	if err := repo.Delete(ctx, "not-a-uuid", w.owner); err == nil || errors.Is(err, domain.ErrMembershipNotFound) {
+		t.Errorf("invalid org err = %v, want storage error", err)
+	}
+}
