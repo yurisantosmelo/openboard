@@ -856,6 +856,245 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /api/v1/workspaces/{workspace_id}/memberships:
+    get:
+      tags: [workspaces]
+      operationId: listWorkspaceMemberships
+      summary: List the Workspace Memberships of a Workspace
+      description: |
+        Lists the Workspace Memberships of a Workspace, ordered by name
+        ignoring case and then by Username. Only those acting as Workspace
+        Owner can list them: its Workspace Owners, Organization Owners and
+        Administrators. Workspaces that do not exist and those the User cannot
+        enter both answer 404.
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: One page of Workspace Memberships.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/WorkspaceMembership"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The signed-in User does not manage the Workspace (`forbidden`) or
+            has a pending Temporary Password (`password-change-required`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Workspace, or the User cannot enter it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "422":
+          $ref: "#/components/responses/InvalidPage"
+    post:
+      tags: [workspaces]
+      operationId: addWorkspaceMembership
+      summary: Grant a Workspace Membership
+      description: |
+        Adds a User who already holds an Organization Membership in the
+        Workspace's Organization to the Workspace. Only those acting as
+        Workspace Owner can grant Workspace Memberships. Never creates a new
+        User.
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddWorkspaceMembershipRequest"
+      responses:
+        "201":
+          description: Workspace Membership granted.
+          headers:
+            Location:
+              description: The created Workspace Membership.
+              schema:
+                type: string
+              example: /api/v1/workspaces/7c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f/memberships/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMembership"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The signed-in User does not manage the Workspace (`forbidden`),
+            has a pending Temporary Password (`password-change-required`), or
+            the request is cross-origin (`cross-origin-request`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Workspace, or the User cannot enter it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: The User already holds a Workspace Membership in this Workspace.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://openboard.dev/problems/workspace-membership-exists
+                title: User already belongs to this Workspace
+                status: 409
+                instance: /api/v1/workspaces/7c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f/memberships
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: |
+            The Username is outside the allowed format (`username`/`invalid`),
+            names no User in the Workspace's Organization (`username`/`not_found`),
+            or the role is not `owner`, `contributor` or `viewer` (`role`/`invalid`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/workspaces/{workspace_id}/memberships/{user_id}:
+    patch:
+      tags: [workspaces]
+      operationId: updateWorkspaceMembership
+      summary: Change the role of a Workspace Membership
+      description: |
+        Changes a User's role in a Workspace between `owner`, `contributor` and
+        `viewer`. Only those acting as Workspace Owner can change roles.
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkspaceMembershipRequest"
+      responses:
+        "200":
+          description: The Workspace Membership after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMembership"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The signed-in User does not manage the Workspace (`forbidden`),
+            has a pending Temporary Password (`password-change-required`), or
+            the request is cross-origin (`cross-origin-request`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Workspace, the User cannot enter it, or no such Workspace Membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: The role is missing or not `owner`, `contributor` or `viewer` (`role`/`invalid`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    delete:
+      tags: [workspaces]
+      operationId: removeWorkspaceMembership
+      summary: Remove a Workspace Membership
+      description: |
+        Removes a User's Workspace Membership. Those acting as Workspace Owner
+        can remove anyone; other Users can only remove themselves.
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Workspace Membership removed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            A User who does not manage the Workspace tried to remove another
+            User (`forbidden`), the User has a pending Temporary Password
+            (`password-change-required`), or the request is cross-origin
+            (`cross-origin-request`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Workspace, the User cannot enter it, or no such Workspace Membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
 components:
   parameters:
     Page:
@@ -1028,6 +1267,51 @@ components:
             The Workspace role the signed-in User acts with. Administrators and
             Organization Owners act as `owner`; without a Workspace Membership,
             an Open Workspace gives `contributor`.
+    AddWorkspaceMembershipRequest:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+          pattern: "^[a-z0-9._-]{3,32}$"
+          description: Normalized to lowercase. Must belong to the Workspace's Organization.
+          example: ana.silva
+        role:
+          type: string
+          enum: [owner, contributor, viewer]
+          default: contributor
+    UpdateWorkspaceMembershipRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [owner, contributor, viewer]
+    WorkspaceMembership:
+      type: object
+      required: [workspace_id, organization_id, user_id, username, name, role, created_at]
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          example: ana.silva
+        name:
+          type: string
+          example: Ana Silva
+        role:
+          type: string
+          enum: [owner, contributor, viewer]
+        created_at:
+          type: string
+          format: date-time
     SignInRequest:
       type: object
       required: [username, password]

@@ -37,6 +37,13 @@ func setupWorkspaces(logger *slog.Logger, pool *pgxpool.Pool, identity *identity
 	return organizationshttp.NewWorkspaceHandler(svc, auth, logger)
 }
 
+// setupWorkspaceMemberships wires the Workspace Membership endpoints.
+func setupWorkspaceMemberships(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) *organizationshttp.WorkspaceMembershipHandler {
+	svc := application.NewWorkspaceMembershipService(postgres.NewWorkspaceMemberships(pool))
+	auth := organizationshttp.Auth{Authenticated: identity.Authenticated, Actor: actorOf}
+	return organizationshttp.NewWorkspaceMembershipHandler(svc, auth, logger)
+}
+
 type userProvisioner struct {
 	svc *identityapp.Service
 }
