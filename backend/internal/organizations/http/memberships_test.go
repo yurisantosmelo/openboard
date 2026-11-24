@@ -21,14 +21,16 @@ var anaMembership = domain.OrganizationMembership{
 }
 
 type fakeMembershipService struct {
-	err   error
-	actor domain.Actor
-	orgID string
-	page  application.PageRequest
-	in    application.AddOrganizationMembershipInput
-	items []domain.OrganizationMembership
-	total int
-	added application.AddedOrganizationMembership
+	err    error
+	actor  domain.Actor
+	orgID  string
+	page   application.PageRequest
+	in     application.AddOrganizationMembershipInput
+	update application.UpdateOrganizationMembershipInput
+	remove application.RemoveOrganizationMembershipInput
+	items  []domain.OrganizationMembership
+	total  int
+	added  application.AddedOrganizationMembership
 }
 
 func (f *fakeMembershipService) ListMemberships(_ context.Context, actor domain.Actor, rawOrganizationID string, page application.PageRequest) ([]domain.OrganizationMembership, int, error) {
@@ -39,6 +41,16 @@ func (f *fakeMembershipService) ListMemberships(_ context.Context, actor domain.
 func (f *fakeMembershipService) AddMembership(_ context.Context, actor domain.Actor, in application.AddOrganizationMembershipInput) (application.AddedOrganizationMembership, error) {
 	f.actor, f.in = actor, in
 	return f.added, f.err
+}
+
+func (f *fakeMembershipService) UpdateMembership(_ context.Context, actor domain.Actor, in application.UpdateOrganizationMembershipInput) (domain.OrganizationMembership, error) {
+	f.actor, f.update = actor, in
+	return anaMembership, f.err
+}
+
+func (f *fakeMembershipService) RemoveMembership(_ context.Context, actor domain.Actor, in application.RemoveOrganizationMembershipInput) error {
+	f.actor, f.remove = actor, in
+	return f.err
 }
 
 func serveMemberships(svc MembershipService, auth Auth, method, path, body string) *httptest.ResponseRecorder {
@@ -154,10 +166,82 @@ func TestAddOrganizationMembershipErrors(t *testing.T) {
 }
 
 func TestMembershipRoutesRequireSession(t *testing.T) {
-	if rec := serveMemberships(&fakeMembershipService{}, fakeAuth(true), http.MethodGet, "/api/v1/organizations/o1/memberships", ""); rec.Code != http.StatusUnauthorized {
-		t.Errorf("GET = %d, want 401", rec.Code)
+	for _, tc := range []struct{ method, path, body string }{
+		{http.MethodGet, "/api/v1/organizations/o1/memberships", ""},
+		{http.MethodPost, "/api/v1/organizations/o1/memberships", `{"username":"ana","name":"Ana"}`},
+		{http.MethodPatch, "/api/v1/organizations/o1/memberships/u1", `{"role":"owner"}`},
+		{http.MethodDelete, "/api/v1/organizations/o1/memberships/u1", ""},
+	} {
+		if rec := serveMemberships(&fakeMembershipService{}, fakeAuth(true), tc.method, tc.path, tc.body); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s = %d, want 401", tc.method, tc.path, rec.Code)
+		}
 	}
-	if rec := serveMemberships(&fakeMembershipService{}, fakeAuth(true), http.MethodPost, "/api/v1/organizations/o1/memberships", `{"username":"ana","name":"Ana"}`); rec.Code != http.StatusUnauthorized {
-		t.Errorf("POST = %d, want 401", rec.Code)
+}
+
+func TestUpdateOrganizationMembership(t *testing.T) {
+	svc := &fakeMembershipService{}
+	rec := serveMemberships(svc, fakeAuth(false), http.MethodPatch, "/api/v1/organizations/o1/memberships/u1", `{"role":"owner"}`)
+
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != membershipJSON {
+		t.Fatalf("status %d, body %s", rec.Code, rec.Body.String())
+	}
+	want := application.UpdateOrganizationMembershipInput{OrganizationID: "o1", UserID: "u1", Role: "owner"}
+	if svc.actor != administrator || svc.update != want {
+		t.Errorf("service called with %+v, %+v", svc.actor, svc.update)
+	}
+}
+
+func TestUpdateOrganizationMembershipErrors(t *testing.T) {
+	cases := map[string]struct {
+		err    error
+		body   string
+		status int
+		slug   string
+	}{
+		"malformed":  {nil, `{"role":`, http.StatusBadRequest, "malformed-request"},
+		"forbidden":  {domain.ErrForbidden, `{"role":"owner"}`, http.StatusForbidden, "forbidden"},
+		"not found":  {domain.ErrMembershipNotFound, `{"role":"owner"}`, http.StatusNotFound, "not-found"},
+		"last owner": {domain.ErrLastOrganizationOwner, `{"role":"contributor"}`, http.StatusConflict, "last-organization-owner"},
+		"invalid":    {domain.ErrInvalidRole, `{"role":"viewer"}`, http.StatusUnprocessableEntity, "validation-error"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			rec := serveMemberships(&fakeMembershipService{err: tc.err}, fakeAuth(false), http.MethodPatch, "/api/v1/organizations/o1/memberships/u1", tc.body)
+			if p := problemOf(t, rec); rec.Code != tc.status || !strings.HasSuffix(p.Type, "/"+tc.slug) {
+				t.Errorf("status %d, type %q; want %d %s", rec.Code, p.Type, tc.status, tc.slug)
+			}
+		})
+	}
+}
+
+func TestRemoveOrganizationMembership(t *testing.T) {
+	svc := &fakeMembershipService{}
+	rec := serveMemberships(svc, fakeAuth(false), http.MethodDelete, "/api/v1/organizations/o1/memberships/u1", "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status %d, want 204", rec.Code)
+	}
+	want := application.RemoveOrganizationMembershipInput{OrganizationID: "o1", UserID: "u1"}
+	if svc.actor != administrator || svc.remove != want {
+		t.Errorf("service called with %+v, %+v", svc.actor, svc.remove)
+	}
+}
+
+func TestRemoveOrganizationMembershipErrors(t *testing.T) {
+	cases := map[string]struct {
+		err    error
+		status int
+		slug   string
+	}{
+		"forbidden":  {domain.ErrForbidden, http.StatusForbidden, "forbidden"},
+		"not found":  {domain.ErrMembershipNotFound, http.StatusNotFound, "not-found"},
+		"last owner": {domain.ErrLastOrganizationOwner, http.StatusConflict, "last-organization-owner"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			rec := serveMemberships(&fakeMembershipService{err: tc.err}, fakeAuth(false), http.MethodDelete, "/api/v1/organizations/o1/memberships/u1", "")
+			if p := problemOf(t, rec); rec.Code != tc.status || !strings.HasSuffix(p.Type, "/"+tc.slug) {
+				t.Errorf("status %d, type %q; want %d %s", rec.Code, p.Type, tc.status, tc.slug)
+			}
+		})
 	}
 }

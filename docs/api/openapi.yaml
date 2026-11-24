@@ -504,6 +504,137 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /api/v1/organizations/{organization_id}/memberships/{user_id}:
+    patch:
+      tags: [organizations]
+      operationId: updateOrganizationMembership
+      summary: Change the role of an Organization Membership
+      description: |
+        Changes a User's role in an Organization between `owner` and
+        `contributor`. Only Organization Owners and Administrators can change
+        roles. The last Organization Owner of an Organization cannot be demoted.
+      parameters:
+        - name: organization_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrganizationMembershipRequest"
+      responses:
+        "200":
+          description: The Organization Membership after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMembership"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The signed-in User does not manage the Organization (`forbidden`),
+            has a pending Temporary Password (`password-change-required`), or
+            the request is cross-origin (`cross-origin-request`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Organization, the User cannot see it, or no such Organization Membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: Demoting this User would leave the Organization without an Organization Owner.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://openboard.dev/problems/last-organization-owner
+                title: An Organization must keep at least one Organization Owner
+                status: 409
+                instance: /api/v1/organizations/0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c/memberships/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: The role is missing or not `owner` or `contributor` (`role`/`invalid`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    delete:
+      tags: [organizations]
+      operationId: removeOrganizationMembership
+      summary: Remove an Organization Membership
+      description: |
+        Removes a User from an Organization and removes every Workspace
+        Membership they hold in that Organization. Organization Owners and
+        Administrators can remove anyone; Organization Contributors can only
+        remove themselves. The last Organization Owner can neither leave nor be
+        removed.
+      parameters:
+        - name: organization_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Organization Membership removed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            An Organization Contributor tried to remove another User (`forbidden`),
+            the User has a pending Temporary Password (`password-change-required`),
+            or the request is cross-origin (`cross-origin-request`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: No such Organization, the User cannot see it, or no such Organization Membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: Removing this User would leave the Organization without an Organization Owner.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://openboard.dev/problems/last-organization-owner
+                title: An Organization must keep at least one Organization Owner
+                status: 409
+                instance: /api/v1/organizations/0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c/memberships/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
   /api/v1/workspaces:
     get:
       tags: [workspaces]
@@ -801,6 +932,13 @@ components:
           type: string
           enum: [owner, contributor]
           default: contributor
+    UpdateOrganizationMembershipRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [owner, contributor]
     OrganizationMembership:
       type: object
       required: [organization_id, user_id, username, name, role, created_at]

@@ -109,3 +109,50 @@ func createOrg(t *testing.T, c *apiClient, name string) string {
 	}
 	return org.ID
 }
+
+func TestUpdateAndRemoveOrganizationMembershipsFlow(t *testing.T) {
+	admin := newAPIClient(t)
+	signInAndReplacePassword(admin, "admin", "admin", "a long and fine passphrase")
+	adminID := currentUserID(t, admin)
+
+	orgID := createOrg(t, admin, "Acme")
+	base := "/api/v1/organizations/" + orgID + "/memberships"
+
+	// Admin is the sole Organization Owner: cannot be demoted or removed.
+	admin.expect(http.MethodPatch, base+"/"+adminID, `{"role":"contributor"}`, http.StatusConflict)
+	admin.expect(http.MethodDelete, base+"/"+adminID, "", http.StatusConflict)
+
+	anaAdded := decodeAddedMembership(t, admin.expect(http.MethodPost, base, `{"username":"ana","name":"Ana"}`, http.StatusCreated))
+	brunoAdded := decodeAddedMembership(t, admin.expect(http.MethodPost, base, `{"username":"bruno","name":"Bruno"}`, http.StatusCreated))
+
+	// Promote Ana to Organization Owner, then Admin can step down to Contributor.
+	admin.expect(http.MethodPatch, base+"/"+anaAdded.UserID, `{"role":"owner"}`, http.StatusOK)
+	admin.expect(http.MethodPatch, base+"/"+adminID, `{"role":"contributor"}`, http.StatusOK)
+
+	// Bruno (Contributor) cannot change roles or remove Ana, but can leave the Organization.
+	bruno := &apiClient{t: t, router: admin.router}
+	signInAndReplacePassword(bruno, "bruno", brunoAdded.TemporaryPassword, "bruno own strong passphrase")
+	bruno.expect(http.MethodPatch, base+"/"+anaAdded.UserID, `{"role":"contributor"}`, http.StatusForbidden)
+	bruno.expect(http.MethodDelete, base+"/"+anaAdded.UserID, "", http.StatusForbidden)
+	bruno.expect(http.MethodDelete, base+"/"+brunoAdded.UserID, "", http.StatusNoContent)
+	bruno.expect(http.MethodGet, "/api/v1/organizations/"+orgID, "", http.StatusNotFound)
+
+	// Ana (Owner) removes Admin's Membership; Ana remains the last Owner and cannot leave.
+	ana := &apiClient{t: t, router: admin.router}
+	signInAndReplacePassword(ana, "ana", anaAdded.TemporaryPassword, "ana own strong passphrase")
+	ana.expect(http.MethodDelete, base+"/"+adminID, "", http.StatusNoContent)
+	ana.expect(http.MethodDelete, base+"/"+anaAdded.UserID, "", http.StatusConflict)
+	ana.expect(http.MethodGet, base+"/"+anaAdded.UserID, "", http.StatusMethodNotAllowed)
+}
+
+func currentUserID(t *testing.T, c *apiClient) string {
+	t.Helper()
+	rec := c.expect(http.MethodGet, "/api/v1/users/me", "", http.StatusOK)
+	var me struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&me); err != nil {
+		t.Fatal(err)
+	}
+	return me.ID
+}

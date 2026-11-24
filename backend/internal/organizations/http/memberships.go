@@ -17,6 +17,8 @@ import (
 type MembershipService interface {
 	ListMemberships(ctx context.Context, actor domain.Actor, rawOrganizationID string, page application.PageRequest) ([]domain.OrganizationMembership, int, error)
 	AddMembership(ctx context.Context, actor domain.Actor, in application.AddOrganizationMembershipInput) (application.AddedOrganizationMembership, error)
+	UpdateMembership(ctx context.Context, actor domain.Actor, in application.UpdateOrganizationMembershipInput) (domain.OrganizationMembership, error)
+	RemoveMembership(ctx context.Context, actor domain.Actor, in application.RemoveOrganizationMembershipInput) error
 }
 
 // MembershipHandler serves the Organization Membership endpoints.
@@ -36,6 +38,10 @@ func (h *MembershipHandler) Register(mux *http.ServeMux) {
 	httpx.RouteMethods(mux, h.logger, "/api/v1/organizations/{organization_id}/memberships", map[string]httpx.HandlerFunc{
 		http.MethodGet:  h.auth.Authenticated(h.list),
 		http.MethodPost: h.auth.Authenticated(h.add),
+	})
+	httpx.RouteMethods(mux, h.logger, "/api/v1/organizations/{organization_id}/memberships/{user_id}", map[string]httpx.HandlerFunc{
+		http.MethodPatch:  h.auth.Authenticated(h.update),
+		http.MethodDelete: h.auth.Authenticated(h.remove),
 	})
 }
 
@@ -84,6 +90,38 @@ func (h *MembershipHandler) add(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
+type updateMembershipRequest struct {
+	Role string `json:"role"`
+}
+
+func (h *MembershipHandler) update(w http.ResponseWriter, r *http.Request) error {
+	var req updateMembershipRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+	m, err := h.svc.UpdateMembership(r.Context(), h.auth.Actor(r.Context()), application.UpdateOrganizationMembershipInput{
+		OrganizationID: r.PathValue("organization_id"),
+		UserID:         r.PathValue("user_id"),
+		Role:           req.Role,
+	})
+	if err != nil {
+		return mapMembershipError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toMembershipResponse(m))
+}
+
+func (h *MembershipHandler) remove(w http.ResponseWriter, r *http.Request) error {
+	err := h.svc.RemoveMembership(r.Context(), h.auth.Actor(r.Context()), application.RemoveOrganizationMembershipInput{
+		OrganizationID: r.PathValue("organization_id"),
+		UserID:         r.PathValue("user_id"),
+	})
+	if err != nil {
+		return mapMembershipError(err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
 type membershipResponse struct {
 	OrganizationID domain.OrganizationID `json:"organization_id"`
 	UserID         domain.UserID         `json:"user_id"`
@@ -119,10 +157,12 @@ func mapMembershipError(err error) error {
 	switch {
 	case errors.Is(err, domain.ErrForbidden):
 		return &httpx.Error{Status: http.StatusForbidden, Slug: "forbidden", Title: "Not allowed"}
-	case errors.Is(err, domain.ErrNotFound):
+	case errors.Is(err, domain.ErrNotFound), errors.Is(err, domain.ErrMembershipNotFound):
 		return httpx.ErrNotFound()
 	case errors.Is(err, domain.ErrMembershipExists):
 		return &httpx.Error{Status: http.StatusConflict, Slug: "organization-membership-exists", Title: "User already belongs to this Organization"}
+	case errors.Is(err, domain.ErrLastOrganizationOwner):
+		return &httpx.Error{Status: http.StatusConflict, Slug: "last-organization-owner", Title: "An Organization must keep at least one Organization Owner"}
 	}
 	return validationOr(err, membershipFieldErrors)
 }
