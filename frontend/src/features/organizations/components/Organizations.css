@@ -38,6 +38,26 @@
   text-decoration: underline;
 }
 
+.entity-list__identity {
+  display: grid;
+  min-width: 0;
+}
+
+.entity-list__name {
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.entity-list__meta {
+  color: var(--color-text-subtle);
+  overflow-wrap: anywhere;
+}
+
+.notice-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .list-pager {
   display: flex;
   gap: var(--space-100);

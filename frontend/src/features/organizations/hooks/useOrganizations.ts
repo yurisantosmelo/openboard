@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  addOrganizationMembership,
   createOrganization,
   createWorkspace,
   getOrganization,
   getWorkspace,
+  listOrganizationMemberships,
   listOrganizations,
   listWorkspaces,
   updateWorkspace,
@@ -11,6 +13,8 @@ import {
 } from '../api/organizationsApi';
 
 const workspacesKey = (organizationId: string) => ['workspaces', organizationId] as const;
+const membershipsKey = (organizationId: string) =>
+  ['organization-memberships', organizationId] as const;
 
 export function useOrganizations(page: number) {
   return useQuery({
@@ -64,5 +68,20 @@ export function useCreateWorkspace(organizationId: string) {
   return useMutation({
     mutationFn: createWorkspace,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workspacesKey(organizationId) }),
+  });
+}
+
+export function useOrganizationMemberships(organizationId: string, page: number) {
+  return useQuery({
+    queryKey: [...membershipsKey(organizationId), page],
+    queryFn: ({ signal }) => listOrganizationMemberships(organizationId, page, signal),
+  });
+}
+
+export function useAddOrganizationMembership(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: addOrganizationMembership,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
   });
 }

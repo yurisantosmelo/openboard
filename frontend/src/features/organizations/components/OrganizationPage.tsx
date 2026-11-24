@@ -7,6 +7,7 @@ import { useOrganization, useWorkspaces } from '../hooks/useOrganizations';
 import { workspacePath } from '../paths';
 import { CreateWorkspaceForm } from './CreateWorkspaceForm';
 import { ListPanel } from './ListPanel';
+import { OrganizationMemberships } from './OrganizationMemberships';
 import './Organizations.css';
 import { VisibilityLozenge } from './VisibilityLozenge';
 
@@ -76,6 +77,9 @@ export function OrganizationPage() {
         <h1 className="page-header__title">{organization.data.name}</h1>
       </header>
       <WorkspaceList organization={organization.data} />
+      {organization.data.currentUserRole === 'owner' && (
+        <OrganizationMemberships organizationId={organization.data.id} />
+      )}
       <Link className="btn btn--link" to="/">
         All Organizations
       </Link>

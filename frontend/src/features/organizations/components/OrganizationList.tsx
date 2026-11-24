@@ -1,16 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Lozenge } from '../../../shared/design-system';
-import type { Organization, OrganizationRole } from '../api/organizationsApi';
+import type { Organization } from '../api/organizationsApi';
 import { useOrganizations } from '../hooks/useOrganizations';
 import { organizationPath } from '../paths';
 import { CreateOrganizationForm } from './CreateOrganizationForm';
 import { ListPanel } from './ListPanel';
-
-const roleLabels: Record<OrganizationRole, string> = {
-  owner: 'Organization Owner',
-  contributor: 'Organization Contributor',
-};
+import { organizationRoleLabels } from './organizationRole';
 
 function OrganizationRow(organization: Organization) {
   return (
@@ -18,7 +14,7 @@ function OrganizationRow(organization: Organization) {
       <Link className="entity-list__link" to={organizationPath(organization.id)}>
         {organization.name}
       </Link>
-      <Lozenge>{roleLabels[organization.currentUserRole]}</Lozenge>
+      <Lozenge>{organizationRoleLabels[organization.currentUserRole]}</Lozenge>
     </li>
   );
 }
