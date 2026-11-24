@@ -6,6 +6,7 @@ import { organizationPath } from '../paths';
 import './Organizations.css';
 import { visibilityLabels } from './visibility';
 import { VisibilityLozenge } from './VisibilityLozenge';
+import { WorkspaceMemberships } from './WorkspaceMemberships';
 import { WorkspaceSettings } from './WorkspaceSettings';
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
@@ -35,7 +36,12 @@ export function WorkspacePage() {
           <dd>{dateFormat.format(new Date(createdAt))}</dd>
         </dl>
       </Card>
-      {currentUserRole === 'owner' && <WorkspaceSettings workspace={workspace.data} />}
+      {currentUserRole === 'owner' && (
+        <>
+          <WorkspaceMemberships workspaceId={workspace.data.id} />
+          <WorkspaceSettings workspace={workspace.data} />
+        </>
+      )}
       <Link className="btn btn--link" to={organizationPath(organizationId)}>
         Back to Organization
       </Link>

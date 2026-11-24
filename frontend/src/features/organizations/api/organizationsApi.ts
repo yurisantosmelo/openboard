@@ -42,6 +42,22 @@ export interface Workspace {
   currentUserRole: WorkspaceRole;
 }
 
+export interface WorkspaceMembership {
+  workspaceId: string;
+  organizationId: string;
+  userId: string;
+  username: string;
+  name: string;
+  role: WorkspaceRole;
+  createdAt: string;
+}
+
+export interface NewWorkspaceMembership {
+  workspaceId: string;
+  username: string;
+  role: WorkspaceRole;
+}
+
 /** The fields to change in a Workspace; those left out keep their value. */
 export interface WorkspaceChange {
   name?: string;
@@ -94,6 +110,16 @@ interface WorkspaceDto {
   current_user_role: WorkspaceRole;
 }
 
+interface WorkspaceMembershipDto {
+  workspace_id: string;
+  organization_id: string;
+  user_id: string;
+  username: string;
+  name: string;
+  role: WorkspaceRole;
+  created_at: string;
+}
+
 function toOrganization(dto: OrganizationDto): Organization {
   return { id: dto.id, name: dto.name, currentUserRole: dto.current_user_role };
 }
@@ -126,6 +152,18 @@ function toWorkspace(dto: WorkspaceDto): Workspace {
     visibility: dto.visibility,
     createdAt: dto.created_at,
     currentUserRole: dto.current_user_role,
+  };
+}
+
+function toWorkspaceMembership(dto: WorkspaceMembershipDto): WorkspaceMembership {
+  return {
+    workspaceId: dto.workspace_id,
+    organizationId: dto.organization_id,
+    userId: dto.user_id,
+    username: dto.username,
+    name: dto.name,
+    role: dto.role,
+    createdAt: dto.created_at,
   };
 }
 
@@ -238,5 +276,51 @@ export async function removeOrganizationMembership(
   userId: string,
 ): Promise<void> {
   const path = `/api/v1/organizations/${encodeURIComponent(organizationId)}/memberships/${encodeURIComponent(userId)}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
+}
+
+export async function listWorkspaceMemberships(
+  workspaceId: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<Page<WorkspaceMembership>> {
+  const query = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+  const path = `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/memberships?${query}`;
+  const dto = await apiRequest<PageDto<WorkspaceMembershipDto>>(path, { signal });
+  return toPage(dto, toWorkspaceMembership);
+}
+
+export async function addWorkspaceMembership(
+  membership: NewWorkspaceMembership,
+): Promise<WorkspaceMembership> {
+  const path = `/api/v1/workspaces/${encodeURIComponent(membership.workspaceId)}/memberships`;
+  const dto = await apiRequest<WorkspaceMembershipDto>(path, {
+    method: 'POST',
+    body: {
+      username: membership.username,
+      role: membership.role,
+    },
+  });
+  return toWorkspaceMembership(dto);
+}
+
+export async function updateWorkspaceMembership(
+  workspaceId: string,
+  userId: string,
+  role: WorkspaceRole,
+): Promise<WorkspaceMembership> {
+  const path = `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/memberships/${encodeURIComponent(userId)}`;
+  const dto = await apiRequest<WorkspaceMembershipDto>(path, {
+    method: 'PATCH',
+    body: { role },
+  });
+  return toWorkspaceMembership(dto);
+}
+
+export async function removeWorkspaceMembership(
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
+  const path = `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/memberships/${encodeURIComponent(userId)}`;
   await apiRequest<undefined>(path, { method: 'DELETE' });
 }
