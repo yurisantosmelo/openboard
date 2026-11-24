@@ -55,16 +55,7 @@ func NewWorkspaces(pool *pgxpool.Pool) *Workspaces {
 // RoleIn returns the role scope acts with in the Organization, or
 // domain.ErrUnknownOrganization when scope does not see it.
 func (r *Workspaces) RoleIn(ctx context.Context, id domain.OrganizationID, scope application.Scope) (domain.Role, error) {
-	var role *string
-	err := r.pool.QueryRow(ctx, `SELECT `+viewerRole+` FROM organizations o WHERE o.id = $3`,
-		scope.All, nullableUser(scope), string(id)).Scan(&role)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && role == nil) {
-		return "", domain.ErrUnknownOrganization
-	}
-	if err != nil {
-		return "", fmt.Errorf("read organization role: %w", err)
-	}
-	return domain.Role(*role), nil
+	return organizationRole(ctx, r.pool, id, scope, domain.ErrUnknownOrganization)
 }
 
 // Create inserts the Workspace and the creator's Workspace Membership in one
