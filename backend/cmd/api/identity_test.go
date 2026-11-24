@@ -33,13 +33,14 @@ func newAPIClient(t *testing.T) *apiClient {
 	t.Cleanup(pool.Close)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	identity, err := setupIdentity(ctx, logger, pool, config.Config{})
+	identity, identitySvc, err := setupIdentity(ctx, logger, pool, config.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	organizations := setupOrganizations(logger, pool, identity)
+	memberships := setupOrganizationMemberships(logger, pool, identity, identitySvc)
 	workspaces := setupWorkspaces(logger, pool, identity)
-	return &apiClient{t: t, router: newRouter(logger, []module{identity, organizations, workspaces})}
+	return &apiClient{t: t, router: newRouter(logger, []module{identity, organizations, memberships, workspaces})}
 }
 
 func (c *apiClient) send(method, path, body string) *httptest.ResponseRecorder {

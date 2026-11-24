@@ -35,7 +35,7 @@ export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps)
   }
 
   return (
-    <form className="list-form" aria-label="New Organization" onSubmit={handleSubmit}>
+    <form className="form-stack list-form" aria-label="New Organization" onSubmit={handleSubmit}>
       {create.isError && !nameError && <Alert tone="danger">{errorMessage(create.error)}</Alert>}
       <TextField
         label="Name"
@@ -48,7 +48,7 @@ export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps)
           setName(e.target.value);
         }}
       />
-      <div className="list-form__actions">
+      <div className="form-actions">
         <Button type="submit" busy={create.isPending}>
           Create Organization
         </Button>

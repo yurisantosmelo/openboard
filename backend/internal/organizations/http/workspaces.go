@@ -17,6 +17,7 @@ type WorkspaceService interface {
 	CreateWorkspace(ctx context.Context, actor domain.Actor, in application.CreateWorkspaceInput) (domain.Workspace, error)
 	GetWorkspace(ctx context.Context, actor domain.Actor, rawID string) (domain.Workspace, error)
 	ListWorkspaces(ctx context.Context, actor domain.Actor, rawOrganizationID string, page application.PageRequest) ([]domain.Workspace, int, error)
+	UpdateWorkspace(ctx context.Context, actor domain.Actor, in application.UpdateWorkspaceInput) (domain.Workspace, error)
 }
 
 // WorkspaceHandler serves the Workspace endpoints.
@@ -37,7 +38,10 @@ func (h *WorkspaceHandler) Register(mux *http.ServeMux) {
 		http.MethodGet:  h.auth.Authenticated(h.list),
 		http.MethodPost: h.auth.Authenticated(h.create),
 	})
-	httpx.Route(mux, h.logger, http.MethodGet, "/api/v1/workspaces/{workspace_id}", h.auth.Authenticated(h.get))
+	httpx.RouteMethods(mux, h.logger, "/api/v1/workspaces/{workspace_id}", map[string]httpx.HandlerFunc{
+		http.MethodGet:   h.auth.Authenticated(h.get),
+		http.MethodPatch: h.auth.Authenticated(h.update),
+	})
 }
 
 func (h *WorkspaceHandler) list(w http.ResponseWriter, r *http.Request) error {
@@ -86,23 +90,45 @@ func (h *WorkspaceHandler) create(w http.ResponseWriter, r *http.Request) error 
 	return httpx.WriteJSON(w, http.StatusCreated, toWorkspaceResponse(ws))
 }
 
+// updateWorkspaceRequest leaves nil the fields that stay as they are.
+type updateWorkspaceRequest struct {
+	Name       *string `json:"name"`
+	Visibility *string `json:"visibility"`
+}
+
+func (h *WorkspaceHandler) update(w http.ResponseWriter, r *http.Request) error {
+	var req updateWorkspaceRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+	ws, err := h.svc.UpdateWorkspace(r.Context(), h.auth.Actor(r.Context()), application.UpdateWorkspaceInput{
+		ID: r.PathValue("workspace_id"), Name: req.Name, Visibility: req.Visibility,
+	})
+	if err != nil {
+		return mapWorkspaceError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toWorkspaceResponse(ws))
+}
+
 type workspaceResponse struct {
-	ID             domain.WorkspaceID    `json:"id"`
-	OrganizationID domain.OrganizationID `json:"organization_id"`
-	Name           string                `json:"name"`
-	Visibility     domain.Visibility     `json:"visibility"`
-	CreatedAt      time.Time             `json:"created_at"`
-	UpdatedAt      time.Time             `json:"updated_at"`
+	ID              domain.WorkspaceID    `json:"id"`
+	OrganizationID  domain.OrganizationID `json:"organization_id"`
+	Name            string                `json:"name"`
+	Visibility      domain.Visibility     `json:"visibility"`
+	CreatedAt       time.Time             `json:"created_at"`
+	UpdatedAt       time.Time             `json:"updated_at"`
+	CurrentUserRole domain.Role           `json:"current_user_role"`
 }
 
 func toWorkspaceResponse(ws domain.Workspace) workspaceResponse {
 	return workspaceResponse{
-		ID:             ws.ID,
-		OrganizationID: ws.OrganizationID,
-		Name:           ws.Name,
-		Visibility:     ws.Visibility,
-		CreatedAt:      ws.CreatedAt,
-		UpdatedAt:      ws.UpdatedAt,
+		ID:              ws.ID,
+		OrganizationID:  ws.OrganizationID,
+		Name:            ws.Name,
+		Visibility:      ws.Visibility,
+		CreatedAt:       ws.CreatedAt,
+		UpdatedAt:       ws.UpdatedAt,
+		CurrentUserRole: ws.ViewerRole,
 	}
 }
 

@@ -179,6 +179,80 @@ func TestFindWorkspaceHonoursVisibility(t *testing.T) {
 	}
 }
 
+func TestFindWorkspaceReportsViewerRole(t *testing.T) {
+	w := newWorkspaceWorld(t)
+	repo := NewWorkspaces(pool)
+	finance, err := repo.Create(context.Background(), application.NewWorkspace{
+		OrganizationID: w.acme.ID, Name: "Finance", Visibility: domain.VisibilityOpen, CreatorID: w.outside,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]struct {
+		id    domain.WorkspaceID
+		scope application.Scope
+		want  domain.Role
+	}{
+		"Administrator":                 {w.legal.ID, application.Scope{All: true}, domain.WorkspaceRoleOwner},
+		"Organization Owner":            {finance.ID, application.Scope{UserID: w.owner}, domain.WorkspaceRoleOwner},
+		"Workspace Membership":          {w.legal.ID, application.Scope{UserID: w.legalMember}, domain.WorkspaceRoleViewer},
+		"Open Workspace, no Membership": {finance.ID, application.Scope{UserID: w.contributor}, domain.WorkspaceRoleContributor},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ws, err := repo.Find(context.Background(), tc.id, tc.scope)
+			if err != nil || ws.ViewerRole != tc.want {
+				t.Errorf("ViewerRole = %q, %v; want %q", ws.ViewerRole, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestUpdateWorkspace(t *testing.T) {
+	w := newWorkspaceWorld(t)
+	repo := NewWorkspaces(pool)
+	name, open := "Legal team", domain.VisibilityOpen
+	ws, err := repo.Update(context.Background(), application.WorkspaceChange{ID: w.legal.ID, Name: &name, Visibility: &open})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws.ID != w.legal.ID || ws.Name != name || ws.Visibility != open || !ws.UpdatedAt.After(w.legal.UpdatedAt) {
+		t.Errorf("returned %+v", ws)
+	}
+}
+
+func TestUpdateWorkspaceKeepsFieldsLeftOut(t *testing.T) {
+	w := newWorkspaceWorld(t)
+	open := domain.VisibilityOpen
+	ws, err := NewWorkspaces(pool).Update(context.Background(), application.WorkspaceChange{ID: w.legal.ID, Visibility: &open})
+	if err != nil || ws.Name != "Legal" || ws.Visibility != open {
+		t.Fatalf("returned %+v, %v", ws, err)
+	}
+}
+
+func TestUpdateWorkspaceRejections(t *testing.T) {
+	w := newWorkspaceWorld(t)
+	taken, secret := "DEFAULT", domain.Visibility("secret")
+	cases := map[string]struct {
+		change application.WorkspaceChange
+		want   error
+	}{
+		"name in use": {application.WorkspaceChange{ID: w.legal.ID, Name: &taken}, domain.ErrWorkspaceNameTaken},
+		"gone":        {application.WorkspaceChange{ID: "00000000-0000-0000-0000-000000000000", Name: &taken}, domain.ErrWorkspaceNotFound},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NewWorkspaces(pool).Update(context.Background(), tc.change); !errors.Is(err, tc.want) {
+				t.Errorf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+	_, err := NewWorkspaces(pool).Update(context.Background(), application.WorkspaceChange{ID: w.legal.ID, Visibility: &secret})
+	if err == nil || errors.Is(err, domain.ErrWorkspaceNameTaken) {
+		t.Errorf("err = %v, want a storage error", err)
+	}
+}
+
 func TestListWorkspacesHonoursVisibilityAndPages(t *testing.T) {
 	w := newWorkspaceWorld(t)
 	repo := NewWorkspaces(pool)

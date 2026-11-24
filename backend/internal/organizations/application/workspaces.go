@@ -30,6 +30,26 @@ type WorkspaceRepository interface {
 	// List returns one page of the Organization's Workspaces scope can enter,
 	// ordered by name ignoring case, and how many there are in total.
 	List(ctx context.Context, id domain.OrganizationID, scope Scope, page PageRequest) ([]domain.Workspace, int, error)
+	// Update applies the change and returns the Workspace without ViewerRole.
+	// It returns domain.ErrWorkspaceNameTaken when the Organization already
+	// uses the name, and domain.ErrWorkspaceNotFound when the Workspace is gone.
+	Update(ctx context.Context, change WorkspaceChange) (domain.Workspace, error)
+}
+
+// WorkspaceChange holds the validated fields to change in a Workspace; nil
+// fields stay as they are.
+type WorkspaceChange struct {
+	ID         domain.WorkspaceID
+	Name       *string
+	Visibility *domain.Visibility
+}
+
+// UpdateWorkspaceInput is the raw request to change a Workspace; nil fields
+// stay as they are.
+type UpdateWorkspaceInput struct {
+	ID         string
+	Name       *string
+	Visibility *string
 }
 
 // CreateWorkspaceInput is the raw request to create a Workspace.
@@ -65,12 +85,64 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, actor domain.Act
 	if !role.CanCreateWorkspace() {
 		return domain.Workspace{}, domain.ErrForbidden
 	}
-	return s.workspaces.Create(ctx, NewWorkspace{
+	ws, err := s.workspaces.Create(ctx, NewWorkspace{
 		OrganizationID: organizationID,
 		Name:           name,
 		Visibility:     visibility,
 		CreatorID:      actor.UserID,
 	})
+	if err != nil {
+		return domain.Workspace{}, err
+	}
+	// The creator is an Organization Owner, who acts as Workspace Owner.
+	ws.ViewerRole = domain.WorkspaceRoleOwner
+	return ws, nil
+}
+
+// UpdateWorkspace renames a Workspace or changes its visibility, for an Actor
+// who manages it. Invalid fields are all reported at once, joined; a
+// Workspace the Actor cannot enter gives domain.ErrWorkspaceNotFound.
+func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, actor domain.Actor, in UpdateWorkspaceInput) (domain.Workspace, error) {
+	id, err := domain.ParseWorkspaceID(in.ID)
+	if err != nil {
+		return domain.Workspace{}, err
+	}
+	change, err := parseChange(id, in)
+	if err != nil {
+		return domain.Workspace{}, err
+	}
+	current, err := s.workspaces.Find(ctx, id, scopeOf(actor))
+	if err != nil {
+		return domain.Workspace{}, err
+	}
+	if !current.ViewerRole.CanManageWorkspace() {
+		return domain.Workspace{}, domain.ErrForbidden
+	}
+	if change.Name == nil && change.Visibility == nil {
+		return current, nil
+	}
+	updated, err := s.workspaces.Update(ctx, change)
+	if err != nil {
+		return domain.Workspace{}, err
+	}
+	updated.ViewerRole = current.ViewerRole
+	return updated, nil
+}
+
+func parseChange(id domain.WorkspaceID, in UpdateWorkspaceInput) (WorkspaceChange, error) {
+	change := WorkspaceChange{ID: id}
+	var nameErr, visibilityErr error
+	if in.Name != nil {
+		var name string
+		name, nameErr = domain.ParseName(*in.Name)
+		change.Name = &name
+	}
+	if in.Visibility != nil {
+		var visibility domain.Visibility
+		visibility, visibilityErr = domain.ParseVisibilityChange(*in.Visibility)
+		change.Visibility = &visibility
+	}
+	return change, errors.Join(nameErr, visibilityErr)
 }
 
 // GetWorkspace returns a Workspace the Actor can enter. Unknown IDs and

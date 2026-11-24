@@ -5,6 +5,8 @@ import { renderRoute } from '../../test/renderRoute';
 const ACME = 'o1';
 const organizationsUrl = (page = '1') => `GET /api/v1/organizations?page=${page}&page_size=20`;
 const workspacesUrl = () => `GET /api/v1/workspaces?organization_id=${ACME}&page=1&page_size=20`;
+const membershipsUrl = (page = '1') =>
+  `GET /api/v1/organizations/${ACME}/memberships?page=${page}&page_size=20`;
 
 const signedIn = { 'GET /api/v1/users/me': Response.json(userDto()) };
 
@@ -32,6 +34,17 @@ const workspaceDto = (overrides: object = {}) => ({
   visibility: 'open',
   created_at: '2026-11-17T12:00:00Z',
   updated_at: '2026-11-17T12:00:00Z',
+  current_user_role: 'contributor',
+  ...overrides,
+});
+
+const membershipDto = (overrides: object = {}) => ({
+  organization_id: ACME,
+  user_id: 'u1',
+  username: 'admin',
+  name: 'Administrator',
+  role: 'owner',
+  created_at: '2026-11-17T12:00:00Z',
   ...overrides,
 });
 
@@ -134,6 +147,7 @@ describe('Creating an Organization', () => {
       'POST /api/v1/organizations': Response.json(acme(), { status: 201 }),
       [`GET /api/v1/organizations/${ACME}`]: Response.json(acme()),
       [workspacesUrl()]: pageOf([workspaceDto()]),
+      [membershipsUrl()]: pageOf([membershipDto()]),
     });
 
     await user.type(screen.getByLabelText('Name'), 'Acme');
@@ -186,10 +200,15 @@ describe('Creating an Organization', () => {
 });
 
 describe('Organization page', () => {
-  const organizationRoutes = (role = 'owner', workspaces = [workspaceDto()]) => ({
+  const organizationRoutes = (
+    role = 'owner',
+    workspaces = [workspaceDto()],
+    memberships = [membershipDto()],
+  ) => ({
     ...signedIn,
     [`GET /api/v1/organizations/${ACME}`]: Response.json(acme(role)),
     [workspacesUrl()]: pageOf(workspaces),
+    ...(role === 'owner' && { [membershipsUrl()]: pageOf(memberships) }),
   });
 
   it('shows the Workspaces and their visibility', async () => {
@@ -375,5 +394,405 @@ describe('Workspace page', () => {
     renderRoute('/workspaces/w2');
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Resource not found');
+  });
+});
+
+describe('Workspace settings', () => {
+  const legalDto = (overrides: object = {}) =>
+    workspaceDto({
+      id: 'w2',
+      name: 'Legal',
+      visibility: 'restricted',
+      current_user_role: 'owner',
+      ...overrides,
+    });
+
+  async function openSettings(routes: Parameters<typeof stubApi>[0] = {}) {
+    const fetchMock = stubApi({
+      ...signedIn,
+      'GET /api/v1/workspaces/w2': Response.json(legalDto()),
+      ...routes,
+    });
+    const rendered = renderRoute('/workspaces/w2');
+    await screen.findByRole('form', { name: 'Workspace settings' });
+    return { fetchMock, ...rendered };
+  }
+
+  it.each(['contributor', 'viewer'])('is not shown to a Workspace %s', async (role) => {
+    stubApi({
+      ...signedIn,
+      'GET /api/v1/workspaces/w2': Response.json(legalDto({ current_user_role: role })),
+    });
+    renderRoute('/workspaces/w2');
+
+    await screen.findByRole('heading', { name: 'Legal', level: 1 });
+    expect(screen.queryByRole('form', { name: 'Workspace settings' })).not.toBeInTheDocument();
+  });
+
+  it('saves only what changed and shows the result', async () => {
+    const { fetchMock, user } = await openSettings({
+      'PATCH /api/v1/workspaces/w2': Response.json(legalDto({ name: 'Legal team' })),
+      [workspacesUrl()]: pageOf([]),
+    });
+    const save = screen.getByRole('button', { name: 'Save changes' });
+    expect(save).toBeDisabled();
+
+    await user.clear(screen.getByLabelText('Name'));
+    await user.type(screen.getByLabelText('Name'), 'Legal team');
+    await user.click(save);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Changes saved.');
+    expect(screen.getByRole('heading', { name: 'Legal team', level: 1 })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/w2',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: 'Legal team' }) }),
+    );
+    expect(save).toBeDisabled();
+  });
+
+  it('changes the visibility', async () => {
+    const { fetchMock, user } = await openSettings({
+      'PATCH /api/v1/workspaces/w2': Response.json(legalDto({ visibility: 'open' })),
+      [workspacesUrl()]: pageOf([]),
+    });
+    const settings = screen.getByRole('form', { name: 'Workspace settings' });
+
+    await user.click(within(settings).getByRole('button', { name: 'Open' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Changes saved.');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/w2',
+      expect.objectContaining({ body: JSON.stringify({ visibility: 'open' }) }),
+    );
+  });
+
+  it('shows a name already in use on the field', async () => {
+    const { user } = await openSettings({
+      'PATCH /api/v1/workspaces/w2': problem(409, 'workspace-name-taken', 'Taken'),
+    });
+
+    await user.type(screen.getByLabelText('Name'), ' team');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Name')).toHaveAccessibleDescription(
+        'Another Workspace in this Organization already uses this name.',
+      );
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('reports other failures above the form', async () => {
+    const { user } = await openSettings({
+      'PATCH /api/v1/workspaces/w2': problem(403, 'forbidden', 'Not allowed'),
+    });
+
+    await user.type(screen.getByLabelText('Name'), ' team');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed');
+  });
+});
+
+describe('Organization Memberships', () => {
+  const routes = (role = 'owner', memberships = [membershipDto()]) => ({
+    ...signedIn,
+    [`GET /api/v1/organizations/${ACME}`]: Response.json(acme(role)),
+    [workspacesUrl()]: pageOf([workspaceDto()]),
+    ...(role === 'owner' && { [membershipsUrl()]: pageOf(memberships) }),
+  });
+
+  async function openForm(overrides: Parameters<typeof stubApi>[0] = {}) {
+    const fetchMock = stubApi({ ...routes(), ...overrides });
+    const rendered = renderRoute(`/organizations/${ACME}`);
+    await rendered.user.click(await screen.findByRole('button', { name: 'Add person' }));
+    return { fetchMock, ...rendered };
+  }
+
+  it('is not shown to an Organization Contributor', async () => {
+    stubApi(routes('contributor'));
+    renderRoute(`/organizations/${ACME}`);
+
+    await screen.findByRole('link', { name: 'Default' });
+    expect(
+      screen.queryByRole('heading', { name: 'Organization Memberships' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add person' })).not.toBeInTheDocument();
+  });
+
+  it('lists Organization Memberships and moves between pages', async () => {
+    stubApi({
+      ...routes(),
+      [membershipsUrl()]: pageOf([membershipDto()], 1, 2),
+      [membershipsUrl('2')]: pageOf(
+        [
+          membershipDto({
+            user_id: 'u2',
+            username: 'ana.silva',
+            name: 'Ana Silva',
+            role: 'contributor',
+          }),
+        ],
+        2,
+        2,
+      ),
+    });
+    const { user } = renderRoute(`/organizations/${ACME}`);
+
+    const section = (
+      await screen.findByRole('heading', { name: 'Organization Memberships' })
+    ).closest('section') as HTMLElement;
+    expect(await within(section).findByText('Administrator')).toBeInTheDocument();
+    expect(within(section).getByText('@admin')).toBeInTheDocument();
+    expect(within(section).getByText('Organization Owner')).toBeInTheDocument();
+
+    await user.click(within(section).getByRole('button', { name: 'Next' }));
+
+    expect(await within(section).findByText('Ana Silva')).toBeInTheDocument();
+    expect(within(section).getByText('@ana.silva')).toBeInTheDocument();
+    expect(within(section).getByText('Organization Contributor')).toBeInTheDocument();
+  });
+
+  it('adds a new User, shows the Temporary Password once and lets the Owner dismiss it', async () => {
+    let added = false;
+    const ana = membershipDto({
+      user_id: 'u2',
+      username: 'ana.silva',
+      name: 'Ana Silva',
+      role: 'contributor',
+    });
+    const { fetchMock, user } = await openForm({
+      [membershipsUrl()]: () => pageOf(added ? [membershipDto(), ana] : [membershipDto()]),
+      [`POST /api/v1/organizations/${ACME}/memberships`]: () => {
+        added = true;
+        return Response.json(
+          { ...ana, temporary_password: 'one-time-secret-pass' },
+          { status: 201 },
+        );
+      },
+    });
+    const form = screen.getByRole('form', { name: 'Add Organization Membership' });
+
+    expect(within(form).getByRole('button', { name: 'Organization Contributor' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.type(within(form).getByLabelText('Name'), 'Ana Silva');
+    await user.type(within(form).getByLabelText('Username'), 'ana.silva');
+    await user.click(within(form).getByRole('button', { name: 'Add person' }));
+
+    expect(await screen.findByText('Ana Silva')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('one-time-secret-pass');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/organizations/${ACME}/memberships`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          username: 'ana.silva',
+          name: 'Ana Silva',
+          role: 'contributor',
+        }),
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText('one-time-secret-pass')).not.toBeInTheDocument();
+  });
+
+  it('links an existing User as Organization Owner without showing a Temporary Password', async () => {
+    const { fetchMock, user } = await openForm({
+      [`POST /api/v1/organizations/${ACME}/memberships`]: Response.json(
+        membershipDto({ user_id: 'u2', username: 'ana', name: 'Ana', role: 'owner' }),
+        { status: 201 },
+      ),
+    });
+    const form = screen.getByRole('form', { name: 'Add Organization Membership' });
+
+    await user.type(within(form).getByLabelText('Name'), 'Ana');
+    await user.type(within(form).getByLabelText('Username'), 'ana');
+    await user.click(within(form).getByRole('button', { name: 'Organization Owner' }));
+    await user.click(within(form).getByRole('button', { name: 'Add person' }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('form', { name: 'Add Organization Membership' }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/organizations/${ACME}/memberships`,
+      expect.objectContaining({
+        body: JSON.stringify({ username: 'ana', name: 'Ana', role: 'owner' }),
+      }),
+    );
+  });
+
+  it.each([
+    [
+      'a User already in the Organization',
+      problem(409, 'organization-membership-exists', 'Already belongs'),
+      'Username',
+      'This User already belongs to this Organization.',
+    ],
+    [
+      'an invalid Username',
+      problem(422, 'validation-error', 'Validation failed', {
+        errors: [{ field: 'username', code: 'invalid', message: 'invalid username' }],
+      }),
+      'Username',
+      'invalid username',
+    ],
+    [
+      'an invalid Name',
+      problem(422, 'validation-error', 'Validation failed', {
+        errors: [{ field: 'name', code: 'invalid', message: 'invalid name' }],
+      }),
+      'Name',
+      'invalid name',
+    ],
+  ])('shows %s on the field', async (_case, reply, fieldLabel, message) => {
+    const { user } = await openForm({
+      [`POST /api/v1/organizations/${ACME}/memberships`]: reply,
+    });
+    const form = screen.getByRole('form', { name: 'Add Organization Membership' });
+
+    await user.type(within(form).getByLabelText('Name'), 'Ana');
+    await user.type(within(form).getByLabelText('Username'), 'ana');
+    await user.click(within(form).getByRole('button', { name: 'Add person' }));
+
+    await waitFor(() => {
+      expect(within(form).getByLabelText(fieldLabel)).toHaveAccessibleDescription(message);
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a refused request', problem(403, 'forbidden', 'Not allowed')],
+    ['an unreachable server', undefined],
+  ])('reports %s above the form', async (_case, reply) => {
+    const { user } = await openForm(
+      reply ? { [`POST /api/v1/organizations/${ACME}/memberships`]: reply } : {},
+    );
+    const form = screen.getByRole('form', { name: 'Add Organization Membership' });
+
+    await user.type(within(form).getByLabelText('Name'), 'Ana');
+    await user.type(within(form).getByLabelText('Username'), 'ana');
+    await user.click(within(form).getByRole('button', { name: 'Add person' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('closes the form on cancel', async () => {
+    const { user } = await openForm();
+    const form = screen.getByRole('form', { name: 'Add Organization Membership' });
+
+    await user.click(within(form).getByRole('button', { name: 'Cancel' }));
+
+    expect(
+      screen.queryByRole('form', { name: 'Add Organization Membership' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add person' })).toBeInTheDocument();
+  });
+
+  it('changes a Membership role and refreshes the list', async () => {
+    const ana = membershipDto({
+      user_id: 'u2',
+      username: 'ana',
+      name: 'Ana',
+      role: 'contributor',
+    });
+    let anaRole: 'contributor' | 'owner' = 'contributor';
+    const fetchMock = stubApi({
+      ...routes(),
+      [membershipsUrl()]: () => pageOf([membershipDto(), { ...ana, role: anaRole }]),
+      [`PATCH /api/v1/organizations/${ACME}/memberships/u2`]: () => {
+        anaRole = 'owner';
+        return Response.json({ ...ana, role: 'owner' });
+      },
+      [`PATCH /api/v1/organizations/${ACME}/memberships/u1`]: Response.json(
+        membershipDto({ role: 'contributor' }),
+      ),
+    });
+    const { user } = renderRoute(`/organizations/${ACME}`);
+
+    await user.click(await screen.findByRole('button', { name: 'Make Organization Owner: Ana' }));
+    expect(
+      await screen.findByRole('button', { name: 'Make Organization Contributor: Ana' }),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/organizations/${ACME}/memberships/u2`,
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ role: 'owner' }) }),
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Make Organization Contributor: Administrator' }),
+    );
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/organizations/${ACME}/memberships/u1`,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ role: 'contributor' }),
+        }),
+      );
+    });
+  });
+
+  it('removes a Membership and refreshes the list', async () => {
+    const ana = membershipDto({
+      user_id: 'u2',
+      username: 'ana',
+      name: 'Ana',
+      role: 'contributor',
+    });
+    let removed = false;
+    const fetchMock = stubApi({
+      ...routes(),
+      [membershipsUrl()]: () => pageOf(removed ? [membershipDto()] : [membershipDto(), ana]),
+      [`DELETE /api/v1/organizations/${ACME}/memberships/u2`]: () => {
+        removed = true;
+        return new Response(null, { status: 204 });
+      },
+    });
+    const { user } = renderRoute(`/organizations/${ACME}`);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Ana' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/organizations/${ACME}/memberships/u2`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('reports when the last Organization Owner cannot be demoted or removed', async () => {
+    const lastOwner = problem(
+      409,
+      'last-organization-owner',
+      'An Organization must keep at least one Organization Owner',
+    );
+    stubApi({
+      ...routes(),
+      [`PATCH /api/v1/organizations/${ACME}/memberships/u1`]: lastOwner,
+      [`DELETE /api/v1/organizations/${ACME}/memberships/u1`]: lastOwner,
+    });
+    const { user } = renderRoute(`/organizations/${ACME}`);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Make Organization Contributor: Administrator',
+      }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'An Organization must keep at least one Organization Owner.',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Remove Administrator' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'An Organization must keep at least one Organization Owner.',
+    );
   });
 });

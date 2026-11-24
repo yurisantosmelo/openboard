@@ -4,11 +4,33 @@ export const PAGE_SIZE = 20;
 
 export type OrganizationRole = 'owner' | 'contributor';
 export type WorkspaceVisibility = 'open' | 'restricted';
+export type WorkspaceRole = 'owner' | 'contributor' | 'viewer';
 
 export interface Organization {
   id: string;
   name: string;
   currentUserRole: OrganizationRole;
+}
+
+export interface OrganizationMembership {
+  organizationId: string;
+  userId: string;
+  username: string;
+  name: string;
+  role: OrganizationRole;
+  createdAt: string;
+}
+
+export interface NewOrganizationMembership {
+  organizationId: string;
+  username: string;
+  name: string;
+  role: OrganizationRole;
+}
+
+export interface AddedOrganizationMembership extends OrganizationMembership {
+  /** Shown once when an unknown Username created a new User. */
+  temporaryPassword?: string;
 }
 
 export interface Workspace {
@@ -17,6 +39,13 @@ export interface Workspace {
   name: string;
   visibility: WorkspaceVisibility;
   createdAt: string;
+  currentUserRole: WorkspaceRole;
+}
+
+/** The fields to change in a Workspace; those left out keep their value. */
+export interface WorkspaceChange {
+  name?: string;
+  visibility?: WorkspaceVisibility;
 }
 
 export interface Page<T> {
@@ -43,16 +72,50 @@ interface OrganizationDto {
   current_user_role: OrganizationRole;
 }
 
+interface OrganizationMembershipDto {
+  organization_id: string;
+  user_id: string;
+  username: string;
+  name: string;
+  role: OrganizationRole;
+  created_at: string;
+}
+
+interface AddedOrganizationMembershipDto extends OrganizationMembershipDto {
+  temporary_password?: string;
+}
+
 interface WorkspaceDto {
   id: string;
   organization_id: string;
   name: string;
   visibility: WorkspaceVisibility;
   created_at: string;
+  current_user_role: WorkspaceRole;
 }
 
 function toOrganization(dto: OrganizationDto): Organization {
   return { id: dto.id, name: dto.name, currentUserRole: dto.current_user_role };
+}
+
+function toOrganizationMembership(dto: OrganizationMembershipDto): OrganizationMembership {
+  return {
+    organizationId: dto.organization_id,
+    userId: dto.user_id,
+    username: dto.username,
+    name: dto.name,
+    role: dto.role,
+    createdAt: dto.created_at,
+  };
+}
+
+function toAddedOrganizationMembership(
+  dto: AddedOrganizationMembershipDto,
+): AddedOrganizationMembership {
+  return {
+    ...toOrganizationMembership(dto),
+    ...(dto.temporary_password !== undefined && { temporaryPassword: dto.temporary_password }),
+  };
 }
 
 function toWorkspace(dto: WorkspaceDto): Workspace {
@@ -62,6 +125,7 @@ function toWorkspace(dto: WorkspaceDto): Workspace {
     name: dto.name,
     visibility: dto.visibility,
     createdAt: dto.created_at,
+    currentUserRole: dto.current_user_role,
   };
 }
 
@@ -123,4 +187,56 @@ export async function createWorkspace(workspace: NewWorkspace): Promise<Workspac
     },
   });
   return toWorkspace(dto);
+}
+
+export async function updateWorkspace(id: string, change: WorkspaceChange): Promise<Workspace> {
+  const path = `/api/v1/workspaces/${encodeURIComponent(id)}`;
+  return toWorkspace(await apiRequest<WorkspaceDto>(path, { method: 'PATCH', body: change }));
+}
+
+export async function listOrganizationMemberships(
+  organizationId: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<Page<OrganizationMembership>> {
+  const query = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+  const path = `/api/v1/organizations/${encodeURIComponent(organizationId)}/memberships?${query}`;
+  const dto = await apiRequest<PageDto<OrganizationMembershipDto>>(path, { signal });
+  return toPage(dto, toOrganizationMembership);
+}
+
+export async function addOrganizationMembership(
+  membership: NewOrganizationMembership,
+): Promise<AddedOrganizationMembership> {
+  const path = `/api/v1/organizations/${encodeURIComponent(membership.organizationId)}/memberships`;
+  const dto = await apiRequest<AddedOrganizationMembershipDto>(path, {
+    method: 'POST',
+    body: {
+      username: membership.username,
+      name: membership.name,
+      role: membership.role,
+    },
+  });
+  return toAddedOrganizationMembership(dto);
+}
+
+export async function updateOrganizationMembership(
+  organizationId: string,
+  userId: string,
+  role: OrganizationRole,
+): Promise<OrganizationMembership> {
+  const path = `/api/v1/organizations/${encodeURIComponent(organizationId)}/memberships/${encodeURIComponent(userId)}`;
+  const dto = await apiRequest<OrganizationMembershipDto>(path, {
+    method: 'PATCH',
+    body: { role },
+  });
+  return toOrganizationMembership(dto);
+}
+
+export async function removeOrganizationMembership(
+  organizationId: string,
+  userId: string,
+): Promise<void> {
+  const path = `/api/v1/organizations/${encodeURIComponent(organizationId)}/memberships/${encodeURIComponent(userId)}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
 }

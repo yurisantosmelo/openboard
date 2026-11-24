@@ -7,13 +7,17 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elyosemite/openboard/backend/internal/identity/application"
 	"github.com/elyosemite/openboard/backend/internal/identity/domain"
 )
 
-const userColumns = `id::text, username, name, password_hash, must_change_password, is_administrator, created_at, updated_at`
+const (
+	userColumns     = `id::text, username, name, password_hash, must_change_password, is_administrator, created_at, updated_at`
+	uqUsersUsername = "uq_users_username"
+)
 
 // Users stores Users in the users table.
 type Users struct {
@@ -35,13 +39,19 @@ func (r *Users) Count(ctx context.Context) (int, error) {
 }
 
 // Create inserts a User and returns it with its generated ID and timestamps.
+// It returns application.ErrUsernameTaken when the Username is already used.
 func (r *Users) Create(ctx context.Context, u application.NewUser) (domain.User, error) {
 	row := r.pool.QueryRow(ctx, `
 		INSERT INTO users (username, name, password_hash, must_change_password, is_administrator)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING `+userColumns,
 		u.Username.String(), u.Name, u.PasswordHash, u.MustChangePassword, u.IsAdministrator)
-	return scanUser(row)
+	user, err := scanUser(row)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.ConstraintName == uqUsersUsername {
+		return domain.User{}, application.ErrUsernameTaken
+	}
+	return user, err
 }
 
 // FindByID returns the User with id, or application.ErrNotFound.
