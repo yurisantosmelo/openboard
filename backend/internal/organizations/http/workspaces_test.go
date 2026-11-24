@@ -15,21 +15,28 @@ import (
 )
 
 const workspaceJSON = `{"id":"w1","organization_id":"o1","name":"Legal","visibility":"restricted",` +
-	`"created_at":"2026-11-17T12:00:00Z","updated_at":"2026-11-17T12:00:00Z"}`
+	`"created_at":"2026-11-17T12:00:00Z","updated_at":"2026-11-17T12:00:00Z","current_user_role":"owner"}`
 
 var legal = domain.Workspace{
 	ID: "w1", OrganizationID: "o1", Name: "Legal", Visibility: domain.VisibilityRestricted, CreatedAt: created, UpdatedAt: created,
+	ViewerRole: domain.WorkspaceRoleOwner,
 }
 
 type fakeWorkspaceService struct {
-	err   error
-	actor domain.Actor
-	in    application.CreateWorkspaceInput
-	id    string
-	orgID string
-	page  application.PageRequest
-	items []domain.Workspace
-	total int
+	err    error
+	actor  domain.Actor
+	in     application.CreateWorkspaceInput
+	change application.UpdateWorkspaceInput
+	id     string
+	orgID  string
+	page   application.PageRequest
+	items  []domain.Workspace
+	total  int
+}
+
+func (f *fakeWorkspaceService) UpdateWorkspace(_ context.Context, actor domain.Actor, in application.UpdateWorkspaceInput) (domain.Workspace, error) {
+	f.actor, f.change = actor, in
+	return legal, f.err
 }
 
 func (f *fakeWorkspaceService) CreateWorkspace(_ context.Context, actor domain.Actor, in application.CreateWorkspaceInput) (domain.Workspace, error) {
@@ -166,10 +173,58 @@ func TestGetWorkspace(t *testing.T) {
 	}
 }
 
+func TestUpdateWorkspace(t *testing.T) {
+	svc := &fakeWorkspaceService{}
+	rec := serveWorkspaces(svc, fakeAuth(false), http.MethodPatch, "/api/v1/workspaces/w1", `{"name":"Legal","visibility":"open"}`)
+
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != workspaceJSON {
+		t.Fatalf("status %d, body %s", rec.Code, rec.Body.String())
+	}
+	got := svc.change
+	if svc.actor != administrator || got.ID != "w1" || got.Name == nil || *got.Name != "Legal" ||
+		got.Visibility == nil || *got.Visibility != "open" {
+		t.Errorf("service called with %+v, %+v", svc.actor, got)
+	}
+}
+
+func TestUpdateWorkspaceLeavesOutMissingFields(t *testing.T) {
+	svc := &fakeWorkspaceService{}
+	rec := serveWorkspaces(svc, fakeAuth(false), http.MethodPatch, "/api/v1/workspaces/w1", `{"visibility":"open"}`)
+	if rec.Code != http.StatusOK || svc.change.Name != nil {
+		t.Fatalf("status %d, change %+v", rec.Code, svc.change)
+	}
+}
+
+func TestUpdateWorkspaceErrors(t *testing.T) {
+	cases := map[string]struct {
+		err    error
+		body   string
+		status int
+	}{
+		"malformed body": {nil, `{"name":`, http.StatusBadRequest},
+		"forbidden":      {domain.ErrForbidden, `{"name":"Legal"}`, http.StatusForbidden},
+		"not found":      {domain.ErrWorkspaceNotFound, `{"name":"Legal"}`, http.StatusNotFound},
+		"name taken":     {domain.ErrWorkspaceNameTaken, `{"name":"Legal"}`, http.StatusConflict},
+		"invalid fields": {errors.Join(domain.ErrInvalidName, domain.ErrInvalidVisibility), `{"name":" "}`, http.StatusUnprocessableEntity},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			rec := serveWorkspaces(&fakeWorkspaceService{err: tc.err}, fakeAuth(false), http.MethodPatch, "/api/v1/workspaces/w1", tc.body)
+			if rec.Code != tc.status {
+				t.Errorf("status %d, want %d", rec.Code, tc.status)
+			}
+		})
+	}
+}
+
 func TestWorkspaceRoutesRequireSession(t *testing.T) {
 	for _, path := range []string{"/api/v1/workspaces", "/api/v1/workspaces/w1"} {
 		if rec := serveWorkspaces(&fakeWorkspaceService{}, fakeAuth(true), http.MethodGet, path, ""); rec.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s = %d, want 401", path, rec.Code)
 		}
+	}
+	rec := serveWorkspaces(&fakeWorkspaceService{}, fakeAuth(true), http.MethodPatch, "/api/v1/workspaces/w1", `{"name":"Legal"}`)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("PATCH = %d, want 401", rec.Code)
 	}
 }

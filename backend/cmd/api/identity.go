@@ -24,8 +24,8 @@ const (
 )
 
 // setupIdentity wires the identity module, creates the first Administrator
-// when the Instance has no Users yet and returns its HTTP handler.
-func setupIdentity(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, cfg config.Config) (*identityhttp.Handler, error) {
+// when the Instance has no Users yet and returns its HTTP handler and service.
+func setupIdentity(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, cfg config.Config) (*identityhttp.Handler, *application.Service, error) {
 	svc, err := application.NewService(application.Deps{
 		Users:    postgres.NewUsers(pool),
 		Sessions: postgres.NewSessions(pool),
@@ -33,18 +33,18 @@ func setupIdentity(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool,
 		Throttle: throttle.NewMemory(signInMaxFailures, signInLockout, time.Now),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("build identity service: %w", err)
+		return nil, nil, fmt.Errorf("build identity service: %w", err)
 	}
 
 	seed := application.AdministratorSeed{Username: cfg.AdminUsername, Password: cfg.AdminPassword}
 	created, err := svc.EnsureAdministrator(ctx, seed)
 	if err != nil {
-		return nil, fmt.Errorf("create first administrator: %w", err)
+		return nil, nil, fmt.Errorf("create first administrator: %w", err)
 	}
 	if created {
 		logFirstAdministrator(ctx, logger, seed)
 	}
-	return identityhttp.NewHandler(svc, logger, signInLockout), nil
+	return identityhttp.NewHandler(svc, logger, signInLockout), svc, nil
 }
 
 func logFirstAdministrator(ctx context.Context, logger *slog.Logger, seed application.AdministratorSeed) {

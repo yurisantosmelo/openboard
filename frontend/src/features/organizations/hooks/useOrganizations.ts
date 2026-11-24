@@ -1,14 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  addOrganizationMembership,
   createOrganization,
   createWorkspace,
   getOrganization,
   getWorkspace,
+  listOrganizationMemberships,
   listOrganizations,
   listWorkspaces,
+  removeOrganizationMembership,
+  updateOrganizationMembership,
+  updateWorkspace,
+  type OrganizationRole,
+  type WorkspaceChange,
 } from '../api/organizationsApi';
 
 const workspacesKey = (organizationId: string) => ['workspaces', organizationId] as const;
+const membershipsKey = (organizationId: string) =>
+  ['organization-memberships', organizationId] as const;
 
 export function useOrganizations(page: number) {
   return useQuery({
@@ -46,10 +55,63 @@ export function useWorkspace(id: string) {
   });
 }
 
+export function useUpdateWorkspace(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (change: WorkspaceChange) => updateWorkspace(id, change),
+    onSuccess: (workspace) => {
+      queryClient.setQueryData(['workspace', id], workspace);
+      return queryClient.invalidateQueries({ queryKey: workspacesKey(workspace.organizationId) });
+    },
+  });
+}
+
 export function useCreateWorkspace(organizationId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createWorkspace,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workspacesKey(organizationId) }),
+  });
+}
+
+export function useOrganizationMemberships(organizationId: string, page: number) {
+  return useQuery({
+    queryKey: [...membershipsKey(organizationId), page],
+    queryFn: ({ signal }) => listOrganizationMemberships(organizationId, page, signal),
+  });
+}
+
+export function useAddOrganizationMembership(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: addOrganizationMembership,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
+  });
+}
+
+export function useUpdateOrganizationMembership(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: OrganizationRole }) =>
+      updateOrganizationMembership(organizationId, userId, role),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: ['organization', organizationId] }),
+        queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+      ]),
+  });
+}
+
+export function useRemoveOrganizationMembership(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => removeOrganizationMembership(organizationId, userId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: ['organization', organizationId] }),
+        queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+      ]),
   });
 }

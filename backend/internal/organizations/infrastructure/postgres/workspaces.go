@@ -18,6 +18,20 @@ const uxWorkspaceName = "ux_workspaces_organization_name"
 
 const workspaceColumns = `w.id::text, w.organization_id::text, w.name, w.visibility, w.created_at, w.updated_at`
 
+// workspaceRole is the Workspace role a Scope acts with in Workspace w:
+// Workspace Owner for those who see all ($1, ADR 0009) and for Organization
+// Owners, otherwise their Workspace Membership's role, otherwise Workspace
+// Contributor in an Open Workspace of an Organization the User ($2) belongs to.
+const workspaceRole = `CASE WHEN $1 OR EXISTS (
+	SELECT 1 FROM organization_memberships m
+	WHERE m.organization_id = w.organization_id AND m.user_id = $2::uuid AND m.role = 'owner'
+) THEN 'owner' ELSE coalesce(
+	(SELECT wm.role FROM workspace_memberships wm WHERE wm.workspace_id = w.id AND wm.user_id = $2::uuid),
+	(SELECT 'contributor' FROM organization_memberships m
+		WHERE m.organization_id = w.organization_id AND m.user_id = $2::uuid AND w.visibility = 'open')) END`
+
+const viewedWorkspaceColumns = workspaceColumns + `, ` + workspaceRole
+
 // enterable keeps the Workspaces a Scope can enter: all of them ($1), every one
 // of an Organization the User ($2) owns, Open ones of an Organization they
 // belong to, and those they hold a Workspace Membership in.
@@ -41,16 +55,7 @@ func NewWorkspaces(pool *pgxpool.Pool) *Workspaces {
 // RoleIn returns the role scope acts with in the Organization, or
 // domain.ErrUnknownOrganization when scope does not see it.
 func (r *Workspaces) RoleIn(ctx context.Context, id domain.OrganizationID, scope application.Scope) (domain.Role, error) {
-	var role *string
-	err := r.pool.QueryRow(ctx, `SELECT `+viewerRole+` FROM organizations o WHERE o.id = $3`,
-		scope.All, nullableUser(scope), string(id)).Scan(&role)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && role == nil) {
-		return "", domain.ErrUnknownOrganization
-	}
-	if err != nil {
-		return "", fmt.Errorf("read organization role: %w", err)
-	}
-	return domain.Role(*role), nil
+	return organizationRole(ctx, r.pool, id, scope, domain.ErrUnknownOrganization)
 }
 
 // Create inserts the Workspace and the creator's Workspace Membership in one
@@ -85,12 +90,29 @@ func insertWorkspace(ctx context.Context, tx pgx.Tx, n application.NewWorkspace)
 // Find returns the Workspace with id if scope can enter it, or
 // domain.ErrWorkspaceNotFound.
 func (r *Workspaces) Find(ctx context.Context, id domain.WorkspaceID, scope application.Scope) (domain.Workspace, error) {
-	ws, err := scanWorkspace(r.pool.QueryRow(ctx, `SELECT `+workspaceColumns+` FROM workspaces w
+	ws, err := scanViewedWorkspace(r.pool.QueryRow(ctx, `SELECT `+viewedWorkspaceColumns+` FROM workspaces w
 		WHERE w.id = $3 AND `+enterable, scope.All, nullableUser(scope), string(id)))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Workspace{}, domain.ErrWorkspaceNotFound
 	}
 	return ws, err
+}
+
+// Update applies the change, keeping the fields it leaves nil, and returns the
+// Workspace without ViewerRole.
+func (r *Workspaces) Update(ctx context.Context, c application.WorkspaceChange) (domain.Workspace, error) {
+	var visibility *string
+	if c.Visibility != nil {
+		v := string(*c.Visibility)
+		visibility = &v
+	}
+	ws, err := scanWorkspace(r.pool.QueryRow(ctx, `UPDATE workspaces AS w
+		SET name = coalesce($2, w.name), visibility = coalesce($3, w.visibility), updated_at = now()
+		WHERE w.id = $1 RETURNING `+workspaceColumns, string(c.ID), c.Name, visibility))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Workspace{}, domain.ErrWorkspaceNotFound
+	}
+	return ws, mapWorkspaceError(err)
 }
 
 // List returns one page of the Organization's Workspaces scope can enter,
@@ -101,14 +123,14 @@ func (r *Workspaces) List(ctx context.Context, id domain.OrganizationID, scope a
 		scope.All, nullableUser(scope), string(id)).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count workspaces: %w", err)
 	}
-	rows, err := r.pool.Query(ctx, `SELECT `+workspaceColumns+` FROM workspaces w
+	rows, err := r.pool.Query(ctx, `SELECT `+viewedWorkspaceColumns+` FROM workspaces w
 		WHERE w.organization_id = $3 AND `+enterable+` ORDER BY lower(w.name), w.id LIMIT $4 OFFSET $5`,
 		scope.All, nullableUser(scope), string(id), page.Limit, page.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list workspaces: %w", err)
 	}
 	workspaces, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Workspace, error) {
-		return scanWorkspace(row)
+		return scanViewedWorkspace(row)
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("scan workspaces: %w", err)
@@ -116,18 +138,27 @@ func (r *Workspaces) List(ctx context.Context, id domain.OrganizationID, scope a
 	return workspaces, total, nil
 }
 
-func scanWorkspace(row pgx.Row) (domain.Workspace, error) {
+func scanWorkspace(row pgx.Row, extra ...any) (domain.Workspace, error) {
 	var (
 		ws                     domain.Workspace
 		id, organizationID, vi string
 	)
-	if err := row.Scan(&id, &organizationID, &ws.Name, &vi, &ws.CreatedAt, &ws.UpdatedAt); err != nil {
+	dest := append([]any{&id, &organizationID, &ws.Name, &vi, &ws.CreatedAt, &ws.UpdatedAt}, extra...)
+	if err := row.Scan(dest...); err != nil {
 		return domain.Workspace{}, err
 	}
 	ws.ID = domain.WorkspaceID(id)
 	ws.OrganizationID = domain.OrganizationID(organizationID)
 	ws.Visibility = domain.Visibility(vi)
 	return ws, nil
+}
+
+// scanViewedWorkspace reads viewedWorkspaceColumns.
+func scanViewedWorkspace(row pgx.Row) (domain.Workspace, error) {
+	var role string
+	ws, err := scanWorkspace(row, &role)
+	ws.ViewerRole = domain.Role(role)
+	return ws, err
 }
 
 func mapWorkspaceError(err error) error {

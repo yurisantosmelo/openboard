@@ -2,7 +2,7 @@
 id: WebApp
 name: Web App
 version: 0.0.1
-summary: React and TypeScript interface of OpenBoard, which today covers signing in, signing out, changing the password and browsing Organizations and Workspaces.
+summary: React and TypeScript interface of OpenBoard, which today covers signing in, signing out, changing the password, creating Organizations and browsing, creating and editing Workspaces.
 owners:
   - maintainers
 sends:
@@ -17,7 +17,7 @@ repository:
 
 ## Overview
 
-The Web App talks to the backend over the HTTP API. Its authentication feature calls [[service|IdentityModule]]; it does not call [[service|OrganizationsModule]] yet.
+The Web App talks to the backend over the HTTP API. Its authentication feature calls [[service|IdentityModule]], and its Organizations feature calls [[service|OrganizationsModule]].
 
 <NodeGraph />
 

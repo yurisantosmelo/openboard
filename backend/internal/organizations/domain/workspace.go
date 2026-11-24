@@ -21,8 +21,14 @@ var (
 	ErrWorkspaceNotFound = errors.New("workspace not found")
 )
 
-// WorkspaceRoleOwner is the role of the User who manages a Workspace.
-const WorkspaceRoleOwner Role = "owner"
+// Workspace roles. Organization Owners act as Workspace Owner in every
+// Workspace of their Organization, and a User who enters an Open Workspace
+// without a Workspace Membership acts as Workspace Contributor.
+const (
+	WorkspaceRoleOwner       Role = "owner"
+	WorkspaceRoleContributor Role = "contributor"
+	WorkspaceRoleViewer      Role = "viewer"
+)
 
 // WorkspaceID identifies a Workspace.
 type WorkspaceID string
@@ -35,6 +41,8 @@ type Workspace struct {
 	Visibility     Visibility
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// ViewerRole is the Workspace role of the User who reads it.
+	ViewerRole Role
 }
 
 // ParseWorkspaceID normalizes a Workspace ID; anything that is not a UUID
@@ -59,11 +67,18 @@ func ParseOrganizationRef(raw string) (OrganizationID, error) {
 // ParseVisibility reads a Workspace visibility. Every new Workspace is
 // Restricted unless the request says otherwise.
 func ParseVisibility(raw string) (Visibility, error) {
-	switch Visibility(raw) {
-	case "", VisibilityRestricted:
+	if raw == "" {
 		return VisibilityRestricted, nil
-	case VisibilityOpen:
-		return VisibilityOpen, nil
+	}
+	return ParseVisibilityChange(raw)
+}
+
+// ParseVisibilityChange reads the visibility a Workspace changes to; unlike a
+// new Workspace, there is no default.
+func ParseVisibilityChange(raw string) (Visibility, error) {
+	switch v := Visibility(raw); v {
+	case VisibilityRestricted, VisibilityOpen:
+		return v, nil
 	default:
 		return "", ErrInvalidVisibility
 	}
@@ -72,3 +87,7 @@ func ParseVisibility(raw string) (Visibility, error) {
 // CanCreateWorkspace reports whether this Organization role may create
 // Workspaces: only Organization Owners can.
 func (r Role) CanCreateWorkspace() bool { return r == RoleOwner }
+
+// CanManageWorkspace reports whether this Workspace role may rename a
+// Workspace or change its visibility: only Workspace Owners can.
+func (r Role) CanManageWorkspace() bool { return r == WorkspaceRoleOwner }

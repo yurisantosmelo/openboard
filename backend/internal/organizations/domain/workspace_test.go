@@ -45,6 +45,26 @@ func TestParseVisibility(t *testing.T) {
 	}
 }
 
+func TestParseVisibilityChangeHasNoDefault(t *testing.T) {
+	if got, err := ParseVisibilityChange("open"); got != VisibilityOpen || err != nil {
+		t.Errorf("ParseVisibilityChange(open) = %q, %v", got, err)
+	}
+	if _, err := ParseVisibilityChange(""); !errors.Is(err, ErrInvalidVisibility) {
+		t.Errorf("err = %v, want ErrInvalidVisibility", err)
+	}
+}
+
+func TestOnlyWorkspaceOwnersManageWorkspaces(t *testing.T) {
+	if !WorkspaceRoleOwner.CanManageWorkspace() {
+		t.Error("a Workspace Owner must be able to manage the Workspace")
+	}
+	for _, role := range []Role{WorkspaceRoleContributor, WorkspaceRoleViewer, ""} {
+		if role.CanManageWorkspace() {
+			t.Errorf("role %q must not manage the Workspace", role)
+		}
+	}
+}
+
 func TestOnlyOrganizationOwnersCreateWorkspaces(t *testing.T) {
 	if !RoleOwner.CanCreateWorkspace() {
 		t.Error("an Organization Owner must be able to create Workspaces")

@@ -19,6 +19,15 @@ type fakeWorkspaces struct {
 	orgID   domain.OrganizationID
 	scope   Scope
 	page    PageRequest
+	// viewerRole is the role Find reports; updated and updateErr serve Update.
+	viewerRole domain.Role
+	updated    []WorkspaceChange
+	updateErr  error
+}
+
+func (f *fakeWorkspaces) Update(_ context.Context, change WorkspaceChange) (domain.Workspace, error) {
+	f.updated = append(f.updated, change)
+	return domain.Workspace{ID: change.ID, Name: "Renamed"}, f.updateErr
 }
 
 func (f *fakeWorkspaces) RoleIn(_ context.Context, id domain.OrganizationID, scope Scope) (domain.Role, error) {
@@ -33,7 +42,7 @@ func (f *fakeWorkspaces) Create(_ context.Context, w NewWorkspace) (domain.Works
 
 func (f *fakeWorkspaces) Find(_ context.Context, id domain.WorkspaceID, scope Scope) (domain.Workspace, error) {
 	f.foundID, f.scope = id, scope
-	return domain.Workspace{ID: id}, f.err
+	return domain.Workspace{ID: id, ViewerRole: f.viewerRole}, f.err
 }
 
 func (f *fakeWorkspaces) List(_ context.Context, id domain.OrganizationID, scope Scope, page PageRequest) ([]domain.Workspace, int, error) {
@@ -52,7 +61,7 @@ func TestCreateWorkspaceIsRestrictedByDefault(t *testing.T) {
 	if len(repo.created) != 1 || repo.created[0] != want {
 		t.Fatalf("created %+v, want %+v", repo.created, want)
 	}
-	if ws.ID != legalID || repo.scope != (Scope{UserID: marinaID}) {
+	if ws.ID != legalID || ws.ViewerRole != domain.WorkspaceRoleOwner || repo.scope != (Scope{UserID: marinaID}) {
 		t.Errorf("returned %+v, scope %+v", ws, repo.scope)
 	}
 }
@@ -99,6 +108,82 @@ func TestCreateWorkspaceStoresNothingWhenForbidden(t *testing.T) {
 		CreateWorkspaceInput{OrganizationID: acmeID, Name: "Legal"})
 	if len(repo.created) != 0 {
 		t.Errorf("created %+v, want nothing", repo.created)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func TestUpdateWorkspace(t *testing.T) {
+	repo := &fakeWorkspaces{viewerRole: domain.WorkspaceRoleOwner}
+	ws, err := NewWorkspaceService(repo).UpdateWorkspace(context.Background(), contributor,
+		UpdateWorkspaceInput{ID: legalID, Name: ptr(" Legal team "), Visibility: ptr("open")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.updated) != 1 {
+		t.Fatalf("updated %+v, want one change", repo.updated)
+	}
+	got := repo.updated[0]
+	if got.ID != legalID || *got.Name != "Legal team" || *got.Visibility != domain.VisibilityOpen {
+		t.Errorf("change %+v", got)
+	}
+	if ws.Name != "Renamed" || ws.ViewerRole != domain.WorkspaceRoleOwner || repo.scope != (Scope{UserID: marinaID}) {
+		t.Errorf("returned %+v, scope %+v", ws, repo.scope)
+	}
+}
+
+func TestUpdateWorkspaceChangesOnlyGivenFields(t *testing.T) {
+	repo := &fakeWorkspaces{viewerRole: domain.WorkspaceRoleOwner}
+	_, err := NewWorkspaceService(repo).UpdateWorkspace(context.Background(), contributor,
+		UpdateWorkspaceInput{ID: legalID, Visibility: ptr("restricted")})
+	if err != nil || len(repo.updated) != 1 || repo.updated[0].Name != nil {
+		t.Fatalf("updated %+v, err %v", repo.updated, err)
+	}
+}
+
+func TestUpdateWorkspaceWithoutFieldsReturnsItUnchanged(t *testing.T) {
+	repo := &fakeWorkspaces{viewerRole: domain.WorkspaceRoleOwner}
+	ws, err := NewWorkspaceService(repo).UpdateWorkspace(context.Background(), contributor,
+		UpdateWorkspaceInput{ID: legalID})
+	if err != nil || ws.ID != legalID || len(repo.updated) != 0 {
+		t.Fatalf("workspace %+v, updated %+v, err %v", ws, repo.updated, err)
+	}
+}
+
+func TestUpdateWorkspaceRejections(t *testing.T) {
+	errStore := errors.New("store down")
+	rename := UpdateWorkspaceInput{ID: legalID, Name: ptr("Legal")}
+	owner := domain.WorkspaceRoleOwner
+	cases := map[string]struct {
+		in   UpdateWorkspaceInput
+		repo fakeWorkspaces
+		want []error
+	}{
+		"invalid id":          {UpdateWorkspaceInput{ID: "legal"}, fakeWorkspaces{}, []error{domain.ErrWorkspaceNotFound}},
+		"every field invalid": {UpdateWorkspaceInput{ID: legalID, Name: ptr(" "), Visibility: ptr("")}, fakeWorkspaces{viewerRole: owner}, []error{domain.ErrInvalidName, domain.ErrInvalidVisibility}},
+		"cannot enter":        {rename, fakeWorkspaces{err: domain.ErrWorkspaceNotFound}, []error{domain.ErrWorkspaceNotFound}},
+		"not an Owner":        {rename, fakeWorkspaces{viewerRole: domain.WorkspaceRoleContributor}, []error{domain.ErrForbidden}},
+		"name taken":          {rename, fakeWorkspaces{viewerRole: owner, updateErr: domain.ErrWorkspaceNameTaken}, []error{domain.ErrWorkspaceNameTaken}},
+		"store failure":       {rename, fakeWorkspaces{viewerRole: owner, updateErr: errStore}, []error{errStore}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewWorkspaceService(&tc.repo).UpdateWorkspace(context.Background(), contributor, tc.in)
+			for _, want := range tc.want {
+				if !errors.Is(err, want) {
+					t.Errorf("err = %v, want it to wrap %v", err, want)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateWorkspaceChangesNothingWhenForbidden(t *testing.T) {
+	repo := &fakeWorkspaces{viewerRole: domain.WorkspaceRoleViewer}
+	_, _ = NewWorkspaceService(repo).UpdateWorkspace(context.Background(), contributor,
+		UpdateWorkspaceInput{ID: legalID, Name: ptr("Legal")})
+	if len(repo.updated) != 0 {
+		t.Errorf("updated %+v, want nothing", repo.updated)
 	}
 }
 

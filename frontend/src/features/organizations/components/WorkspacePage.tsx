@@ -6,6 +6,7 @@ import { organizationPath } from '../paths';
 import './Organizations.css';
 import { visibilityLabels } from './visibility';
 import { VisibilityLozenge } from './VisibilityLozenge';
+import { WorkspaceSettings } from './WorkspaceSettings';
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 
@@ -19,7 +20,7 @@ export function WorkspacePage() {
   if (workspace.isError) {
     return <Alert tone="danger">{errorMessage(workspace.error)}</Alert>;
   }
-  const { name, visibility, createdAt, organizationId } = workspace.data;
+  const { name, visibility, createdAt, organizationId, currentUserRole } = workspace.data;
   return (
     <div className="page-stack">
       <header className="page-header">
@@ -34,6 +35,7 @@ export function WorkspacePage() {
           <dd>{dateFormat.format(new Date(createdAt))}</dd>
         </dl>
       </Card>
+      {currentUserRole === 'owner' && <WorkspaceSettings workspace={workspace.data} />}
       <Link className="btn btn--link" to={organizationPath(organizationId)}>
         Back to Organization
       </Link>

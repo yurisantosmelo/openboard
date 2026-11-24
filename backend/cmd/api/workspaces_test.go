@@ -11,9 +11,10 @@ import (
 const unknownID = "00000000-0000-0000-0000-000000000000"
 
 type workspaceBody struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Visibility string `json:"visibility"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Visibility      string `json:"visibility"`
+	CurrentUserRole string `json:"current_user_role"`
 }
 
 func decodeBody[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
@@ -85,4 +86,23 @@ func TestAdministratorListsWorkspaces(t *testing.T) {
 	c.expect(http.MethodGet, "/api/v1/workspaces", "", http.StatusUnprocessableEntity)
 	c.expect(http.MethodGet, "/api/v1/workspaces?organization_id="+unknownID, "", http.StatusUnprocessableEntity)
 	c.expect(http.MethodDelete, "/api/v1/workspaces", "", http.StatusMethodNotAllowed)
+}
+
+func TestAdministratorUpdatesDefaultWorkspace(t *testing.T) {
+	c := newAPIClient(t)
+	orgID := signedInWithOrganization(t, c)
+	c.expect(http.MethodPost, "/api/v1/workspaces", `{"organization_id":"`+orgID+`","name":"Legal"}`, http.StatusCreated)
+	page := decodeBody[struct {
+		Items []workspaceBody `json:"items"`
+	}](t, c.expect(http.MethodGet, "/api/v1/workspaces?organization_id="+orgID, "", http.StatusOK))
+	path := "/api/v1/workspaces/" + page.Items[0].ID
+
+	ws := decodeBody[workspaceBody](t, c.expect(http.MethodPatch, path, `{"name":" Everyone ","visibility":"restricted"}`, http.StatusOK))
+	if ws.Name != "Everyone" || ws.Visibility != "restricted" || ws.CurrentUserRole != "owner" {
+		t.Errorf("workspace %+v", ws)
+	}
+
+	c.expect(http.MethodPatch, path, `{"name":"legal"}`, http.StatusConflict)
+	c.expect(http.MethodPatch, path, `{"visibility":""}`, http.StatusUnprocessableEntity)
+	c.expect(http.MethodPatch, "/api/v1/workspaces/"+unknownID, `{"name":"HR"}`, http.StatusNotFound)
 }
