@@ -1,10 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  deactivateUser,
-  issueTemporaryPassword,
-  listUsers,
-  reactivateUser,
-} from '../api/usersApi';
+import { deactivateUser, issueTemporaryPassword, listUsers, reactivateUser } from '../api/usersApi';
 
 const usersKey = ['users'] as const;
 
