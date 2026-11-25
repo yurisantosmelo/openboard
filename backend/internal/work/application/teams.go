@@ -180,6 +180,9 @@ func (s *TeamService) AddProjectTeam(ctx context.Context, actor domain.Actor, ra
 	if !role.CanManageProject() {
 		return domain.Team{}, domain.ErrForbidden
 	}
+	if project.IsReadOnly() {
+		return domain.Team{}, domain.ErrProjectReadOnly
+	}
 	teamID, err := domain.ParseTeamRef(rawTeamID)
 	if err != nil {
 		return domain.Team{}, err
@@ -200,6 +203,9 @@ func (s *TeamService) RemoveProjectTeam(ctx context.Context, actor domain.Actor,
 	}
 	if !role.CanManageProject() {
 		return domain.ErrForbidden
+	}
+	if project.IsReadOnly() {
+		return domain.ErrProjectReadOnly
 	}
 	teamID, err := domain.ParseTeamID(rawTeamID)
 	if err != nil {
@@ -251,6 +257,9 @@ func (s *TeamService) workspaceOwner(ctx context.Context, actor domain.Actor, ra
 	if !access.Role.CanManageProject() {
 		return domain.WorkspaceAccess{}, domain.ErrForbidden
 	}
+	if access.Archived {
+		return domain.WorkspaceAccess{}, domain.ErrProjectReadOnly
+	}
 	return access, nil
 }
 
@@ -270,5 +279,6 @@ func (s *TeamService) projectAccess(ctx context.Context, actor domain.Actor, raw
 	if err != nil {
 		return domain.Project{}, "", err
 	}
+	project.WorkspaceArchived = access.Archived
 	return project, access.Role, nil
 }

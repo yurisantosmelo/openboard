@@ -209,6 +209,7 @@ func (s *EraService) projectForViewer(ctx context.Context, actor domain.Actor, r
 		return domain.Project{}, err
 	}
 	project.ViewerRole = access.Role
+	project.WorkspaceArchived = access.Archived
 	return project, nil
 }
 
@@ -219,6 +220,9 @@ func (s *EraService) projectForWriter(ctx context.Context, actor domain.Actor, r
 	}
 	if !project.ViewerRole.CanWriteWorkItems() {
 		return domain.Project{}, domain.ErrForbidden
+	}
+	if project.IsReadOnly() {
+		return domain.Project{}, domain.ErrProjectReadOnly
 	}
 	return project, nil
 }

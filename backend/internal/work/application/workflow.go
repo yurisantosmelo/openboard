@@ -316,6 +316,7 @@ func (s *WorkflowService) projectForViewer(ctx context.Context, actor domain.Act
 		return domain.Project{}, err
 	}
 	project.ViewerRole = access.Role
+	project.WorkspaceArchived = access.Archived
 	return project, nil
 }
 
@@ -326,6 +327,9 @@ func (s *WorkflowService) projectForOwner(ctx context.Context, actor domain.Acto
 	}
 	if !project.ViewerRole.CanManageProject() {
 		return domain.Project{}, domain.ErrForbidden
+	}
+	if project.IsReadOnly() {
+		return domain.Project{}, domain.ErrProjectReadOnly
 	}
 	return project, nil
 }
