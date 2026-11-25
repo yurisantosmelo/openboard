@@ -69,6 +69,15 @@ databaseChangeLog:
   - include:
       file: ../constraints/20261118110003_add_workspace_memberships_constraints.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../constraints/20261124230505_add_projects_constraints.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../constraints/20261124230506_add_project_statuses_constraints.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../constraints/20261124230507_add_project_work_item_types_constraints.sql
+      relativeToChangelogFile: true
 
   # 4. indexes
   - include:
@@ -79,4 +88,7 @@ databaseChangeLog:
       relativeToChangelogFile: true
   - include:
       file: ../indexes/20261118110004_create_workspace_indexes.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../indexes/20261124230508_create_project_indexes.sql
       relativeToChangelogFile: true
