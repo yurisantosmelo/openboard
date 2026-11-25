@@ -33,12 +33,14 @@ export function LoginForm({
 
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">
+      <Card className="shadow-sm/5 dark:shadow-none">
+        <CardHeader className="gap-1.5">
+          <CardTitle className="text-xl tracking-tight">
             <h1>Sign in</h1>
           </CardTitle>
-          <CardDescription>Enter your username below to sign in to OpenBoard</CardDescription>
+          <CardDescription className="text-sm">
+            Enter your username below to sign in to OpenBoard
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form autoComplete="off" onSubmit={onSubmit}>

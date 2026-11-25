@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { NavLink } from 'react-router';
+import { NavLink, useLocation } from 'react-router';
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -15,13 +15,16 @@ export interface NavMainItem {
 }
 
 export function NavMain({ items }: { items: NavMainItem[] }) {
+  const { pathname } = useLocation();
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel className="text-2xs uppercase tracking-wider text-sidebar-muted-foreground">
+        Platform
+      </SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.title}>
-            <SidebarMenuButton asChild tooltip={item.title}>
+            <SidebarMenuButton asChild isActive={pathname === item.url} tooltip={item.title}>
               <NavLink to={item.url} end>
                 <item.icon aria-hidden="true" />
                 <span>{item.title}</span>
