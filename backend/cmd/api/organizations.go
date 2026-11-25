@@ -58,6 +58,7 @@ func (p userProvisioner) ProvisionUser(ctx context.Context, username, name strin
 		Username:          res.User.Username.String(),
 		Name:              res.User.Name,
 		TemporaryPassword: res.TemporaryPassword,
+		Deactivated:       res.User.IsDeactivated(),
 	}, nil
 }
 
