@@ -13,6 +13,9 @@ function workspaceMembershipUsernameError(error: unknown): string | undefined {
     return undefined;
   }
   if (error.status === 409) {
+    if (error.problem?.type.endsWith('/user-deactivated')) {
+      return 'A Deactivated User cannot receive new Memberships.';
+    }
     return 'This User already belongs to this Workspace.';
   }
   return error.problem?.errors?.find(({ field }) => field === 'username')?.message;

@@ -650,6 +650,12 @@ describe('Organization Memberships', () => {
       'This User already belongs to this Organization.',
     ],
     [
+      'a Deactivated User',
+      problem(409, 'user-deactivated', 'A Deactivated User cannot receive new Memberships'),
+      'Username',
+      'A Deactivated User cannot receive new Memberships.',
+    ],
+    [
       'an invalid Username',
       problem(422, 'validation-error', 'Validation failed', {
         errors: [{ field: 'username', code: 'invalid', message: 'invalid username' }],
@@ -916,6 +922,11 @@ describe('Workspace Memberships', () => {
       'a User already in the Workspace',
       problem(409, 'workspace-membership-exists', 'Already belongs'),
       'This User already belongs to this Workspace.',
+    ],
+    [
+      'a Deactivated User',
+      problem(409, 'user-deactivated', 'A Deactivated User cannot receive new Memberships'),
+      'A Deactivated User cannot receive new Memberships.',
     ],
     [
       'a User outside the Organization',

@@ -13,12 +13,19 @@ interface MembershipFieldErrors {
   username?: string;
 }
 
+function membershipConflictMessage(error: ApiError): string {
+  if (error.problem?.type.endsWith('/user-deactivated')) {
+    return 'A Deactivated User cannot receive new Memberships.';
+  }
+  return 'This User already belongs to this Organization.';
+}
+
 function membershipFieldErrors(error: unknown): MembershipFieldErrors {
   if (!(error instanceof ApiError)) {
     return {};
   }
   if (error.status === 409) {
-    return { username: 'This User already belongs to this Organization.' };
+    return { username: membershipConflictMessage(error) };
   }
   const errors = error.problem?.errors;
   return {
