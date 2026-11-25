@@ -126,8 +126,9 @@ func TestAddWorkspaceMembershipErrors(t *testing.T) {
 		"malformed":  {nil, `{"username":`, http.StatusBadRequest, "malformed-request", nil},
 		"not found":  {domain.ErrWorkspaceNotFound, `{"username":"ana"}`, http.StatusNotFound, "not-found", nil},
 		"forbidden":  {domain.ErrForbidden, `{"username":"ana"}`, http.StatusForbidden, "forbidden", nil},
-		"duplicate":  {domain.ErrWorkspaceMembershipExists, `{"username":"ana"}`, http.StatusConflict, "workspace-membership-exists", nil},
-		"not in org": {domain.ErrOrganizationMemberNotFound, `{"username":"ana"}`, http.StatusUnprocessableEntity, "validation-error", []string{"username:not_found"}},
+		"duplicate":   {domain.ErrWorkspaceMembershipExists, `{"username":"ana"}`, http.StatusConflict, "workspace-membership-exists", nil},
+		"deactivated": {domain.ErrUserDeactivated, `{"username":"ana"}`, http.StatusConflict, "user-deactivated", nil},
+		"not in org":  {domain.ErrOrganizationMemberNotFound, `{"username":"ana"}`, http.StatusUnprocessableEntity, "validation-error", []string{"username:not_found"}},
 		"all fields": {errors.Join(domain.ErrInvalidUsername, domain.ErrInvalidWorkspaceRole), `{}`, http.StatusUnprocessableEntity, "validation-error", []string{"username:invalid", "role:invalid"}},
 		"internal":   {errors.New("store down"), `{"username":"ana"}`, http.StatusInternalServerError, "internal-error", nil},
 	}

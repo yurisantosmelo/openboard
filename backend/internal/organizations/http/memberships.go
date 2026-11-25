@@ -163,6 +163,8 @@ func mapMembershipError(err error) error {
 		return &httpx.Error{Status: http.StatusConflict, Slug: "organization-membership-exists", Title: "User already belongs to this Organization"}
 	case errors.Is(err, domain.ErrLastOrganizationOwner):
 		return &httpx.Error{Status: http.StatusConflict, Slug: "last-organization-owner", Title: "An Organization must keep at least one Organization Owner"}
+	case errors.Is(err, domain.ErrUserDeactivated):
+		return errUserDeactivated()
 	}
 	return validationOr(err, membershipFieldErrors)
 }
