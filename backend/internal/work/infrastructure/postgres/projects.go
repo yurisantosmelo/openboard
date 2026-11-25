@@ -111,6 +111,33 @@ func (r *Projects) Rename(ctx context.Context, id domain.ProjectID, name string)
 	return project, nil
 }
 
+// Move relocates a Project to targetWorkspaceID inside the same Organization,
+// clearing its Project Teams atomically while preserving all Project content.
+func (r *Projects) Move(ctx context.Context, id domain.ProjectID, targetWorkspaceID domain.WorkspaceID) (domain.Project, error) {
+	var moved domain.Project
+	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM project_teams WHERE project_id = $1`, string(id)); err != nil {
+			return fmt.Errorf("clear project teams on move: %w", err)
+		}
+		row := tx.QueryRow(ctx, `
+			UPDATE projects
+			SET workspace_id = $2, updated_at = NOW()
+			WHERE id = $1
+			RETURNING `+projectColumns,
+			string(id), string(targetWorkspaceID))
+		p, err := scanProject(row)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNotFound
+		}
+		if err != nil {
+			return mapProjectError("move project", err)
+		}
+		moved = p
+		return nil
+	})
+	return moved, err
+}
+
 func scanProject(row pgx.Row) (domain.Project, error) {
 	var (
 		p                        domain.Project

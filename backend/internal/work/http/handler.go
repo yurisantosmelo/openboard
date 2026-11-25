@@ -20,6 +20,7 @@ type Service interface {
 	ListProjects(ctx context.Context, actor domain.Actor, rawWorkspaceID string, page application.PageRequest) ([]domain.Project, int, error)
 	GetProject(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error)
 	UpdateProject(ctx context.Context, actor domain.Actor, in application.UpdateProjectInput) (domain.Project, error)
+	MoveProject(ctx context.Context, actor domain.Actor, rawProjectID, rawTargetWorkspaceID string) (domain.Project, error)
 }
 
 // Auth authenticates requests and resolves the Actor behind them.
@@ -50,6 +51,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		http.MethodGet:   h.auth.Authenticated(h.get),
 		http.MethodPatch: h.auth.Authenticated(h.update),
 	})
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/projects/{project_id}/move",
+		h.auth.Authenticated(h.move))
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
@@ -109,6 +112,22 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) error {
 	project, err := h.svc.UpdateProject(r.Context(), h.auth.Actor(r.Context()), application.UpdateProjectInput{
 		ID: r.PathValue("project_id"), Name: req.Name,
 	})
+	if err != nil {
+		return mapError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toProjectResponse(project))
+}
+
+type moveProjectRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+}
+
+func (h *Handler) move(w http.ResponseWriter, r *http.Request) error {
+	var req moveProjectRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+	project, err := h.svc.MoveProject(r.Context(), h.auth.Actor(r.Context()), r.PathValue("project_id"), req.WorkspaceID)
 	if err != nil {
 		return mapError(err)
 	}

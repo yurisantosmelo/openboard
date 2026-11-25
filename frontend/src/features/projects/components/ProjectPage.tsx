@@ -8,6 +8,7 @@ import { ProjectWorkItems } from '../../work-items/components/ProjectWorkItems';
 import { useProject } from '../hooks/useProjects';
 import { ProjectErasCard } from './ProjectErasCard';
 import { ProjectSettings } from './ProjectSettings';
+import { ProjectTeamsCard } from './ProjectTeamsCard';
 import { ProjectWorkflow } from './ProjectWorkflow';
 
 export function ProjectPage() {
@@ -43,6 +44,7 @@ export function ProjectPage() {
       </header>
       <ProjectWorkItems project={project.data} />
       <ProjectErasCard project={project.data} />
+      <ProjectTeamsCard project={project.data} />
       <ProjectWorkflow
         projectId={project.data.id}
         canManage={project.data.currentUserRole === 'owner'}

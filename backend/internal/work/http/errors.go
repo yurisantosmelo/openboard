@@ -47,6 +47,10 @@ var workFieldErrors = []fieldRule{
 	{domain.ErrInvalidViewLayout, httpx.FieldError{Field: "layout", Code: "invalid", Message: domain.ErrInvalidViewLayout.Error()}},
 	{domain.ErrInvalidViewVisibility, httpx.FieldError{Field: "visibility", Code: "invalid", Message: domain.ErrInvalidViewVisibility.Error()}},
 	{domain.ErrInvalidViewFilters, httpx.FieldError{Field: "filters", Code: "invalid", Message: domain.ErrInvalidViewFilters.Error()}},
+	{domain.ErrInvalidTeamName, httpx.FieldError{Field: "name", Code: "invalid", Message: domain.ErrInvalidTeamName.Error()}},
+	{domain.ErrInvalidTeamRef, httpx.FieldError{Field: "team_id", Code: "invalid", Message: domain.ErrInvalidTeamRef.Error()}},
+	{domain.ErrInvalidTeamAssignee, httpx.FieldError{Field: "user_id", Code: "invalid", Message: domain.ErrInvalidTeamAssignee.Error()}},
+	{domain.ErrCrossOrganizationMove, httpx.FieldError{Field: "workspace_id", Code: "cross_organization", Message: domain.ErrCrossOrganizationMove.Error()}},
 }
 
 var conflictErrors = []struct {
@@ -66,6 +70,9 @@ var conflictErrors = []struct {
 	{domain.ErrEraNotActive, "era-not-active", "Only an Active Era can be closed"},
 	{domain.ErrEraCompleted, "era-completed", "Completed Eras cannot be modified"},
 	{domain.ErrViewNameInUse, "view-name-taken", "View name already in use"},
+	{domain.ErrTeamNameInUse, "team-name-taken", "Team name already in use"},
+	{domain.ErrTeamAssignmentExists, "team-assignment-exists", "User is already assigned to this Team"},
+	{domain.ErrProjectTeamExists, "project-team-exists", "Team is already associated with this Project"},
 }
 
 var notFoundErrors = []error{
@@ -77,6 +84,9 @@ var notFoundErrors = []error{
 	domain.ErrLinkNotFound,
 	domain.ErrEraNotFound,
 	domain.ErrViewNotFound,
+	domain.ErrTeamNotFound,
+	domain.ErrTeamAssignmentNotFound,
+	domain.ErrProjectTeamNotFound,
 }
 
 func mapError(err error) error {

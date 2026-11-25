@@ -96,6 +96,7 @@ describe('Projects on WorkspacePage', () => {
     stubApi({
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(workspaceDto()),
+      'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
       'GET /api/v1/workspaces/w2/memberships?page=1&page_size=20': pageOf([]),
       'GET /api/v1/projects?workspace_id=w2&page=1&page_size=20': () =>
         pageOf(created ? [projectDto()] : []),
@@ -130,6 +131,7 @@ describe('Projects on WorkspacePage', () => {
     stubApi({
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(workspaceDto()),
+      'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
       'GET /api/v1/workspaces/w2/memberships?page=1&page_size=20': pageOf([]),
       'GET /api/v1/projects?workspace_id=w2&page=1&page_size=20': pageOf([]),
       'POST /api/v1/projects': problem(500, 'internal-error', 'Server failure'),
@@ -150,6 +152,7 @@ describe('Projects on WorkspacePage', () => {
     stubApi({
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(workspaceDto({ current_user_role: 'viewer' })),
+      'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
       'GET /api/v1/projects?workspace_id=w2&page=1&page_size=20': pageOf([]),
     });
 
@@ -178,6 +181,13 @@ describe('ProjectPage', () => {
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/teams': Response.json({ items: [] }),
+      'GET /api/v1/workspaces/w1/teams': Response.json({ items: [] }),
+      'GET /api/v1/workspaces?organization_id=o1&page=1&page_size=20': Response.json({
+        items: [],
+        page: 1,
+        total_pages: 1,
+      }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
       'GET /api/v1/projects?workspace_id=w2&page=1&page_size=20': pageOf([]),
       'PATCH /api/v1/projects/p1': () => {
@@ -232,6 +242,13 @@ describe('ProjectPage', () => {
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/teams': Response.json({ items: [] }),
+      'GET /api/v1/workspaces/w1/teams': Response.json({ items: [] }),
+      'GET /api/v1/workspaces?organization_id=o1&page=1&page_size=20': Response.json({
+        items: [],
+        page: 1,
+        total_pages: 1,
+      }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
     });
 
@@ -264,6 +281,13 @@ describe('ProjectPage', () => {
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/teams': Response.json({ items: [] }),
+      'GET /api/v1/workspaces/w1/teams': Response.json({ items: [] }),
+      'GET /api/v1/workspaces?organization_id=o1&page=1&page_size=20': Response.json({
+        items: [],
+        page: 1,
+        total_pages: 1,
+      }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
       'PATCH /api/v1/projects/p1': problem(500, 'internal-error', 'Rename failed'),
     });
