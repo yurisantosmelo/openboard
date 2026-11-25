@@ -61,12 +61,20 @@ type CreateWorkspaceInput struct {
 
 // WorkspaceService runs the Workspace use cases.
 type WorkspaceService struct {
-	workspaces WorkspaceRepository
+	workspaces             WorkspaceRepository
+	onVisibilityRestricted func(ctx context.Context, wsID domain.WorkspaceID) error
 }
 
 // NewWorkspaceService builds a WorkspaceService from its repository.
 func NewWorkspaceService(workspaces WorkspaceRepository) *WorkspaceService {
 	return &WorkspaceService{workspaces: workspaces}
+}
+
+// WithVisibilityRestrictedHook registers a callback invoked when an Open Workspace
+// is changed to Restricted.
+func (s *WorkspaceService) WithVisibilityRestrictedHook(fn func(ctx context.Context, wsID domain.WorkspaceID) error) *WorkspaceService {
+	s.onVisibilityRestricted = fn
+	return s
 }
 
 // CreateWorkspace creates a Workspace in an Organization the Actor manages.
@@ -125,8 +133,18 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, actor domain.Act
 	if err != nil {
 		return domain.Workspace{}, err
 	}
+	if err := s.notifyVisibilityRestricted(ctx, current.Visibility, updated); err != nil {
+		return domain.Workspace{}, err
+	}
 	updated.ViewerRole = current.ViewerRole
 	return updated, nil
+}
+
+func (s *WorkspaceService) notifyVisibilityRestricted(ctx context.Context, before domain.Visibility, after domain.Workspace) error {
+	if s.onVisibilityRestricted == nil || before == domain.VisibilityRestricted || after.Visibility != domain.VisibilityRestricted {
+		return nil
+	}
+	return s.onVisibilityRestricted(ctx, after.ID)
 }
 
 func parseChange(id domain.WorkspaceID, in UpdateWorkspaceInput) (WorkspaceChange, error) {

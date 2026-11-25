@@ -59,12 +59,19 @@ type RemoveWorkspaceMembershipInput struct {
 
 // WorkspaceMembershipService runs the Workspace Membership use cases.
 type WorkspaceMembershipService struct {
-	memberships WorkspaceMembershipRepository
+	memberships  WorkspaceMembershipRepository
+	onAccessLost func(ctx context.Context, wsID domain.WorkspaceID) error
 }
 
 // NewWorkspaceMembershipService builds a WorkspaceMembershipService from its repository.
 func NewWorkspaceMembershipService(memberships WorkspaceMembershipRepository) *WorkspaceMembershipService {
 	return &WorkspaceMembershipService{memberships: memberships}
+}
+
+// WithAccessLostHook registers a callback invoked after a Workspace Membership is removed.
+func (s *WorkspaceMembershipService) WithAccessLostHook(fn func(ctx context.Context, wsID domain.WorkspaceID) error) *WorkspaceMembershipService {
+	s.onAccessLost = fn
+	return s
 }
 
 // ListMemberships returns one page of a Workspace's Memberships for an Actor
@@ -145,7 +152,13 @@ func (s *WorkspaceMembershipService) RemoveMembership(ctx context.Context, actor
 	if !ws.ViewerRole.CanManageWorkspace() && actor.UserID != userID {
 		return domain.ErrForbidden
 	}
-	return s.memberships.Delete(ctx, wsID, userID)
+	if err := s.memberships.Delete(ctx, wsID, userID); err != nil {
+		return err
+	}
+	if s.onAccessLost != nil {
+		return s.onAccessLost(ctx, wsID)
+	}
+	return nil
 }
 
 func (s *WorkspaceMembershipService) requireOwner(ctx context.Context, wsID domain.WorkspaceID, actor domain.Actor) (domain.Workspace, error) {

@@ -83,13 +83,21 @@ type AddedOrganizationMembership struct {
 
 // MembershipService runs the Organization Membership use cases.
 type MembershipService struct {
-	memberships OrganizationMembershipRepository
-	users       UserProvisioner
+	memberships  OrganizationMembershipRepository
+	users        UserProvisioner
+	onAccessLost func(ctx context.Context, orgID domain.OrganizationID, userID domain.UserID) error
 }
 
 // NewMembershipService builds a MembershipService from its dependencies.
 func NewMembershipService(memberships OrganizationMembershipRepository, users UserProvisioner) *MembershipService {
 	return &MembershipService{memberships: memberships, users: users}
+}
+
+// WithAccessLostHook registers a callback invoked after a User's Organization
+// Membership is removed or demoted from Organization Owner.
+func (s *MembershipService) WithAccessLostHook(fn func(ctx context.Context, orgID domain.OrganizationID, userID domain.UserID) error) *MembershipService {
+	s.onAccessLost = fn
+	return s
 }
 
 // ListMemberships returns one page of the Organization's Memberships for an
@@ -173,7 +181,16 @@ func (s *MembershipService) UpdateMembership(ctx context.Context, actor domain.A
 	if err := s.requireOwner(ctx, orgID, actor); err != nil {
 		return domain.OrganizationMembership{}, err
 	}
-	return s.memberships.UpdateRole(ctx, orgID, userID, role)
+	updated, err := s.memberships.UpdateRole(ctx, orgID, userID, role)
+	if err != nil {
+		return domain.OrganizationMembership{}, err
+	}
+	if role != domain.RoleOwner && s.onAccessLost != nil {
+		if err := s.onAccessLost(ctx, orgID, userID); err != nil {
+			return domain.OrganizationMembership{}, err
+		}
+	}
+	return updated, nil
 }
 
 // RemoveMembership removes an Organization Membership. Organization Owners and
@@ -195,5 +212,11 @@ func (s *MembershipService) RemoveMembership(ctx context.Context, actor domain.A
 	if !role.CanManageOrganization() && actor.UserID != userID {
 		return domain.ErrForbidden
 	}
-	return s.memberships.Delete(ctx, orgID, userID)
+	if err := s.memberships.Delete(ctx, orgID, userID); err != nil {
+		return err
+	}
+	if s.onAccessLost != nil {
+		return s.onAccessLost(ctx, orgID, userID)
+	}
+	return nil
 }
