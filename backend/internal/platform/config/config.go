@@ -9,16 +9,18 @@ import (
 )
 
 const (
-	defaultHTTPAddr        = ":8080"
-	defaultShutdownTimeout = 10 * time.Second
+	defaultHTTPAddr            = ":8080"
+	defaultShutdownTimeout     = 10 * time.Second
+	defaultDeletionGracePeriod = 30 * 24 * time.Hour
 )
 
 // Config is the runtime configuration of the API process.
 type Config struct {
-	HTTPAddr        string
-	LogLevel        slog.Level
-	ShutdownTimeout time.Duration
-	DatabaseURL     string
+	HTTPAddr            string
+	LogLevel            slog.Level
+	ShutdownTimeout     time.Duration
+	DeletionGracePeriod time.Duration
+	DatabaseURL         string
 	// AdminUsername and AdminPassword optionally seed the first Administrator.
 	AdminUsername string
 	AdminPassword string
@@ -31,12 +33,13 @@ var ErrMissingDatabaseURL = errors.New("OPENBOARD_DATABASE_URL is required")
 // defaults for unset variables and rejecting invalid values.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		HTTPAddr:        defaultHTTPAddr,
-		LogLevel:        slog.LevelInfo,
-		ShutdownTimeout: defaultShutdownTimeout,
-		DatabaseURL:     getenv("OPENBOARD_DATABASE_URL"),
-		AdminUsername:   getenv("OPENBOARD_ADMIN_USERNAME"),
-		AdminPassword:   getenv("OPENBOARD_ADMIN_PASSWORD"),
+		HTTPAddr:            defaultHTTPAddr,
+		LogLevel:            slog.LevelInfo,
+		ShutdownTimeout:     defaultShutdownTimeout,
+		DeletionGracePeriod: defaultDeletionGracePeriod,
+		DatabaseURL:         getenv("OPENBOARD_DATABASE_URL"),
+		AdminUsername:       getenv("OPENBOARD_ADMIN_USERNAME"),
+		AdminPassword:       getenv("OPENBOARD_ADMIN_PASSWORD"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, ErrMissingDatabaseURL
@@ -58,6 +61,14 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("OPENBOARD_SHUTDOWN_TIMEOUT: %w", err)
 		}
 		cfg.ShutdownTimeout = timeout
+	}
+
+	if raw := getenv("OPENBOARD_DELETION_GRACE_PERIOD"); raw != "" {
+		grace, err := parsePositiveDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("OPENBOARD_DELETION_GRACE_PERIOD: %w", err)
+		}
+		cfg.DeletionGracePeriod = grace
 	}
 
 	return cfg, nil
