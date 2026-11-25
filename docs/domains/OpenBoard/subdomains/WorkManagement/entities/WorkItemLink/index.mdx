@@ -1,0 +1,50 @@
+---
+id: WorkItemLink
+name: Work Item Link
+version: 0.1.0
+summary: A non-hierarchical relation between two Work Items of the same Project.
+owners:
+  - maintainers
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+    description: Unique identifier of the Link.
+  - name: project_id
+    type: UUID
+    required: true
+    description: The Project both Work Items belong to.
+    references: Project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: source_work_item_id
+    type: UUID
+    required: true
+    description: Origin Work Item of the Link.
+    references: WorkItem
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: target_work_item_id
+    type: UUID
+    required: true
+    description: Target Work Item of the Link (must differ from source).
+    references: WorkItem
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: kind
+    type: string
+    required: true
+    description: Fixed relation kind.
+    enum: ['blocks', 'duplicates', 'relates_to']
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the Link was created.
+---
+
+## Overview
+
+Links connect two distinct Work Items in the same Project. `blocks` is directional (read from the other side as "blocked by"), `duplicates` records duplicate reports, and `relates_to` is symmetric.
+
+<EntityPropertiesTable />

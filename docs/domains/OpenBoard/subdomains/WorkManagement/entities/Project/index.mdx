@@ -1,0 +1,61 @@
+---
+id: Project
+name: Project
+version: 0.1.0
+summary: The central unit of planned and executed work, owned by one Workspace with its own workflow.
+owners:
+  - maintainers
+identifier: id
+aggregateRoot: true
+properties:
+  - name: id
+    type: UUID
+    required: true
+    description: Unique identifier of the Project.
+  - name: organization_id
+    type: UUID
+    required: true
+    description: The Organization tenant that owns the Project.
+    references: Organization
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: workspace_id
+    type: UUID
+    required: true
+    description: The Workspace that owns the Project.
+    references: Workspace
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: name
+    type: string
+    required: true
+    description: Display name, unique within the Workspace ignoring case.
+  - name: archived_at
+    type: timestamp
+    required: false
+    description: When the Project was Archived (hidden from default lists and read-only), or null.
+  - name: deleted_at
+    type: timestamp
+    required: false
+    description: When the Project entered Pending Deletion, or null.
+  - name: purge_after
+    type: timestamp
+    required: false
+    description: When a Pending Deletion Project becomes eligible for permanent deletion.
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the Project was created.
+  - name: updated_at
+    type: timestamp
+    required: true
+    description: When the Project last changed.
+---
+
+## Overview
+
+Creating a Project seeds its default Statuses (`Backlog`, `To Do`, `In Progress`, `Done`) and default Work Item Types (`Epic`, `Feature`, `User Story`, `Task`, `Bug`, `Subtask`) with their initial hierarchy.
+
+A Project is read-only whenever it is Archived or its owning Workspace is Archived. Moving a Project to another Workspace in the same Organization preserves all Work Items, workflow rules, Eras and Views while removing its Project Team associations.
+
+<EntityPropertiesTable />

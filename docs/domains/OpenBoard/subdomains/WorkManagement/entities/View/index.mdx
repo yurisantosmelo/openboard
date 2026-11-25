@@ -1,0 +1,60 @@
+---
+id: View
+name: View
+version: 0.1.0
+summary: A saved configuration of one Layout and Filters over a single Project's Work Items.
+owners:
+  - maintainers
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+    description: Unique identifier of the View.
+  - name: project_id
+    type: UUID
+    required: true
+    description: The Project this View belongs to (ADR 0010).
+    references: Project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: name
+    type: string
+    required: true
+    description: Display name of the View.
+  - name: layout
+    type: string
+    required: true
+    description: Visual representation used to display the Project's Work Items.
+    enum: ['board', 'list', 'table', 'timeline', 'calendar']
+  - name: visibility
+    type: string
+    required: true
+    description: Personal View (creator only) or Shared View (everyone in the Project).
+    enum: ['personal', 'shared']
+  - name: filters
+    type: object
+    required: true
+    description: Saved filter criteria (`status_id`, `work_item_type_id`, `priority`, `assignee_id`, `era_id`).
+  - name: created_by
+    type: UUID
+    required: true
+    description: User who created the View.
+    references: User
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the View was created.
+  - name: updated_at
+    type: timestamp
+    required: true
+    description: When the View last changed.
+---
+
+## Overview
+
+Every View starts as a Personal View; its creator can turn it into a Shared View. Workspace Viewers can use Shared Views but never create or modify Views; only the creator or a Workspace Owner can change a Shared View.
+
+<EntityPropertiesTable />

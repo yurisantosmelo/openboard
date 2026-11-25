@@ -1,0 +1,44 @@
+---
+id: Status
+name: Status
+version: 0.1.0
+summary: A customizable step of work defined by one Project and mapped to a fixed Status Group.
+owners:
+  - maintainers
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+    description: Unique identifier of the Status.
+  - name: project_id
+    type: UUID
+    required: true
+    description: The Project that defines this Status.
+    references: Project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: name
+    type: string
+    required: true
+    description: Display name, unique within the Project ignoring case.
+  - name: status_group
+    type: string
+    required: true
+    description: Fixed group used for planning and metrics across Projects.
+    enum: ['not_committed', 'planned', 'started', 'completed']
+  - name: position
+    type: integer
+    required: true
+    description: Display ordering of the Status in the Project.
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the Status was created.
+---
+
+## Overview
+
+Each Project always keeps at least one `not_committed` Status and one `completed` Status. Removing a Status requires naming a replacement Status in the same Project to receive its Work Items.
+
+<EntityPropertiesTable />

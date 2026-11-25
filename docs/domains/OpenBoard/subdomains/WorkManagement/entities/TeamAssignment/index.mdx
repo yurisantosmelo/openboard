@@ -1,0 +1,33 @@
+---
+id: TeamAssignment
+name: Team Assignment
+version: 0.1.0
+summary: The link placing a User in a Team; requires Workspace access and grants no permissions.
+owners:
+  - maintainers
+properties:
+  - name: team_id
+    type: UUID
+    required: true
+    description: The Team the User is assigned to.
+    references: Team
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: user_id
+    type: UUID
+    required: true
+    description: The assigned User (must be able to enter the Team's Workspace).
+    references: User
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the Team Assignment was created.
+---
+
+## Overview
+
+A Team Assignment grants no access (ADR 0005). If a User loses access to the Team's Workspace, their Team Assignments in that Workspace are removed.
+
+<EntityPropertiesTable />
