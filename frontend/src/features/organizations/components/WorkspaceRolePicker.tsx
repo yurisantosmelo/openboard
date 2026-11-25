@@ -27,6 +27,7 @@ export function WorkspaceRolePicker({ value, onChange }: WorkspaceRolePickerProp
         {roles.map((option) => (
           <Button
             key={option}
+            type="button"
             size="sm"
             variant={value === option ? 'default' : 'outline'}
             aria-pressed={value === option}

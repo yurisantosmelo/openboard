@@ -26,6 +26,7 @@ export function VisibilityPicker({ value, onChange }: VisibilityPickerProps) {
         {visibilities.map((option) => (
           <Button
             key={option}
+            type="button"
             size="sm"
             variant={value === option ? 'default' : 'outline'}
             aria-pressed={value === option}

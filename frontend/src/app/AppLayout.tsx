@@ -1,46 +1,43 @@
-import { LayoutGrid } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router';
+import { Outlet } from 'react-router';
+import { AppSidebar } from '@/components/app-sidebar';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from '@/components/ui/breadcrumb';
+import { Separator } from '@/components/ui/separator';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { CurrentUserMenu } from '../features/auth';
 
 export function AppLayout() {
   return (
-    <div className="grid min-h-screen bg-background text-foreground md:grid-cols-[240px_1fr]">
-      <aside className="flex flex-col gap-6 border-b bg-card p-4 md:border-r md:border-b-0">
-        <Link
-          to="/"
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground no-underline"
-        >
-          <span className="flex size-7 items-center justify-center rounded-md bg-muted text-foreground">
-            <LayoutGrid className="size-4" aria-hidden="true" />
-          </span>
-          OpenBoard
-        </Link>
-        <nav className="flex flex-col gap-1" aria-label="Main">
-          <NavLink
-            to="/"
-            end
-            className={({ isActive }) =>
-              `flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-              }`
-            }
-          >
-            <LayoutGrid className="size-4" aria-hidden="true" />
-            <span>Home</span>
-          </NavLink>
-        </nav>
-      </aside>
-      <main className="flex min-w-0 flex-col">
-        <header className="flex h-14 items-center justify-between border-b bg-card px-6">
-          <span className="text-sm font-medium text-muted-foreground">OpenBoard</span>
-          <CurrentUserMenu />
-        </header>
-        <div className="mx-auto w-full max-w-4xl p-6">
-          <Outlet />
-        </div>
-      </main>
-    </div>
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>OpenBoard</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+            <CurrentUserMenu />
+          </header>
+          <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+            <div className="mx-auto w-full max-w-4xl">
+              <Outlet />
+            </div>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

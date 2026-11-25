@@ -45,19 +45,23 @@ export function WorkspacePage() {
         <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words">{name}</h1>
         <VisibilityLozenge visibility={visibility} />
       </header>
-      <Card aria-labelledby={detailsTitleId}>
-        <CardHeader>
-          <CardTitle id={detailsTitleId}>Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
-            <dt className="text-muted-foreground">Visibility</dt>
-            <dd className="m-0">{visibilityLabels[visibility]}</dd>
-            <dt className="text-muted-foreground">Created</dt>
-            <dd className="m-0">{dateFormat.format(new Date(createdAt))}</dd>
-          </dl>
-        </CardContent>
-      </Card>
+      <section aria-labelledby={detailsTitleId}>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <h2 id={detailsTitleId}>Details</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">Visibility</dt>
+              <dd className="m-0">{visibilityLabels[visibility]}</dd>
+              <dt className="text-muted-foreground">Created</dt>
+              <dd className="m-0">{dateFormat.format(new Date(createdAt))}</dd>
+            </dl>
+          </CardContent>
+        </Card>
+      </section>
       {currentUserRole === 'owner' && (
         <>
           <WorkspaceMemberships workspaceId={workspace.data.id} />

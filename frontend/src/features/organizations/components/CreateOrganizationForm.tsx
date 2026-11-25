@@ -1,9 +1,9 @@
 import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
+import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Field } from '@/components/ui/field';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
 import { useCreateOrganization } from '../hooks/useOrganizations';
 import { organizationPath } from '../paths';
@@ -45,7 +45,7 @@ export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps)
           <AlertDescription role="alert">{errorMessage(create.error)}</AlertDescription>
         </Alert>
       )}
-      <Field
+      <FormField
         label="Name"
         name="name"
         required
@@ -60,7 +60,7 @@ export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps)
         <Button type="submit" disabled={create.isPending} aria-busy={create.isPending || undefined}>
           Create Organization
         </Button>
-        <Button variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
       </div>

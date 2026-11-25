@@ -3,7 +3,14 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { errorMessage } from '../../../shared/api/httpClient';
 import type { Page } from '../api/organizationsApi';
 
@@ -24,14 +31,18 @@ interface ListPanelProps<T> {
 export function ListPanel<T>({ title, query, action, form, ...list }: ListPanelProps<T>) {
   const titleId = useId();
   return (
-    <Card className="overflow-hidden" aria-labelledby={titleId}>
-      <CardHeader>
-        <CardTitle id={titleId}>{title}</CardTitle>
-        {action && <div className="ms-auto">{action}</div>}
-      </CardHeader>
-      {form}
-      <ListBody query={query} {...list} />
-    </Card>
+    <section aria-labelledby={titleId}>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="items-center border-b py-4">
+          <CardTitle>
+            <h2 id={titleId}>{title}</h2>
+          </CardTitle>
+          {action && <CardAction>{action}</CardAction>}
+        </CardHeader>
+        {form}
+        <ListBody query={query} {...list} />
+      </Card>
+    </section>
   );
 }
 
@@ -49,7 +60,7 @@ function ListBody<T>({
 }: ListBodyProps<T>) {
   if (query.isPending) {
     return (
-      <CardContent>
+      <CardContent className="py-6">
         <span
           role="status"
           aria-label="Loading"
@@ -62,7 +73,7 @@ function ListBody<T>({
   }
   if (query.isError) {
     return (
-      <CardContent>
+      <CardContent className="py-6">
         <Alert variant="destructive">
           <AlertCircle aria-hidden="true" />
           <AlertDescription role="alert">{errorMessage(query.error)}</AlertDescription>
@@ -101,12 +112,13 @@ function ListPager({ page, totalPages, onPageChange }: ListPagerProps) {
     return null;
   }
   return (
-    <CardFooter>
+    <CardFooter className="justify-between border-t py-3 text-sm text-muted-foreground">
       <span>
         Page {page} of {totalPages}
       </span>
       <div className="flex gap-2">
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={page <= 1}
@@ -117,6 +129,7 @@ function ListPager({ page, totalPages, onPageChange }: ListPagerProps) {
           Previous
         </Button>
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={page >= totalPages}

@@ -1,10 +1,10 @@
 import { AlertCircle, Info } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
+import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field } from '@/components/ui/field';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
 import { useChangePassword, useCurrentUser } from '../hooks/useAuth';
 
@@ -56,7 +56,9 @@ export function ChangePasswordPage() {
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
       <Card>
         <CardHeader>
-          <CardTitle>Change password</CardTitle>
+          <CardTitle>
+            <h2>Change password</h2>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4" onSubmit={handleSubmit}>
@@ -74,7 +76,7 @@ export function ChangePasswordPage() {
                 <AlertDescription role="alert">{errorMessage(change.error)}</AlertDescription>
               </Alert>
             )}
-            <Field
+            <FormField
               label="Current password"
               name="current-password"
               type="password"
@@ -86,7 +88,7 @@ export function ChangePasswordPage() {
                 setCurrentPassword(e.target.value);
               }}
             />
-            <Field
+            <FormField
               label="New password"
               name="new-password"
               type="password"
@@ -101,7 +103,7 @@ export function ChangePasswordPage() {
             <p className="text-xs text-muted-foreground">
               Use 12 to 128 characters. A long passphrase works well.
             </p>
-            <Field
+            <FormField
               label="Confirm new password"
               name="confirm-password"
               type="password"

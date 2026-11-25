@@ -50,6 +50,7 @@ export function OrganizationList({ canCreate }: OrganizationListProps) {
         canCreate &&
         !creating && (
           <Button
+            type="button"
             size="sm"
             onClick={() => {
               setCreating(true);

@@ -1,8 +1,8 @@
 import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
+import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Field } from '@/components/ui/field';
 import { errorMessage } from '../../../shared/api/httpClient';
 import type { WorkspaceVisibility } from '../api/organizationsApi';
 import { useCreateWorkspace } from '../hooks/useOrganizations';
@@ -34,7 +34,7 @@ export function CreateWorkspaceForm({ organizationId, onClose }: CreateWorkspace
           <AlertDescription role="alert">{errorMessage(create.error)}</AlertDescription>
         </Alert>
       )}
-      <Field
+      <FormField
         label="Name"
         name="name"
         required
@@ -50,7 +50,7 @@ export function CreateWorkspaceForm({ organizationId, onClose }: CreateWorkspace
         <Button type="submit" disabled={create.isPending} aria-busy={create.isPending || undefined}>
           Create Workspace
         </Button>
-        <Button variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
       </div>

@@ -26,6 +26,7 @@ export function OrganizationRolePicker({ value, onChange }: OrganizationRolePick
         {roles.map((option) => (
           <Button
             key={option}
+            type="button"
             size="sm"
             variant={value === option ? 'default' : 'outline'}
             aria-pressed={value === option}

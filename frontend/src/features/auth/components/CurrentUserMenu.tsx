@@ -13,6 +13,7 @@ export function CurrentUserMenu() {
     <div className="flex items-center gap-3">
       <span className="text-sm text-muted-foreground">{user.name}</span>
       <Button
+        type="button"
         variant="outline"
         size="sm"
         disabled={signOut.isPending}

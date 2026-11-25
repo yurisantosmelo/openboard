@@ -46,6 +46,7 @@ function WorkspaceMembershipRow({
           {workspaceRoles.map((option) => (
             <Button
               key={option}
+              type="button"
               size="sm"
               variant={membership.role === option ? 'default' : 'outline'}
               aria-pressed={membership.role === option}
@@ -60,6 +61,7 @@ function WorkspaceMembershipRow({
           ))}
         </div>
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={busy}
@@ -130,6 +132,7 @@ export function WorkspaceMemberships({ workspaceId }: WorkspaceMembershipsProps)
       action={
         !adding && (
           <Button
+            type="button"
             size="sm"
             onClick={() => {
               update.reset();

@@ -8,7 +8,9 @@ export function HomePage() {
     <div className="grid gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>{`Welcome, ${user?.name ?? ''}`}</CardTitle>
+          <CardTitle>
+            <h2>{`Welcome, ${user?.name ?? ''}`}</h2>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">You are signed in as {user?.username}.</p>

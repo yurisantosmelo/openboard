@@ -1,8 +1,8 @@
 import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
+import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Field } from '@/components/ui/field';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
 import type { AddedOrganizationMembership, OrganizationRole } from '../api/organizationsApi';
 import { useAddOrganizationMembership } from '../hooks/useOrganizations';
@@ -63,7 +63,7 @@ export function AddOrganizationMembershipForm({
           <AlertDescription role="alert">{errorMessage(add.error)}</AlertDescription>
         </Alert>
       )}
-      <Field
+      <FormField
         label="Name"
         name="name"
         required
@@ -74,7 +74,7 @@ export function AddOrganizationMembershipForm({
           setName(e.target.value);
         }}
       />
-      <Field
+      <FormField
         label="Username"
         name="username"
         required
@@ -90,7 +90,7 @@ export function AddOrganizationMembershipForm({
         <Button type="submit" disabled={add.isPending} aria-busy={add.isPending || undefined}>
           Add person
         </Button>
-        <Button variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
       </div>

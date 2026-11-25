@@ -42,6 +42,7 @@ function WorkspaceList({ organization }: { organization: Organization }) {
         canCreate &&
         !creating && (
           <Button
+            type="button"
             size="sm"
             onClick={() => {
               setCreating(true);

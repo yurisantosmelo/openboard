@@ -1,29 +1,30 @@
-import type { ComponentProps } from 'react';
-import { Slot } from '@radix-ui/react-slot';
+import * as React from 'react';
 import type { VariantProps } from 'class-variance-authority';
+import { Slot } from 'radix-ui';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from './button-variants';
 
-export type ButtonProps = ComponentProps<'button'> &
+function Button({
+  className,
+  variant = 'default',
+  size = 'default',
+  asChild = false,
+  ...props
+}: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
-  };
+  }) {
+  const Comp = asChild ? Slot.Root : 'button';
 
-export function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  type = 'button',
-  ...props
-}: ButtonProps) {
-  const Comp = asChild ? Slot : 'button';
   return (
     <Comp
       data-slot="button"
-      type={asChild ? undefined : type}
+      data-variant={variant}
+      data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
   );
 }
+
+export { Button };

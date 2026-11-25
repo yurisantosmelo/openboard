@@ -38,7 +38,7 @@ function TemporaryPasswordNotice({ username, password, onDismiss }: TemporaryPas
         </AlertDescription>
       </Alert>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={onDismiss}>
+        <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
           Dismiss
         </Button>
       </div>
@@ -69,6 +69,7 @@ function MembershipRow({ membership, busy, onChangeRole, onRemove }: MembershipR
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{organizationRoleLabels[membership.role]}</Badge>
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={busy}
@@ -80,6 +81,7 @@ function MembershipRow({ membership, busy, onChangeRole, onRemove }: MembershipR
           {nextRole === 'owner' ? 'Make Owner' : 'Make Contributor'}
         </Button>
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={busy}
@@ -174,6 +176,7 @@ export function OrganizationMemberships({ organizationId }: OrganizationMembersh
       action={
         !adding && (
           <Button
+            type="button"
             size="sm"
             onClick={() => {
               update.reset();
