@@ -136,17 +136,24 @@ func TestUsersUpdatePassword(t *testing.T) {
 	}
 }
 
-func TestUsersListDeactivateAndReactivate(t *testing.T) {
+func TestUsersList(t *testing.T) {
 	reset(t)
 	ctx := context.Background()
 	users := NewUsers(pool)
 	createUser(t, "gabriel")
-	admin := createUser(t, "admin")
+	createUser(t, "admin")
 
 	page, total, err := users.List(ctx, application.PageRequest{Limit: 1, Offset: 0})
 	if err != nil || total != 2 || len(page) != 1 || page[0].Username != "admin" {
 		t.Fatalf("List = %+v, total=%d, err=%v", page, total, err)
 	}
+}
+
+func TestUsersDeactivateAndReactivate(t *testing.T) {
+	reset(t)
+	ctx := context.Background()
+	users := NewUsers(pool)
+	admin := createUser(t, "admin")
 
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	deactivated, err := users.Deactivate(ctx, admin.ID, at)
