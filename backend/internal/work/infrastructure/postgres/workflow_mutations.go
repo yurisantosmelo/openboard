@@ -351,8 +351,8 @@ func scanWorkItemType(row pgx.Row) (domain.WorkItemType, error) {
 
 func scanTransitionRule(row pgx.Row) (domain.TransitionRule, error) {
 	var (
-		r                 domain.TransitionRule
-		projID, from, to  string
+		r                domain.TransitionRule
+		projID, from, to string
 	)
 	if err := row.Scan(&projID, &from, &to, &r.CreatedAt); err != nil {
 		return domain.TransitionRule{}, err
