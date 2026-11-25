@@ -86,9 +86,11 @@ const (
 
 // Organization is the tenant: the outermost boundary of data and access.
 type Organization struct {
-	ID        OrganizationID
-	Name      string
-	CreatedAt time.Time
+	ID         OrganizationID
+	Name       string
+	CreatedAt  time.Time
+	DeletedAt  *time.Time
+	PurgeAfter *time.Time
 	// ViewerRole is the role the Actor who read the Organization acts with.
 	ViewerRole Role
 }

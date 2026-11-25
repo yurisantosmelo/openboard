@@ -19,6 +19,11 @@ var (
 	// ErrWorkspaceNotFound reports a Workspace that does not exist or that the
 	// Actor cannot enter, without telling which.
 	ErrWorkspaceNotFound = errors.New("workspace not found")
+	// ErrWorkspaceArchived reports a mutation attempted on an Archived Workspace.
+	ErrWorkspaceArchived = errors.New("workspace is archived and read-only")
+	// ErrLastActiveWorkspace reports archiving or deleting the last non-Archived
+	// Workspace of an Organization (CONTEXT.md).
+	ErrLastActiveWorkspace = errors.New("an organization must keep at least one active workspace")
 )
 
 // Workspace roles. Organization Owners act as Workspace Owner in every
@@ -41,9 +46,16 @@ type Workspace struct {
 	Visibility     Visibility
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	ArchivedAt     *time.Time
+	DeletedAt      *time.Time
+	PurgeAfter     *time.Time
 	// ViewerRole is the Workspace role of the User who reads it.
 	ViewerRole Role
 }
+
+// IsArchived reports whether the Workspace is Archived (hidden from default
+// lists and read-only).
+func (w Workspace) IsArchived() bool { return w.ArchivedAt != nil }
 
 // ParseWorkspaceID normalizes a Workspace ID; anything that is not a UUID
 // names no Workspace.
