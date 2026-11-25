@@ -1,6 +1,6 @@
-import { Button } from '../../../shared/design-system';
+import { LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useCurrentUser, useSignOut } from '../hooks/useAuth';
-import './AuthPage.css';
 
 /** The signed-in User's name and the sign-out action, for the app header. */
 export function CurrentUserMenu() {
@@ -10,15 +10,18 @@ export function CurrentUserMenu() {
     return null;
   }
   return (
-    <div className="current-user">
-      <span className="current-user__name">{user.name}</span>
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-muted-foreground">{user.name}</span>
       <Button
-        variant="secondary"
-        busy={signOut.isPending}
+        variant="outline"
+        size="sm"
+        disabled={signOut.isPending}
+        aria-busy={signOut.isPending || undefined}
         onClick={() => {
           signOut.mutate();
         }}
       >
+        <LogOut className="size-4" aria-hidden="true" />
         Sign out
       </Button>
     </div>

@@ -20,7 +20,10 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src"]
 }

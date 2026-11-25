@@ -1,10 +1,13 @@
+import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
 import { Navigate, useLocation } from 'react-router';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, Card, TextField } from '../../../shared/design-system';
 import { useCurrentUser, useSignIn } from '../hooks/useAuth';
 import { CHANGE_PASSWORD_PATH, type SignInState } from '../paths';
-import './AuthPage.css';
 
 export function LoginPage() {
   const { data: user } = useCurrentUser();
@@ -24,38 +27,52 @@ export function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
-      <h1 className="auth-page__brand">OpenBoard</h1>
-      <Card title="Sign in">
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {signIn.isError && <Alert tone="danger">{errorMessage(signIn.error)}</Alert>}
-          <TextField
-            label="Username"
-            name="username"
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-            value={username}
-            onChange={(e) => {
-              setUsername(e.target.value);
-            }}
-          />
-          <TextField
-            label="Password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-            }}
-          />
-          <Button type="submit" busy={signIn.isPending}>
-            Sign in
-          </Button>
-        </form>
+    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
+      <h1 className="text-center text-2xl font-semibold tracking-tight">OpenBoard</h1>
+      <Card>
+        <CardHeader>
+          <CardTitle>Sign in</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={handleSubmit}>
+            {signIn.isError && (
+              <Alert variant="destructive">
+                <AlertCircle aria-hidden="true" />
+                <AlertDescription role="alert">{errorMessage(signIn.error)}</AlertDescription>
+              </Alert>
+            )}
+            <Field
+              label="Username"
+              name="username"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value);
+              }}
+            />
+            <Field
+              label="Password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+              }}
+            />
+            <Button
+              type="submit"
+              disabled={signIn.isPending}
+              aria-busy={signIn.isPending || undefined}
+            >
+              Sign in
+            </Button>
+          </form>
+        </CardContent>
       </Card>
     </main>
   );

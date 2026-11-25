@@ -1,4 +1,6 @@
 import { useId } from 'react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import type { WorkspaceRole } from '../api/organizationsApi';
 import { workspaceRoleLabels } from './workspaceRole';
 
@@ -19,26 +21,24 @@ interface WorkspaceRolePickerProps {
 export function WorkspaceRolePicker({ value, onChange }: WorkspaceRolePickerProps) {
   const labelId = useId();
   return (
-    <div className="field">
-      <span id={labelId} className="field__label">
-        Role
-      </span>
-      <div className="segmented" role="group" aria-labelledby={labelId}>
+    <div className="grid gap-1.5">
+      <Label id={labelId}>Role</Label>
+      <div className="flex flex-wrap gap-2" role="group" aria-labelledby={labelId}>
         {roles.map((option) => (
-          <button
+          <Button
             key={option}
-            type="button"
-            className="btn"
+            size="sm"
+            variant={value === option ? 'default' : 'outline'}
             aria-pressed={value === option}
             onClick={() => {
               onChange(option);
             }}
           >
             {workspaceRoleLabels[option]}
-          </button>
+          </Button>
         ))}
       </div>
-      <span className="field__help">{roleHelp[value]}</span>
+      <span className="text-xs text-muted-foreground">{roleHelp[value]}</span>
     </div>
   );
 }

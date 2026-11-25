@@ -1,6 +1,9 @@
+import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, TextField } from '../../../shared/design-system';
 import type { AddedOrganizationMembership, OrganizationRole } from '../api/organizationsApi';
 import { useAddOrganizationMembership } from '../hooks/useOrganizations';
 import { OrganizationRolePicker } from './OrganizationRolePicker';
@@ -50,12 +53,17 @@ export function AddOrganizationMembershipForm({
 
   return (
     <form
-      className="form-stack list-form"
+      className="grid gap-4 border-b p-6"
       aria-label="Add Organization Membership"
       onSubmit={handleSubmit}
     >
-      {add.isError && !hasFieldError && <Alert tone="danger">{errorMessage(add.error)}</Alert>}
-      <TextField
+      {add.isError && !hasFieldError && (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription role="alert">{errorMessage(add.error)}</AlertDescription>
+        </Alert>
+      )}
+      <Field
         label="Name"
         name="name"
         required
@@ -66,7 +74,7 @@ export function AddOrganizationMembershipForm({
           setName(e.target.value);
         }}
       />
-      <TextField
+      <Field
         label="Username"
         name="username"
         required
@@ -78,11 +86,11 @@ export function AddOrganizationMembershipForm({
         }}
       />
       <OrganizationRolePicker value={role} onChange={setRole} />
-      <div className="form-actions">
-        <Button type="submit" busy={add.isPending}>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={add.isPending} aria-busy={add.isPending || undefined}>
           Add person
         </Button>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
       </div>

@@ -1,6 +1,9 @@
+import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, TextField } from '../../../shared/design-system';
 import type { WorkspaceVisibility } from '../api/organizationsApi';
 import { useCreateWorkspace } from '../hooks/useOrganizations';
 import { VisibilityPicker } from './VisibilityPicker';
@@ -24,9 +27,14 @@ export function CreateWorkspaceForm({ organizationId, onClose }: CreateWorkspace
   }
 
   return (
-    <form className="form-stack list-form" aria-label="New Workspace" onSubmit={handleSubmit}>
-      {create.isError && !nameError && <Alert tone="danger">{errorMessage(create.error)}</Alert>}
-      <TextField
+    <form className="grid gap-4 border-b p-6" aria-label="New Workspace" onSubmit={handleSubmit}>
+      {create.isError && !nameError && (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription role="alert">{errorMessage(create.error)}</AlertDescription>
+        </Alert>
+      )}
+      <Field
         label="Name"
         name="name"
         required
@@ -38,11 +46,11 @@ export function CreateWorkspaceForm({ organizationId, onClose }: CreateWorkspace
         }}
       />
       <VisibilityPicker value={visibility} onChange={setVisibility} />
-      <div className="form-actions">
-        <Button type="submit" busy={create.isPending}>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={create.isPending} aria-busy={create.isPending || undefined}>
           Create Workspace
         </Button>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
       </div>
