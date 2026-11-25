@@ -463,3 +463,27 @@ func TestTransitionWorkItemRespectsTransitionRules(t *testing.T) {
 		t.Fatalf("allowed transition err = %v", err)
 	}
 }
+
+func TestWorkItemEraValidation(t *testing.T) {
+	svc, _, _, _, _ := newTestWorkItemHarness(domain.RoleContributor)
+	eras := &fakeEraRepo{
+		eras: []domain.Era{
+			{ID: era1UUID, ProjectID: projectUUID, State: domain.EraStateActive},
+			{ID: era2UUID, ProjectID: projectUUID, State: domain.EraStateCompleted},
+		},
+	}
+	svc.WithEras(eras)
+
+	activeRaw := string(era1UUID)
+	completedRaw := string(era2UUID)
+	if _, err := svc.CreateWorkItem(context.Background(), contribActor, CreateWorkItemInput{
+		ProjectID: string(projectUUID), WorkItemTypeID: string(typeTaskUUID), Title: "In era", EraID: &activeRaw,
+	}); err != nil {
+		t.Fatalf("create in active era err = %v", err)
+	}
+	if _, err := svc.UpdateWorkItem(context.Background(), contribActor, UpdateWorkItemInput{
+		ID: string(workItem1UUID), EraID: Optional[string]{Set: true, Value: &completedRaw},
+	}); !errors.Is(err, domain.ErrInvalidEra) {
+		t.Fatalf("assign to completed era err = %v, want ErrInvalidEra", err)
+	}
+}

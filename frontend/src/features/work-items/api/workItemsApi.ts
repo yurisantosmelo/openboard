@@ -4,6 +4,18 @@ import type { WorkspaceRole } from '../../organizations/api/organizationsApi';
 export const PAGE_SIZE = 20;
 
 export type Priority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
+export type LinkKind = 'blocks' | 'duplicates' | 'relates_to';
+
+export interface WorkItemLink {
+  id: string;
+  projectId: string;
+  sourceWorkItemId: string;
+  sourceTitle: string;
+  targetWorkItemId: string;
+  targetTitle: string;
+  kind: LinkKind;
+  createdAt: string;
+}
 
 export interface WorkItem {
   id: string;
@@ -12,6 +24,7 @@ export interface WorkItem {
   workItemTypeId: string;
   statusId: string;
   parentId: string | null;
+  eraId: string | null;
   assigneeId: string | null;
   assigneeUsername: string;
   assigneeName: string;
@@ -37,12 +50,14 @@ export interface WorkItemFilters {
   workItemTypeId?: string;
   priority?: Priority | '';
   assigneeId?: string;
+  eraId?: string;
 }
 
 export interface CreateWorkItemPayload {
   workItemTypeId: string;
   statusId?: string;
   parentId?: string | null;
+  eraId?: string | null;
   assigneeId?: string | null;
   title: string;
   description?: string;
@@ -57,6 +72,7 @@ export interface UpdateWorkItemPayload {
   priority?: Priority;
   workItemTypeId?: string;
   parentId?: string | null;
+  eraId?: string | null;
   assigneeId?: string | null;
   storyPoints?: number | null;
   hours?: number | null;
@@ -69,6 +85,7 @@ interface WorkItemDto {
   work_item_type_id: string;
   status_id: string;
   parent_id: string | null;
+  era_id?: string | null;
   assignee_id: string | null;
   assignee_username?: string;
   assignee_name?: string;
@@ -81,6 +98,21 @@ interface WorkItemDto {
   created_at: string;
   updated_at: string;
   current_user_role: WorkspaceRole;
+}
+
+interface WorkItemLinkDto {
+  id: string;
+  project_id: string;
+  source_work_item_id: string;
+  source_title: string;
+  target_work_item_id: string;
+  target_title: string;
+  kind: LinkKind;
+  created_at: string;
+}
+
+interface ListDto<T> {
+  items: T[];
 }
 
 interface PageDto<T> {
@@ -97,6 +129,7 @@ function toWorkItem(dto: WorkItemDto): WorkItem {
     workItemTypeId: dto.work_item_type_id,
     statusId: dto.status_id,
     parentId: dto.parent_id,
+    eraId: dto.era_id ?? null,
     assigneeId: dto.assignee_id,
     assigneeUsername: dto.assignee_username ?? '',
     assigneeName: dto.assignee_name ?? '',
@@ -109,6 +142,19 @@ function toWorkItem(dto: WorkItemDto): WorkItem {
     createdAt: dto.created_at,
     updatedAt: dto.updated_at,
     currentUserRole: dto.current_user_role,
+  };
+}
+
+function toWorkItemLink(dto: WorkItemLinkDto): WorkItemLink {
+  return {
+    id: dto.id,
+    projectId: dto.project_id,
+    sourceWorkItemId: dto.source_work_item_id,
+    sourceTitle: dto.source_title,
+    targetWorkItemId: dto.target_work_item_id,
+    targetTitle: dto.target_title,
+    kind: dto.kind,
+    createdAt: dto.created_at,
   };
 }
 
@@ -126,6 +172,7 @@ export async function listWorkItems(
   if (filters.workItemTypeId) query.set('work_item_type_id', filters.workItemTypeId);
   if (filters.priority) query.set('priority', filters.priority);
   if (filters.assigneeId) query.set('assignee_id', filters.assigneeId);
+  if (filters.eraId) query.set('era_id', filters.eraId);
   const path = `/api/v1/projects/${encodeURIComponent(projectId)}/work-items?${query}`;
   const dto = await apiRequest<PageDto<WorkItemDto>>(path, { signal });
   return {
@@ -151,15 +198,14 @@ export async function createWorkItem(
     description: payload.description ?? '',
     priority: payload.priority ?? 'none',
   };
-  if (payload.statusId) body.status_id = payload.statusId;
-  if (payload.parentId) body.parent_id = payload.parentId;
-  if (payload.assigneeId) body.assignee_id = payload.assigneeId;
-  if (payload.storyPoints !== undefined && payload.storyPoints !== null) {
-    body.story_points = payload.storyPoints;
-  }
-  if (payload.hours !== undefined && payload.hours !== null) {
-    body.hours = payload.hours;
-  }
+  assignDefined(body, [
+    ['status_id', payload.statusId, Boolean(payload.statusId)],
+    ['parent_id', payload.parentId, Boolean(payload.parentId)],
+    ['era_id', payload.eraId, Boolean(payload.eraId)],
+    ['assignee_id', payload.assigneeId, Boolean(payload.assigneeId)],
+    ['story_points', payload.storyPoints, payload.storyPoints != null],
+    ['hours', payload.hours, payload.hours != null],
+  ]);
   return toWorkItem(await apiRequest<WorkItemDto>(path, { method: 'POST', body }));
 }
 
@@ -184,6 +230,7 @@ export async function updateWorkItem(
     ['priority', payload.priority, payload.priority !== undefined],
     ['work_item_type_id', payload.workItemTypeId, payload.workItemTypeId !== undefined],
     ['parent_id', payload.parentId ?? null, 'parentId' in payload],
+    ['era_id', payload.eraId ?? null, 'eraId' in payload],
     ['assignee_id', payload.assigneeId ?? null, 'assigneeId' in payload],
     ['story_points', payload.storyPoints ?? null, 'storyPoints' in payload],
     ['hours', payload.hours ?? null, 'hours' in payload],
@@ -200,5 +247,33 @@ export async function transitionWorkItem(workItemId: string, statusId: string): 
 
 export async function deleteWorkItem(workItemId: string): Promise<void> {
   const path = `/api/v1/work-items/${encodeURIComponent(workItemId)}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
+}
+
+export async function listWorkItemLinks(
+  workItemId: string,
+  signal?: AbortSignal,
+): Promise<WorkItemLink[]> {
+  const path = `/api/v1/work-items/${encodeURIComponent(workItemId)}/links`;
+  const dto = await apiRequest<ListDto<WorkItemLinkDto>>(path, { signal });
+  return dto.items.map(toWorkItemLink);
+}
+
+export async function createWorkItemLink(
+  workItemId: string,
+  targetWorkItemId: string,
+  kind: LinkKind,
+): Promise<WorkItemLink> {
+  const path = `/api/v1/work-items/${encodeURIComponent(workItemId)}/links`;
+  return toWorkItemLink(
+    await apiRequest<WorkItemLinkDto>(path, {
+      method: 'POST',
+      body: { target_work_item_id: targetWorkItemId, kind },
+    }),
+  );
+}
+
+export async function deleteWorkItemLink(workItemId: string, linkId: string): Promise<void> {
+  const path = `/api/v1/work-items/${encodeURIComponent(workItemId)}/links/${encodeURIComponent(linkId)}`;
   await apiRequest<undefined>(path, { method: 'DELETE' });
 }

@@ -6,6 +6,7 @@ import { errorMessage } from '../../../shared/api/httpClient';
 import { workspacePath } from '../../organizations/paths';
 import { ProjectWorkItems } from '../../work-items/components/ProjectWorkItems';
 import { useProject } from '../hooks/useProjects';
+import { ProjectErasCard } from './ProjectErasCard';
 import { ProjectSettings } from './ProjectSettings';
 import { ProjectWorkflow } from './ProjectWorkflow';
 
@@ -41,6 +42,7 @@ export function ProjectPage() {
         </h1>
       </header>
       <ProjectWorkItems project={project.data} />
+      <ProjectErasCard project={project.data} />
       <ProjectWorkflow
         projectId={project.data.id}
         canManage={project.data.currentUserRole === 'owner'}

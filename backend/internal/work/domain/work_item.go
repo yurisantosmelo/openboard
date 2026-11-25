@@ -58,6 +58,7 @@ type WorkItem struct {
 	WorkItemTypeID   WorkItemTypeID
 	StatusID         StatusID
 	ParentID         *WorkItemID
+	EraID            *EraID
 	AssigneeID       *UserID
 	AssigneeUsername string
 	AssigneeName     string

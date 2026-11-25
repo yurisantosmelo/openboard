@@ -36,6 +36,13 @@ var workFieldErrors = []fieldRule{
 	{domain.ErrInvalidHierarchy, httpx.FieldError{Field: "allowed_child_type_ids", Code: "invalid", Message: domain.ErrInvalidHierarchy.Error()}},
 	{domain.ErrInvalidTransitionRule, httpx.FieldError{Field: "transition_rule", Code: "invalid", Message: domain.ErrInvalidTransitionRule.Error()}},
 	{domain.ErrTransitionNotAllowed, httpx.FieldError{Field: "status_id", Code: "transition_not_allowed", Message: domain.ErrTransitionNotAllowed.Error()}},
+	{domain.ErrInvalidLinkKind, httpx.FieldError{Field: "kind", Code: "invalid", Message: domain.ErrInvalidLinkKind.Error()}},
+	{domain.ErrInvalidLinkTarget, httpx.FieldError{Field: "target_work_item_id", Code: "invalid", Message: domain.ErrInvalidLinkTarget.Error()}},
+	{domain.ErrSelfLink, httpx.FieldError{Field: "target_work_item_id", Code: "self_link", Message: domain.ErrSelfLink.Error()}},
+	{domain.ErrInvalidEraName, httpx.FieldError{Field: "name", Code: "invalid", Message: domain.ErrInvalidEraName.Error()}},
+	{domain.ErrInvalidEraDates, httpx.FieldError{Field: "dates", Code: "invalid", Message: domain.ErrInvalidEraDates.Error()}},
+	{domain.ErrInvalidNextEra, httpx.FieldError{Field: "next_era_id", Code: "invalid", Message: domain.ErrInvalidNextEra.Error()}},
+	{domain.ErrInvalidEra, httpx.FieldError{Field: "era_id", Code: "invalid", Message: domain.ErrInvalidEra.Error()}},
 }
 
 var conflictErrors = []struct {
@@ -47,6 +54,13 @@ var conflictErrors = []struct {
 	{domain.ErrStatusNameInUse, "status-name-taken", "Status name already in use"},
 	{domain.ErrWorkItemTypeNameInUse, "work-item-type-name-taken", "Work Item Type name already in use"},
 	{domain.ErrTransitionRuleExists, "transition-rule-exists", "Transition Rule already exists"},
+	{domain.ErrLinkExists, "link-exists", "Link already exists"},
+	{domain.ErrEraNameInUse, "era-name-taken", "Era name already in use"},
+	{domain.ErrEraOverlap, "era-overlap", "Era dates overlap an existing Era"},
+	{domain.ErrActiveEraExists, "active-era-exists", "Project already has an Active Era"},
+	{domain.ErrEraNotPlanned, "era-not-planned", "Only a Planned Era can be started or deleted"},
+	{domain.ErrEraNotActive, "era-not-active", "Only an Active Era can be closed"},
+	{domain.ErrEraCompleted, "era-completed", "Completed Eras cannot be modified"},
 }
 
 var notFoundErrors = []error{
@@ -55,6 +69,8 @@ var notFoundErrors = []error{
 	domain.ErrStatusNotFound,
 	domain.ErrWorkItemTypeNotFound,
 	domain.ErrTransitionRuleNotFound,
+	domain.ErrLinkNotFound,
+	domain.ErrEraNotFound,
 }
 
 func mapError(err error) error {

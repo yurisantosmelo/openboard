@@ -74,6 +74,7 @@ type WorkItemFilter struct {
 	WorkItemTypeID *domain.WorkItemTypeID
 	Priority       *domain.Priority
 	AssigneeID     *domain.UserID
+	EraID          *domain.EraID
 }
 
 // NewWorkItem holds the validated fields required to persist a new Work Item.
@@ -83,6 +84,7 @@ type NewWorkItem struct {
 	WorkItemTypeID domain.WorkItemTypeID
 	StatusID       domain.StatusID
 	ParentID       *domain.WorkItemID
+	EraID          *domain.EraID
 	AssigneeID     *domain.UserID
 	Title          string
 	Description    string
@@ -97,6 +99,7 @@ type WorkItemUpdate struct {
 	ID             domain.WorkItemID
 	WorkItemTypeID domain.WorkItemTypeID
 	ParentID       *domain.WorkItemID
+	EraID          *domain.EraID
 	AssigneeID     *domain.UserID
 	Title          string
 	Description    string

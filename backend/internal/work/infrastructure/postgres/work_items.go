@@ -16,7 +16,7 @@ import (
 const workItemSelectColumns = `
 	wi.id::text, wi.organization_id::text, wi.project_id::text,
 	wi.work_item_type_id::text, wi.status_id::text,
-	wi.parent_id::text, wi.assignee_id::text,
+	wi.parent_id::text, wi.era_id::text, wi.assignee_id::text,
 	COALESCE(u.username, ''), COALESCE(u.name, ''),
 	wi.title, wi.description, wi.priority,
 	wi.story_points::double precision, wi.hours::double precision,
@@ -38,17 +38,18 @@ func (r *WorkItems) Create(ctx context.Context, in application.NewWorkItem) (dom
 		WITH inserted AS (
 			INSERT INTO work_items (
 				organization_id, project_id, work_item_type_id, status_id,
-				parent_id, assignee_id, title, description, priority,
+				parent_id, era_id, assignee_id, title, description, priority,
 				story_points, hours, created_by
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 			RETURNING *
 		)
 		SELECT `+workItemSelectColumns+`
 		FROM inserted wi
 		LEFT JOIN users u ON u.id = wi.assignee_id`,
 		string(in.OrganizationID), string(in.ProjectID), string(in.WorkItemTypeID), string(in.StatusID),
-		nullableWorkItemID(in.ParentID), nullableUserID(in.AssigneeID), in.Title, in.Description, string(in.Priority),
+		nullableWorkItemID(in.ParentID), nullableEraID(in.EraID), nullableUserID(in.AssigneeID),
+		in.Title, in.Description, string(in.Priority),
 		in.StoryPoints, in.Hours, string(in.CreatedBy))
 	item, err := scanWorkItem(row)
 	if err != nil {
@@ -115,12 +116,13 @@ func (r *WorkItems) Update(ctx context.Context, in application.WorkItemUpdate) (
 			UPDATE work_items
 			SET work_item_type_id = $2,
 			    parent_id         = $3,
-			    assignee_id       = $4,
-			    title             = $5,
-			    description       = $6,
-			    priority          = $7,
-			    story_points      = $8,
-			    hours             = $9,
+			    era_id            = $4,
+			    assignee_id       = $5,
+			    title             = $6,
+			    description       = $7,
+			    priority          = $8,
+			    story_points      = $9,
+			    hours             = $10,
 			    updated_at        = NOW()
 			WHERE id = $1
 			RETURNING *
@@ -128,8 +130,8 @@ func (r *WorkItems) Update(ctx context.Context, in application.WorkItemUpdate) (
 		SELECT `+workItemSelectColumns+`
 		FROM updated wi
 		LEFT JOIN users u ON u.id = wi.assignee_id`,
-		string(in.ID), string(in.WorkItemTypeID), nullableWorkItemID(in.ParentID), nullableUserID(in.AssigneeID),
-		in.Title, in.Description, string(in.Priority), in.StoryPoints, in.Hours)
+		string(in.ID), string(in.WorkItemTypeID), nullableWorkItemID(in.ParentID), nullableEraID(in.EraID),
+		nullableUserID(in.AssigneeID), in.Title, in.Description, string(in.Priority), in.StoryPoints, in.Hours)
 	item, err := scanWorkItem(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.WorkItem{}, domain.ErrWorkItemNotFound
@@ -311,6 +313,9 @@ func buildWorkItemFilter(projectID domain.ProjectID, f application.WorkItemFilte
 	if f.AssigneeID != nil {
 		appendClause("wi.assignee_id", string(*f.AssigneeID))
 	}
+	if f.EraID != nil {
+		appendClause("wi.era_id", string(*f.EraID))
+	}
 	return strings.Join(clauses, " AND "), args
 }
 
@@ -318,12 +323,12 @@ func scanWorkItem(row pgx.Row) (domain.WorkItem, error) {
 	var (
 		w                                      domain.WorkItem
 		id, orgID, projectID, typeID, statusID string
-		parentID, assigneeID                   *string
+		parentID, eraID, assigneeID            *string
 		priority, createdBy                    string
 	)
 	if err := row.Scan(
 		&id, &orgID, &projectID, &typeID, &statusID,
-		&parentID, &assigneeID,
+		&parentID, &eraID, &assigneeID,
 		&w.AssigneeUsername, &w.AssigneeName,
 		&w.Title, &w.Description, &priority,
 		&w.StoryPoints, &w.Hours,
@@ -341,6 +346,10 @@ func scanWorkItem(row pgx.Row) (domain.WorkItem, error) {
 	if parentID != nil {
 		pid := domain.WorkItemID(*parentID)
 		w.ParentID = &pid
+	}
+	if eraID != nil {
+		eid := domain.EraID(*eraID)
+		w.EraID = &eid
 	}
 	if assigneeID != nil {
 		aid := domain.UserID(*assigneeID)

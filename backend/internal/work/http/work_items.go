@@ -60,6 +60,7 @@ func (h *WorkItemHandler) list(w http.ResponseWriter, r *http.Request) error {
 		WorkItemTypeID: query.Get("work_item_type_id"),
 		Priority:       query.Get("priority"),
 		AssigneeID:     query.Get("assignee_id"),
+		EraID:          query.Get("era_id"),
 	}
 	items, total, err := h.svc.ListWorkItems(r.Context(), h.auth.Actor(r.Context()), r.PathValue("project_id"), filter,
 		application.PageRequest{Limit: q.PageSize, Offset: q.Offset()})
@@ -77,6 +78,7 @@ type createWorkItemRequest struct {
 	WorkItemTypeID string   `json:"work_item_type_id"`
 	StatusID       *string  `json:"status_id"`
 	ParentID       *string  `json:"parent_id"`
+	EraID          *string  `json:"era_id"`
 	AssigneeID     *string  `json:"assignee_id"`
 	Title          string   `json:"title"`
 	Description    string   `json:"description"`
@@ -95,6 +97,7 @@ func (h *WorkItemHandler) create(w http.ResponseWriter, r *http.Request) error {
 		WorkItemTypeID: req.WorkItemTypeID,
 		StatusID:       req.StatusID,
 		ParentID:       req.ParentID,
+		EraID:          req.EraID,
 		AssigneeID:     req.AssigneeID,
 		Title:          req.Title,
 		Description:    req.Description,
@@ -146,6 +149,7 @@ type updateWorkItemRequest struct {
 	Priority       *string                `json:"priority"`
 	WorkItemTypeID *string                `json:"work_item_type_id"`
 	ParentID       nullableField[string]  `json:"parent_id"`
+	EraID          nullableField[string]  `json:"era_id"`
 	AssigneeID     nullableField[string]  `json:"assignee_id"`
 	StoryPoints    nullableField[float64] `json:"story_points"`
 	Hours          nullableField[float64] `json:"hours"`
@@ -163,6 +167,7 @@ func (h *WorkItemHandler) update(w http.ResponseWriter, r *http.Request) error {
 		Priority:       req.Priority,
 		WorkItemTypeID: req.WorkItemTypeID,
 		ParentID:       req.ParentID.optional(),
+		EraID:          req.EraID.optional(),
 		AssigneeID:     req.AssigneeID.optional(),
 		StoryPoints:    req.StoryPoints.optional(),
 		Hours:          req.Hours.optional(),
@@ -204,6 +209,7 @@ type workItemResponse struct {
 	WorkItemTypeID   domain.WorkItemTypeID `json:"work_item_type_id"`
 	StatusID         domain.StatusID       `json:"status_id"`
 	ParentID         *domain.WorkItemID    `json:"parent_id"`
+	EraID            *domain.EraID         `json:"era_id"`
 	AssigneeID       *domain.UserID        `json:"assignee_id"`
 	AssigneeUsername string                `json:"assignee_username,omitempty"`
 	AssigneeName     string                `json:"assignee_name,omitempty"`
@@ -226,6 +232,7 @@ func toWorkItemResponse(w domain.WorkItem) workItemResponse {
 		WorkItemTypeID:   w.WorkItemTypeID,
 		StatusID:         w.StatusID,
 		ParentID:         w.ParentID,
+		EraID:            w.EraID,
 		AssigneeID:       w.AssigneeID,
 		AssigneeUsername: w.AssigneeUsername,
 		AssigneeName:     w.AssigneeName,
