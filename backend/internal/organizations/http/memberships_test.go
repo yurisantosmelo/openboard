@@ -140,13 +140,13 @@ func TestAddOrganizationMembershipErrors(t *testing.T) {
 		slug   string
 		fields []string
 	}{
-		"malformed":  {nil, `{"username":`, http.StatusBadRequest, "malformed-request", nil},
-		"not found":  {domain.ErrNotFound, `{"username":"ana","name":"Ana"}`, http.StatusNotFound, "not-found", nil},
-		"forbidden":  {domain.ErrForbidden, `{"username":"ana","name":"Ana"}`, http.StatusForbidden, "forbidden", nil},
+		"malformed":   {nil, `{"username":`, http.StatusBadRequest, "malformed-request", nil},
+		"not found":   {domain.ErrNotFound, `{"username":"ana","name":"Ana"}`, http.StatusNotFound, "not-found", nil},
+		"forbidden":   {domain.ErrForbidden, `{"username":"ana","name":"Ana"}`, http.StatusForbidden, "forbidden", nil},
 		"duplicate":   {domain.ErrMembershipExists, `{"username":"ana","name":"Ana"}`, http.StatusConflict, "organization-membership-exists", nil},
 		"deactivated": {domain.ErrUserDeactivated, `{"username":"ana","name":"Ana"}`, http.StatusConflict, "user-deactivated", nil},
 		"all fields":  {errors.Join(domain.ErrInvalidUsername, domain.ErrInvalidName, domain.ErrInvalidRole), `{}`, http.StatusUnprocessableEntity, "validation-error", []string{"username:invalid", "name:invalid", "role:invalid"}},
-		"internal":   {errors.New("store down"), `{"username":"ana","name":"Ana"}`, http.StatusInternalServerError, "internal-error", nil},
+		"internal":    {errors.New("store down"), `{"username":"ana","name":"Ana"}`, http.StatusInternalServerError, "internal-error", nil},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
