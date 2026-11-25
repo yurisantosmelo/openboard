@@ -196,26 +196,36 @@ describe('Saved Views and Layouts on ProjectPage', () => {
     await user.click(screen.getByRole('button', { name: 'Calendar' }));
     expect(await screen.findByRole('region', { name: 'Work Items calendar' })).toBeInTheDocument();
 
-    // Filter high priority and save as a Personal View
-    await user.selectOptions(screen.getByLabelText('Filter by Priority'), 'high');
-    const viewsBar = screen.getByRole('region', { name: 'Saved Views' });
-    await user.click(within(viewsBar).getByRole('button', { name: 'Save View' }));
-    await user.type(within(viewsBar).getByLabelText('View name'), 'High Focus');
-    await user.click(within(viewsBar).getByRole('button', { name: 'Save Personal View' }));
+    // Filter high priority via collapsible Notion filter bar and save as a Personal View
+    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+    const filtersRegion = screen.getByRole('region', { name: 'Filters' });
+    await user.click(within(filtersRegion).getByRole('button', { name: 'Filter' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Priority' }));
+    await user.selectOptions(within(filtersRegion).getByLabelText('Filter by Priority'), 'high');
 
-    expect(await within(viewsBar).findByRole('button', { name: 'High Focus' })).toBeInTheDocument();
+    const viewsSidebar = screen.getByRole('region', { name: 'Saved Views' });
+    await user.click(within(viewsSidebar).getByRole('button', { name: 'Save View' }));
+    const saveForm = screen.getByRole('form', { name: 'Save View' });
+    await user.type(within(saveForm).getByLabelText('View name'), 'High Focus');
+    await user.click(within(saveForm).getByRole('button', { name: 'Save Personal View' }));
 
-    // Share View, update layout, then delete it
-    await user.click(within(viewsBar).getByRole('button', { name: 'Share View' }));
     expect(
-      await within(viewsBar).findByRole('button', { name: 'Make Personal' }),
+      await within(viewsSidebar).findByRole('button', { name: 'High Focus' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'High Focus', level: 1 })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Table' }));
-    await user.click(within(viewsBar).getByRole('button', { name: 'Update View' }));
+    // Share View, update layout, then delete it via the 3-dot Board options menu
+    await user.click(screen.getByRole('button', { name: 'Board options' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Share View' }));
+    await user.click(screen.getByRole('button', { name: 'Board options' }));
+    expect(await screen.findByRole('menuitem', { name: 'Make Personal' })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Update View' }));
 
-    await user.click(within(viewsBar).getByRole('button', { name: 'Delete View' }));
-    expect(within(viewsBar).queryByRole('button', { name: 'High Focus' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Board options' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete View' }));
+    expect(
+      within(viewsSidebar).queryByRole('button', { name: 'High Focus' }),
+    ).not.toBeInTheDocument();
   });
 
   it('lets Workspace Viewers apply Shared Views without showing edit controls', async () => {
@@ -263,11 +273,14 @@ describe('Saved Views and Layouts on ProjectPage', () => {
     });
 
     renderRoute('/projects/p1');
-    const viewsBar = await screen.findByRole('region', { name: 'Saved Views' });
-    expect(within(viewsBar).queryByRole('button', { name: 'Save View' })).not.toBeInTheDocument();
+    const viewsSidebar = await screen.findByRole('region', { name: 'Saved Views' });
+    expect(
+      within(viewsSidebar).queryByRole('button', { name: 'Save View' }),
+    ).not.toBeInTheDocument();
 
-    await user.click(await within(viewsBar).findByRole('button', { name: 'Team Table' }));
+    await user.click(await within(viewsSidebar).findByRole('button', { name: 'Team Table' }));
     expect(await screen.findByRole('region', { name: 'Work Items table' })).toBeInTheDocument();
-    expect(within(viewsBar).queryByRole('button', { name: 'Delete View' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Board options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Delete View' })).not.toBeInTheDocument();
   });
 });

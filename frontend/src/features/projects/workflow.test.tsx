@@ -108,9 +108,7 @@ describe('Project workflow customization', () => {
     });
 
     renderRoute('/projects/p1');
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Configure' }));
 
     // Create Status
     const statusesSection = screen.getByRole('region', { name: 'Statuses' });
@@ -259,9 +257,7 @@ describe('Project workflow customization', () => {
     });
 
     renderRoute('/projects/p1');
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Configure' }));
 
     // Create Work Item Type with child checkbox
     const typesSection = screen.getByRole('region', { name: 'Work Item Types' });
@@ -313,6 +309,7 @@ describe('Project workflow customization', () => {
   });
 
   it('hides customization controls from Contributors and displays API errors', async () => {
+    const user = userEvent.setup();
     stubApi({
       ...signedIn,
       'GET /api/v1/projects/p1': Response.json(projectDto('contributor')),
@@ -340,9 +337,7 @@ describe('Project workflow customization', () => {
     });
 
     renderRoute('/projects/p1');
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Configure' }));
     expect(screen.queryByRole('button', { name: 'New Status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New Work Item Type' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New Transition Rule' })).not.toBeInTheDocument();

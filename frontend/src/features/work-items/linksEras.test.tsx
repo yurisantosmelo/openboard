@@ -113,11 +113,11 @@ describe('Project Eras and Work Item Links', () => {
     });
 
     renderRoute('/projects/p1');
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Configure' }));
+    const configPanel = screen.getByRole('complementary', { name: 'Project configuration' });
+    await user.click(within(configPanel).getByRole('tab', { name: 'Eras' }));
 
-    const erasSection = screen.getByRole('region', { name: 'Eras' });
+    const erasSection = within(configPanel).getByRole('region', { name: 'Eras' });
     await user.click(within(erasSection).getByRole('button', { name: 'New Era' }));
     const createForm = screen.getByRole('form', { name: 'New Era' });
     await user.type(within(createForm).getByLabelText('Name'), 'Era 1');
