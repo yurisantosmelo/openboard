@@ -23,11 +23,13 @@ import (
 
 type workModule struct {
 	projects  *workhttp.Handler
+	workflow  *workhttp.WorkflowHandler
 	workItems *workhttp.WorkItemHandler
 }
 
 func (m workModule) Register(mux *http.ServeMux) {
 	m.projects.Register(mux)
+	m.workflow.Register(mux)
 	m.workItems.Register(mux)
 }
 
@@ -37,11 +39,14 @@ func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.H
 	workspaces := orgapp.NewWorkspaceService(orgpostgres.NewWorkspaces(pool))
 	access := workspaceAccessAdapter{workspaces: workspaces, users: identitypostgres.NewUsers(pool)}
 	projectsRepo := workpostgres.NewProjects(pool)
+	workflowRepo := workpostgres.NewWorkflow(pool)
 	workItemsRepo := workpostgres.NewWorkItems(pool)
 	auth := workhttp.Auth{Authenticated: identity.Authenticated, Actor: workActorOf}
+	workItemSvc := workapp.NewWorkItemService(projectsRepo, workItemsRepo, access, access).WithTransitionRules(workflowRepo)
 	return workModule{
 		projects:  workhttp.NewHandler(workapp.NewService(projectsRepo, access), auth, logger),
-		workItems: workhttp.NewWorkItemHandler(workapp.NewWorkItemService(projectsRepo, workItemsRepo, access, access), auth, logger),
+		workflow:  workhttp.NewWorkflowHandler(workapp.NewWorkflowService(projectsRepo, workflowRepo, access), auth, logger),
+		workItems: workhttp.NewWorkItemHandler(workItemSvc, auth, logger),
 	}
 }
 
