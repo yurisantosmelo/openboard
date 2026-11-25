@@ -316,10 +316,10 @@ func buildWorkItemFilter(projectID domain.ProjectID, f application.WorkItemFilte
 
 func scanWorkItem(row pgx.Row) (domain.WorkItem, error) {
 	var (
-		w                                       domain.WorkItem
-		id, orgID, projectID, typeID, statusID  string
-		parentID, assigneeID                    *string
-		priority, createdBy                     string
+		w                                      domain.WorkItem
+		id, orgID, projectID, typeID, statusID string
+		parentID, assigneeID                   *string
+		priority, createdBy                    string
 	)
 	if err := row.Scan(
 		&id, &orgID, &projectID, &typeID, &statusID,

@@ -17,6 +17,8 @@ import (
 	orgdomain "github.com/elyosemite/openboard/backend/internal/organizations/domain"
 	orgpostgres "github.com/elyosemite/openboard/backend/internal/organizations/infrastructure/postgres"
 	"github.com/elyosemite/openboard/backend/internal/platform/config"
+	workdomain "github.com/elyosemite/openboard/backend/internal/work/domain"
+	workpostgres "github.com/elyosemite/openboard/backend/internal/work/infrastructure/postgres"
 )
 
 // Sign-in throttling: block a Username for signInLockout after
@@ -29,12 +31,16 @@ const (
 // setupIdentity wires the identity module, creates the first Administrator
 // when the Instance has no Users yet and returns its HTTP handler and service.
 func setupIdentity(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, cfg config.Config) (*identityhttp.Handler, *application.Service, error) {
+	workItems := workpostgres.NewWorkItems(pool)
 	svc, err := application.NewService(application.Deps{
 		Users:     postgres.NewUsers(pool),
 		Sessions:  postgres.NewSessions(pool),
 		Hasher:    passwordhash.New(passwordhash.OWASPParams),
 		Throttle:  throttle.NewMemory(signInMaxFailures, signInLockout, time.Now),
 		Ownership: ownershipAdapter{memberships: orgpostgres.NewMemberships(pool)},
+		OnUserDeactivated: func(ctx context.Context, userID identitydomain.UserID) error {
+			return workItems.ClearAssigneeForUser(ctx, workdomain.UserID(userID))
+		},
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("build identity service: %w", err)

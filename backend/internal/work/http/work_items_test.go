@@ -14,18 +14,18 @@ import (
 )
 
 type fakeWorkItemService struct {
-	err            error
-	item           domain.WorkItem
-	items          []domain.WorkItem
-	total          int
-	lastProjectID  string
-	lastFilter     application.ListWorkItemsFilter
-	lastPage       application.PageRequest
-	createIn       application.CreateWorkItemInput
-	updateIn       application.UpdateWorkItemInput
-	lastID         string
-	lastStatusID   string
-	deletedID      string
+	err           error
+	item          domain.WorkItem
+	items         []domain.WorkItem
+	total         int
+	lastProjectID string
+	lastFilter    application.ListWorkItemsFilter
+	lastPage      application.PageRequest
+	createIn      application.CreateWorkItemInput
+	updateIn      application.UpdateWorkItemInput
+	lastID        string
+	lastStatusID  string
+	deletedID     string
 }
 
 func (f *fakeWorkItemService) CreateWorkItem(_ context.Context, _ domain.Actor, in application.CreateWorkItemInput) (domain.WorkItem, error) {

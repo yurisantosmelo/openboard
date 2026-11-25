@@ -420,7 +420,7 @@ func parseCreateWorkItem(in CreateWorkItemInput) (parsedCreateWorkItem, error) {
 
 func parseListWorkItemsFilter(raw ListWorkItemsFilter) (WorkItemFilter, error) {
 	var (
-		filter                                  WorkItemFilter
+		filter                                 WorkItemFilter
 		statusErr, typeErr, prioErr, assignErr error
 	)
 	if strings.TrimSpace(raw.StatusID) != "" {
