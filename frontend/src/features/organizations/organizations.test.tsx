@@ -391,6 +391,7 @@ describe('Workspace page', () => {
         workspaceDto({ id: 'w2', name: 'Legal', visibility: 'restricted' }),
       ),
       [projectsUrl()]: pageOf([]),
+      'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
     });
     renderRoute('/workspaces/w2');
 
@@ -428,6 +429,7 @@ describe('Workspace settings', () => {
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(legalDto()),
       [projectsUrl()]: pageOf([]),
+      'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
       [workspaceMembershipsUrl()]: pageOf([]),
       ...routes,
     });
@@ -441,6 +443,7 @@ describe('Workspace settings', () => {
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(legalDto({ current_user_role: role })),
       [projectsUrl()]: pageOf([]),
+      'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
     });
     renderRoute('/workspaces/w2');
 
@@ -835,6 +838,7 @@ describe('Workspace Memberships', () => {
     ...signedIn,
     'GET /api/v1/workspaces/w2': Response.json(legal(role)),
     [projectsUrl()]: pageOf([]),
+    'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
     ...(role === 'owner' && { [workspaceMembershipsUrl()]: pageOf(memberships) }),
   });
 
