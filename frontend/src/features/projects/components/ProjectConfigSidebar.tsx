@@ -113,7 +113,7 @@ function ConfigPanelBody({
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'workflow' && (
           <div className="grid gap-4">
-            <ProjectWorkflow projectId={project.id} canManage={isOwner} />
+            <ProjectWorkflow projectId={project.id} canManage={isOwner && !project.isReadOnly} />
             <PrioritiesReferenceCard />
           </div>
         )}

@@ -1,12 +1,14 @@
-import { AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Loader2, RotateCcw } from 'lucide-react';
 import { useId } from 'react';
 import { Link, useParams } from 'react-router';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { errorMessage } from '../../../shared/api/httpClient';
 import { ProjectList, WorkspaceTeamsCard } from '../../projects';
-import { useWorkspace } from '../hooks/useOrganizations';
+import { useUnarchiveWorkspace, useWorkspace } from '../hooks/useOrganizations';
 import { organizationPath } from '../paths';
 import { visibilityLabels } from './visibility';
 import { VisibilityLozenge } from './VisibilityLozenge';
@@ -19,6 +21,7 @@ export function WorkspacePage() {
   const detailsTitleId = useId();
   const { workspaceId = '' } = useParams();
   const workspace = useWorkspace(workspaceId);
+  const unarchive = useUnarchiveWorkspace(workspaceId);
 
   if (workspace.isPending) {
     return (
@@ -39,13 +42,40 @@ export function WorkspacePage() {
       </Alert>
     );
   }
-  const { name, visibility, createdAt, organizationId, currentUserRole } = workspace.data;
+  const { name, visibility, createdAt, organizationId, currentUserRole, archivedAt } =
+    workspace.data;
+  const isArchived = Boolean(archivedAt);
+  const isOwner = currentUserRole === 'owner';
+
   return (
     <div className="grid gap-6">
       <header className="flex flex-wrap items-center gap-2">
         <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words">{name}</h1>
         <VisibilityLozenge visibility={visibility} />
+        {isArchived && <Badge variant="secondary">Archived</Badge>}
       </header>
+      {isArchived && (
+        <Alert>
+          <Archive aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>This Workspace and all of its Projects are Archived and read-only.</span>
+            {isOwner && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={unarchive.isPending}
+                onClick={() => {
+                  unarchive.mutate();
+                }}
+              >
+                <RotateCcw className="size-3.5" aria-hidden="true" />
+                Restore Workspace
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       <section aria-labelledby={detailsTitleId}>
         <Card>
           <CardHeader>
@@ -63,9 +93,13 @@ export function WorkspacePage() {
           </CardContent>
         </Card>
       </section>
-      <ProjectList workspaceId={workspace.data.id} canCreate={currentUserRole === 'owner'} />
-      <WorkspaceTeamsCard workspaceId={workspace.data.id} canManage={currentUserRole === 'owner'} />
-      {currentUserRole === 'owner' && (
+      <ProjectList
+        workspaceId={workspace.data.id}
+        canCreate={isOwner && !isArchived}
+        canManagePending={isOwner}
+      />
+      <WorkspaceTeamsCard workspaceId={workspace.data.id} canManage={isOwner && !isArchived} />
+      {isOwner && (
         <>
           <WorkspaceMemberships workspaceId={workspace.data.id} />
           <WorkspaceSettings workspace={workspace.data} />

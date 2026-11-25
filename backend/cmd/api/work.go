@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -44,8 +45,17 @@ func (m workModule) Register(mux *http.ServeMux) {
 // setupWork wires the Work Management core domain module, checking Workspace
 // access through the Organization module and User active status through identity.
 func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) module {
-	workspaces := orgapp.NewWorkspaceService(orgpostgres.NewWorkspaces(pool))
-	access := workspaceAccessAdapter{workspaces: workspaces, users: identitypostgres.NewUsers(pool)}
+	return setupWorkWithGrace(logger, pool, identity, 0)
+}
+
+func setupWorkWithGrace(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler, grace time.Duration) module {
+	wsRepo := orgpostgres.NewWorkspaces(pool)
+	workspaces := orgapp.NewWorkspaceService(wsRepo)
+	access := workspaceAccessAdapter{
+		workspaces: workspaces,
+		wsRepo:     wsRepo,
+		users:      identitypostgres.NewUsers(pool),
+	}
 	projectsRepo := workpostgres.NewProjects(pool)
 	workflowRepo := workpostgres.NewWorkflow(pool)
 	workItemsRepo := workpostgres.NewWorkItems(pool)
@@ -58,7 +68,7 @@ func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.H
 		WithTransitionRules(workflowRepo).
 		WithEras(erasRepo)
 	return workModule{
-		projects:  workhttp.NewHandler(workapp.NewService(projectsRepo, access), auth, logger),
+		projects:  workhttp.NewHandler(workapp.NewService(projectsRepo, access).WithDeletionGracePeriod(grace), auth, logger),
 		workflow:  workhttp.NewWorkflowHandler(workapp.NewWorkflowService(projectsRepo, workflowRepo, access), auth, logger),
 		workItems: workhttp.NewWorkItemHandler(workItemSvc, auth, logger),
 		links:     workhttp.NewLinkHandler(workapp.NewLinkService(projectsRepo, workItemsRepo, linksRepo, access), auth, logger),
@@ -70,24 +80,33 @@ func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.H
 
 type workspaceAccessAdapter struct {
 	workspaces *orgapp.WorkspaceService
+	wsRepo     *orgpostgres.Workspaces
 	users      *identitypostgres.Users
 }
 
 func (a workspaceAccessAdapter) Access(ctx context.Context, actor workdomain.Actor, workspaceID workdomain.WorkspaceID) (workdomain.WorkspaceAccess, error) {
-	ws, err := a.workspaces.GetWorkspace(ctx, orgdomain.Actor{
+	orgActor := orgdomain.Actor{
 		UserID:          orgdomain.UserID(actor.UserID),
 		IsAdministrator: actor.IsAdministrator,
-	}, string(workspaceID))
+	}
+	ws, err := a.workspaces.GetWorkspace(ctx, orgActor, string(workspaceID))
 	if errors.Is(err, orgdomain.ErrWorkspaceNotFound) {
 		return workdomain.WorkspaceAccess{}, workdomain.ErrWorkspaceNotFound
 	}
 	if err != nil {
 		return workdomain.WorkspaceAccess{}, err
 	}
+	canRestore := actor.IsAdministrator
+	if !canRestore {
+		orgRole, roleErr := a.wsRepo.RoleIn(ctx, ws.OrganizationID, orgapp.Scope{UserID: orgActor.UserID})
+		canRestore = roleErr == nil && orgRole == orgdomain.RoleOwner
+	}
 	return workdomain.WorkspaceAccess{
-		WorkspaceID:    workdomain.WorkspaceID(ws.ID),
-		OrganizationID: workdomain.OrganizationID(ws.OrganizationID),
-		Role:           workdomain.Role(ws.ViewerRole),
+		WorkspaceID:               workdomain.WorkspaceID(ws.ID),
+		OrganizationID:            workdomain.OrganizationID(ws.OrganizationID),
+		Role:                      workdomain.Role(ws.ViewerRole),
+		Archived:                  ws.IsArchived(),
+		CanRestorePendingDeletion: canRestore,
 	}, nil
 }
 

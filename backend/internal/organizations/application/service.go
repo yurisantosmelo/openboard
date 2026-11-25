@@ -5,6 +5,7 @@ package application
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/elyosemite/openboard/backend/internal/organizations/domain"
 )
@@ -54,14 +55,33 @@ type CreateOrganizationInput struct {
 	OwnerUserID string
 }
 
+const defaultDeletionGracePeriod = 30 * 24 * time.Hour
+
 // Service runs the Organization use cases.
 type Service struct {
 	organizations OrganizationRepository
+	lifecycle     OrganizationLifecycleRepository
+	gracePeriod   time.Duration
+	now           func() time.Time
 }
 
 // NewService builds a Service from its repository.
 func NewService(organizations OrganizationRepository) *Service {
-	return &Service{organizations: organizations}
+	lc, _ := organizations.(OrganizationLifecycleRepository)
+	return &Service{
+		organizations: organizations,
+		lifecycle:     lc,
+		gracePeriod:   defaultDeletionGracePeriod,
+		now:           time.Now,
+	}
+}
+
+// WithDeletionGracePeriod configures the Pending Deletion grace period.
+func (s *Service) WithDeletionGracePeriod(d time.Duration) *Service {
+	if d > 0 {
+		s.gracePeriod = d
+	}
+	return s
 }
 
 // CreateOrganization creates an Organization with its Default Workspace and

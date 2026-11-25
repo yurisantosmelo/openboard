@@ -16,7 +16,7 @@ import (
 // uxWorkspaceName is violated when an Organization already uses a Workspace name.
 const uxWorkspaceName = "ux_workspaces_organization_name"
 
-const workspaceColumns = `w.id::text, w.organization_id::text, w.name, w.visibility, w.created_at, w.updated_at`
+const workspaceColumns = `w.id::text, w.organization_id::text, w.name, w.visibility, w.created_at, w.updated_at, w.archived_at`
 
 // workspaceRole is the Workspace role a Scope acts with in Workspace w:
 // Workspace Owner for those who see all ($1, ADR 0009) and for Organization
@@ -32,10 +32,11 @@ const workspaceRole = `CASE WHEN $1 OR EXISTS (
 
 const viewedWorkspaceColumns = workspaceColumns + `, ` + workspaceRole
 
-// enterable keeps the Workspaces a Scope can enter: all of them ($1), every one
-// of an Organization the User ($2) owns, Open ones of an Organization they
-// belong to, and those they hold a Workspace Membership in.
-const enterable = `($1 OR EXISTS (
+// enterable keeps active or Archived (not Pending Deletion) Workspaces of
+// active Organizations that Scope can enter.
+const enterable = `w.deleted_at IS NULL AND EXISTS (
+	SELECT 1 FROM organizations o WHERE o.id = w.organization_id AND o.deleted_at IS NULL
+) AND ($1 OR EXISTS (
 	SELECT 1 FROM organization_memberships m
 	WHERE m.organization_id = w.organization_id AND m.user_id = $2::uuid
 		AND (m.role = 'owner' OR w.visibility = 'open')
@@ -115,27 +116,10 @@ func (r *Workspaces) Update(ctx context.Context, c application.WorkspaceChange) 
 	return ws, mapWorkspaceError(err)
 }
 
-// List returns one page of the Organization's Workspaces scope can enter,
-// ordered by name ignoring case and then by ID so pages stay stable.
+// List returns one page of the Organization's non-Archived Workspaces scope can
+// enter, ordered by name ignoring case and then by ID so pages stay stable.
 func (r *Workspaces) List(ctx context.Context, id domain.OrganizationID, scope application.Scope, page application.PageRequest) ([]domain.Workspace, int, error) {
-	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM workspaces w WHERE w.organization_id = $3 AND `+enterable,
-		scope.All, nullableUser(scope), string(id)).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count workspaces: %w", err)
-	}
-	rows, err := r.pool.Query(ctx, `SELECT `+viewedWorkspaceColumns+` FROM workspaces w
-		WHERE w.organization_id = $3 AND `+enterable+` ORDER BY lower(w.name), w.id LIMIT $4 OFFSET $5`,
-		scope.All, nullableUser(scope), string(id), page.Limit, page.Offset)
-	if err != nil {
-		return nil, 0, fmt.Errorf("list workspaces: %w", err)
-	}
-	workspaces, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Workspace, error) {
-		return scanViewedWorkspace(row)
-	})
-	if err != nil {
-		return nil, 0, fmt.Errorf("scan workspaces: %w", err)
-	}
-	return workspaces, total, nil
+	return r.ListFiltered(ctx, id, scope, false, page)
 }
 
 func scanWorkspace(row pgx.Row, extra ...any) (domain.Workspace, error) {
@@ -143,7 +127,7 @@ func scanWorkspace(row pgx.Row, extra ...any) (domain.Workspace, error) {
 		ws                     domain.Workspace
 		id, organizationID, vi string
 	)
-	dest := append([]any{&id, &organizationID, &ws.Name, &vi, &ws.CreatedAt, &ws.UpdatedAt}, extra...)
+	dest := append([]any{&id, &organizationID, &ws.Name, &vi, &ws.CreatedAt, &ws.UpdatedAt, &ws.ArchivedAt}, extra...)
 	if err := row.Scan(dest...); err != nil {
 		return domain.Workspace{}, err
 	}

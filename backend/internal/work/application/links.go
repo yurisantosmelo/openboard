@@ -48,6 +48,9 @@ func (s *LinkService) CreateLink(ctx context.Context, actor domain.Actor, rawWor
 	if !project.ViewerRole.CanWriteWorkItems() {
 		return domain.Link{}, domain.ErrForbidden
 	}
+	if project.IsReadOnly() {
+		return domain.Link{}, domain.ErrProjectReadOnly
+	}
 	srcID, tgtID, err := domain.NormalizeLinkPair(source.ID, targetID, kind)
 	if err != nil {
 		return domain.Link{}, err
@@ -75,6 +78,9 @@ func (s *LinkService) DeleteLink(ctx context.Context, actor domain.Actor, rawWor
 	if !project.ViewerRole.CanWriteWorkItems() {
 		return domain.ErrForbidden
 	}
+	if project.IsReadOnly() {
+		return domain.ErrProjectReadOnly
+	}
 	return s.links.Delete(ctx, project.ID, item.ID, linkID)
 }
 
@@ -99,5 +105,6 @@ func (s *LinkService) workItemWithAccess(ctx context.Context, actor domain.Actor
 		return domain.WorkItem{}, domain.Project{}, err
 	}
 	project.ViewerRole = access.Role
+	project.WorkspaceArchived = access.Archived
 	return item, project, nil
 }

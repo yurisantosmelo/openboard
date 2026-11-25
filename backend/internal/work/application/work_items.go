@@ -87,12 +87,9 @@ func (s *WorkItemService) WithEras(eras EraReader) *WorkItemService {
 
 // CreateWorkItem validates and creates a new Work Item inside a Project.
 func (s *WorkItemService) CreateWorkItem(ctx context.Context, actor domain.Actor, in CreateWorkItemInput) (domain.WorkItem, error) {
-	project, err := s.projectWithAccess(ctx, actor, in.ProjectID)
+	project, err := s.writableProject(ctx, actor, in.ProjectID)
 	if err != nil {
 		return domain.WorkItem{}, err
-	}
-	if !project.ViewerRole.CanWriteWorkItems() {
-		return domain.WorkItem{}, domain.ErrForbidden
 	}
 	parsed, err := parseCreateWorkItem(in)
 	if err != nil {
@@ -175,12 +172,9 @@ func (s *WorkItemService) GetWorkItem(ctx context.Context, actor domain.Actor, r
 // UpdateWorkItem applies partial changes to a Work Item, validating Priority,
 // estimate unit, hierarchy, cycle prevention and Assignee Workspace access.
 func (s *WorkItemService) UpdateWorkItem(ctx context.Context, actor domain.Actor, in UpdateWorkItemInput) (domain.WorkItem, error) {
-	current, project, err := s.workItemWithAccess(ctx, actor, in.ID)
+	current, project, err := s.writableWorkItem(ctx, actor, in.ID)
 	if err != nil {
 		return domain.WorkItem{}, err
-	}
-	if !project.ViewerRole.CanWriteWorkItems() {
-		return domain.WorkItem{}, domain.ErrForbidden
 	}
 	next, err := buildWorkItemUpdate(current, in)
 	if err != nil {
@@ -224,6 +218,9 @@ func (s *WorkItemService) TransitionWorkItem(ctx context.Context, actor domain.A
 	if !project.ViewerRole.CanWriteWorkItems() {
 		return domain.WorkItem{}, domain.ErrForbidden
 	}
+	if project.IsReadOnly() {
+		return domain.WorkItem{}, domain.ErrProjectReadOnly
+	}
 	statuses, err := s.projects.ListStatuses(ctx, project.ID)
 	if err != nil {
 		return domain.WorkItem{}, err
@@ -266,7 +263,38 @@ func (s *WorkItemService) DeleteWorkItem(ctx context.Context, actor domain.Actor
 	if !project.ViewerRole.CanWriteWorkItems() {
 		return domain.ErrForbidden
 	}
+	if project.IsReadOnly() {
+		return domain.ErrProjectReadOnly
+	}
 	return s.items.Delete(ctx, current.ID)
+}
+
+func (s *WorkItemService) writableProject(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error) {
+	project, err := s.projectWithAccess(ctx, actor, rawProjectID)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	if !project.ViewerRole.CanWriteWorkItems() {
+		return domain.Project{}, domain.ErrForbidden
+	}
+	if project.IsReadOnly() {
+		return domain.Project{}, domain.ErrProjectReadOnly
+	}
+	return project, nil
+}
+
+func (s *WorkItemService) writableWorkItem(ctx context.Context, actor domain.Actor, rawID string) (domain.WorkItem, domain.Project, error) {
+	current, project, err := s.workItemWithAccess(ctx, actor, rawID)
+	if err != nil {
+		return domain.WorkItem{}, domain.Project{}, err
+	}
+	if !project.ViewerRole.CanWriteWorkItems() {
+		return domain.WorkItem{}, domain.Project{}, domain.ErrForbidden
+	}
+	if project.IsReadOnly() {
+		return domain.WorkItem{}, domain.Project{}, domain.ErrProjectReadOnly
+	}
+	return current, project, nil
 }
 
 func (s *WorkItemService) projectWithAccess(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error) {
@@ -286,6 +314,7 @@ func (s *WorkItemService) projectWithAccess(ctx context.Context, actor domain.Ac
 		return domain.Project{}, err
 	}
 	project.ViewerRole = access.Role
+	project.WorkspaceArchived = access.Archived
 	return project, nil
 }
 
@@ -310,6 +339,7 @@ func (s *WorkItemService) workItemWithAccess(ctx context.Context, actor domain.A
 		return domain.WorkItem{}, domain.Project{}, err
 	}
 	project.ViewerRole = access.Role
+	project.WorkspaceArchived = access.Archived
 	item.ViewerRole = access.Role
 	return item, project, nil
 }

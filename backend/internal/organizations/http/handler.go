@@ -42,13 +42,25 @@ func NewHandler(svc Service, auth Auth, logger *slog.Logger) *Handler {
 	return &Handler{svc: svc, auth: auth, logger: logger}
 }
 
+// organizationLifecycleService is optionally implemented by Service to support
+// Organization Pending Deletion and restoration.
+type organizationLifecycleService interface {
+	DeleteOrganization(ctx context.Context, actor domain.Actor, rawID string) error
+	RestoreOrganization(ctx context.Context, actor domain.Actor, rawID string) (domain.Organization, error)
+	ListPendingDeletionOrganizations(ctx context.Context, actor domain.Actor, page application.PageRequest) ([]domain.Organization, int, error)
+}
+
 // Register adds the Organization routes to mux.
 func (h *Handler) Register(mux *http.ServeMux) {
 	httpx.RouteMethods(mux, h.logger, "/api/v1/organizations", map[string]httpx.HandlerFunc{
 		http.MethodGet:  h.auth.Authenticated(h.list),
 		http.MethodPost: h.auth.Authenticated(h.create),
 	})
-	httpx.Route(mux, h.logger, http.MethodGet, "/api/v1/organizations/{organization_id}", h.auth.Authenticated(h.get))
+	httpx.RouteMethods(mux, h.logger, "/api/v1/organizations/{organization_id}", map[string]httpx.HandlerFunc{
+		http.MethodGet:    h.auth.Authenticated(h.get),
+		http.MethodDelete: h.auth.Authenticated(h.delete),
+	})
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/organizations/{organization_id}/restore", h.auth.Authenticated(h.restore))
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
@@ -56,10 +68,22 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	orgs, total, err := h.svc.ListOrganizations(r.Context(), h.auth.Actor(r.Context()),
-		application.PageRequest{Limit: q.PageSize, Offset: q.Offset()})
+	page := application.PageRequest{Limit: q.PageSize, Offset: q.Offset()}
+	var (
+		orgs  []domain.Organization
+		total int
+	)
+	if r.URL.Query().Get("pending_deletion") == "true" {
+		lc, ok := h.svc.(organizationLifecycleService)
+		if !ok {
+			return httpx.ErrNotFound()
+		}
+		orgs, total, err = lc.ListPendingDeletionOrganizations(r.Context(), h.auth.Actor(r.Context()), page)
+	} else {
+		orgs, total, err = h.svc.ListOrganizations(r.Context(), h.auth.Actor(r.Context()), page)
+	}
 	if err != nil {
-		return err
+		return mapError(err)
 	}
 	items := make([]organizationResponse, 0, len(orgs))
 	for _, org := range orgs {
@@ -70,6 +94,30 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) error {
 	org, err := h.svc.GetOrganization(r.Context(), h.auth.Actor(r.Context()), r.PathValue("organization_id"))
+	if err != nil {
+		return mapError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toOrganizationResponse(org))
+}
+
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(organizationLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	if err := lc.DeleteOrganization(r.Context(), h.auth.Actor(r.Context()), r.PathValue("organization_id")); err != nil {
+		return mapError(err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (h *Handler) restore(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(organizationLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	org, err := lc.RestoreOrganization(r.Context(), h.auth.Actor(r.Context()), r.PathValue("organization_id"))
 	if err != nil {
 		return mapError(err)
 	}
@@ -99,11 +147,20 @@ type organizationResponse struct {
 	ID              domain.OrganizationID `json:"id"`
 	Name            string                `json:"name"`
 	CreatedAt       time.Time             `json:"created_at"`
+	DeletedAt       *time.Time            `json:"deleted_at,omitempty"`
+	PurgeAfter      *time.Time            `json:"purge_after,omitempty"`
 	CurrentUserRole domain.Role           `json:"current_user_role"`
 }
 
 func toOrganizationResponse(org domain.Organization) organizationResponse {
-	return organizationResponse{ID: org.ID, Name: org.Name, CreatedAt: org.CreatedAt, CurrentUserRole: org.ViewerRole}
+	return organizationResponse{
+		ID:              org.ID,
+		Name:            org.Name,
+		CreatedAt:       org.CreatedAt,
+		DeletedAt:       org.DeletedAt,
+		PurgeAfter:      org.PurgeAfter,
+		CurrentUserRole: org.ViewerRole,
+	}
 }
 
 // fieldRule ties a domain validation error to the request field it concerns.

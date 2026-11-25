@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/elyosemite/openboard/backend/internal/organizations/domain"
 )
@@ -62,12 +63,29 @@ type CreateWorkspaceInput struct {
 // WorkspaceService runs the Workspace use cases.
 type WorkspaceService struct {
 	workspaces             WorkspaceRepository
+	lifecycle              WorkspaceLifecycleRepository
+	gracePeriod            time.Duration
+	now                    func() time.Time
 	onVisibilityRestricted func(ctx context.Context, wsID domain.WorkspaceID) error
 }
 
 // NewWorkspaceService builds a WorkspaceService from its repository.
 func NewWorkspaceService(workspaces WorkspaceRepository) *WorkspaceService {
-	return &WorkspaceService{workspaces: workspaces}
+	lc, _ := workspaces.(WorkspaceLifecycleRepository)
+	return &WorkspaceService{
+		workspaces:  workspaces,
+		lifecycle:   lc,
+		gracePeriod: defaultDeletionGracePeriod,
+		now:         time.Now,
+	}
+}
+
+// WithDeletionGracePeriod configures the Pending Deletion grace period.
+func (s *WorkspaceService) WithDeletionGracePeriod(d time.Duration) *WorkspaceService {
+	if d > 0 {
+		s.gracePeriod = d
+	}
+	return s
 }
 
 // WithVisibilityRestrictedHook registers a callback invoked when an Open Workspace
@@ -125,6 +143,9 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, actor domain.Act
 	}
 	if !current.ViewerRole.CanManageWorkspace() {
 		return domain.Workspace{}, domain.ErrForbidden
+	}
+	if current.IsArchived() {
+		return domain.Workspace{}, domain.ErrWorkspaceArchived
 	}
 	if change.Name == nil && change.Visibility == nil {
 		return current, nil

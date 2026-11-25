@@ -104,6 +104,9 @@ func (s *WorkspaceMembershipService) AddMembership(ctx context.Context, actor do
 	if err != nil {
 		return domain.WorkspaceMembership{}, err
 	}
+	if ws.IsArchived() {
+		return domain.WorkspaceMembership{}, domain.ErrWorkspaceArchived
+	}
 	return s.memberships.Create(ctx, NewWorkspaceMembership{
 		WorkspaceID:    ws.ID,
 		OrganizationID: ws.OrganizationID,
@@ -127,8 +130,12 @@ func (s *WorkspaceMembershipService) UpdateMembership(ctx context.Context, actor
 	if err != nil {
 		return domain.WorkspaceMembership{}, err
 	}
-	if _, err := s.requireOwner(ctx, wsID, actor); err != nil {
+	ws, err := s.requireOwner(ctx, wsID, actor)
+	if err != nil {
 		return domain.WorkspaceMembership{}, err
+	}
+	if ws.IsArchived() {
+		return domain.WorkspaceMembership{}, domain.ErrWorkspaceArchived
 	}
 	return s.memberships.UpdateRole(ctx, wsID, userID, role)
 }
@@ -151,6 +158,9 @@ func (s *WorkspaceMembershipService) RemoveMembership(ctx context.Context, actor
 	}
 	if !ws.ViewerRole.CanManageWorkspace() && actor.UserID != userID {
 		return domain.ErrForbidden
+	}
+	if ws.IsArchived() {
+		return domain.ErrWorkspaceArchived
 	}
 	if err := s.memberships.Delete(ctx, wsID, userID); err != nil {
 		return err

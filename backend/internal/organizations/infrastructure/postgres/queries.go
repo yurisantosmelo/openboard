@@ -11,9 +11,10 @@ import (
 	"github.com/elyosemite/openboard/backend/internal/organizations/domain"
 )
 
-// visible keeps the Organizations a Scope sees: all of them ($1), or those the
-// User ($2) holds an Organization Membership in.
-const visible = `($1 OR EXISTS (
+// visible keeps active Organizations a Scope sees: all of them ($1), or those
+// the User ($2) holds an Organization Membership in. Pending Deletion
+// Organizations are invisible here (CONTEXT.md).
+const visible = `o.deleted_at IS NULL AND ($1 OR EXISTS (
 	SELECT 1 FROM organization_memberships m WHERE m.organization_id = o.id AND m.user_id = $2::uuid))`
 
 // viewerRole is the role a Scope acts with in Organization o: Organization

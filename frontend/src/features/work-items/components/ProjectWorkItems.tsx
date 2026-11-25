@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Archive, Loader2, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import {
@@ -23,6 +23,7 @@ import {
   useProjectEras,
   useProjectStatuses,
   useProjectWorkItemTypes,
+  useUnarchiveProject,
 } from '../../projects/hooks/useProjects';
 import {
   useCreateProjectView,
@@ -437,6 +438,45 @@ function useSavedViewHandlers(
   };
 }
 
+function ProjectReadOnlyBanner({
+  project,
+  busy,
+  onRestore,
+}: {
+  project: Project;
+  busy: boolean;
+  onRestore: () => void;
+}) {
+  if (!project.isReadOnly) return null;
+  const canRestore = Boolean(project.archivedAt) && project.currentUserRole === 'owner';
+  return (
+    <div className="shrink-0 border-b border-border bg-muted/30 px-4 py-2.5 md:px-6">
+      <Alert>
+        <Archive aria-hidden="true" />
+        <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            {project.workspaceArchived
+              ? 'This Project is read-only because its Workspace is Archived.'
+              : 'This Project is Archived and read-only.'}
+          </span>
+          {canRestore && (
+            <Button
+              type="button"
+              size="compact"
+              variant="outline"
+              disabled={busy}
+              onClick={onRestore}
+            >
+              <RotateCcw className="size-3.5" aria-hidden="true" />
+              Restore Project
+            </Button>
+          )}
+        </AlertDescription>
+      </Alert>
+    </div>
+  );
+}
+
 /** Displays a Project's persistent 4-row view header and active Board/Timeline/Table/Calendar/List canvas. */
 export function ProjectWorkItems({
   project,
@@ -455,7 +495,9 @@ export function ProjectWorkItems({
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
 
   const data = useProjectWorkItemsData(project.id, filters, page);
-  const canWrite = project.currentUserRole !== 'viewer';
+  const unarchive = useUnarchiveProject(project.id);
+  const isReadOnly = Boolean(project.isReadOnly);
+  const canWrite = project.currentUserRole !== 'viewer' && !isReadOnly;
   const canCreateWorkItem = canWrite && !creating && data.types.length > 0;
   const viewMeta = useActiveViewMeta(
     project,
@@ -589,6 +631,14 @@ export function ProjectWorkItems({
         onUpdateActiveView={viewHandlers.onUpdateActiveView}
         onToggleActiveViewVisibility={viewHandlers.onToggleActiveViewVisibility}
         onDeleteActiveView={viewHandlers.onDeleteActiveView}
+      />
+
+      <ProjectReadOnlyBanner
+        project={project}
+        busy={unarchive.isPending}
+        onRestore={() => {
+          unarchive.mutate();
+        }}
       />
 
       <SaveViewBanner

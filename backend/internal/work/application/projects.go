@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/elyosemite/openboard/backend/internal/work/domain"
 )
@@ -25,22 +26,49 @@ type ProjectMover interface {
 	Move(ctx context.Context, id domain.ProjectID, targetWorkspaceID domain.WorkspaceID) (domain.Project, error)
 }
 
+const defaultDeletionGracePeriod = 30 * 24 * time.Hour
+
 // Service runs the Work Management use cases.
 type Service struct {
-	projects   ProjectRepository
-	mover      ProjectMover
-	workspaces WorkspaceAccessChecker
+	projects    ProjectRepository
+	mover       ProjectMover
+	lifecycle   ProjectLifecycleRepository
+	workspaces  WorkspaceAccessChecker
+	gracePeriod time.Duration
+	now         func() time.Time
 }
 
 // NewService builds a Service from its dependencies.
 func NewService(projects ProjectRepository, workspaces WorkspaceAccessChecker) *Service {
 	mover, _ := projects.(ProjectMover)
-	return &Service{projects: projects, mover: mover, workspaces: workspaces}
+	lc, _ := projects.(ProjectLifecycleRepository)
+	return &Service{
+		projects:    projects,
+		mover:       mover,
+		lifecycle:   lc,
+		workspaces:  workspaces,
+		gracePeriod: defaultDeletionGracePeriod,
+		now:         time.Now,
+	}
 }
 
 // WithProjectMover configures a ProjectMover when separate from ProjectRepository.
 func (s *Service) WithProjectMover(m ProjectMover) *Service {
 	s.mover = m
+	return s
+}
+
+// WithProjectLifecycle configures a ProjectLifecycleRepository when separate from ProjectRepository.
+func (s *Service) WithProjectLifecycle(lc ProjectLifecycleRepository) *Service {
+	s.lifecycle = lc
+	return s
+}
+
+// WithDeletionGracePeriod configures the Pending Deletion grace period.
+func (s *Service) WithDeletionGracePeriod(d time.Duration) *Service {
+	if d > 0 {
+		s.gracePeriod = d
+	}
 	return s
 }
 
@@ -60,6 +88,9 @@ func (s *Service) CreateProject(ctx context.Context, actor domain.Actor, in Crea
 	if !access.Role.CanManageProject() {
 		return domain.Project{}, domain.ErrForbidden
 	}
+	if access.Archived {
+		return domain.Project{}, domain.ErrProjectReadOnly
+	}
 	project, err := s.projects.Create(ctx, NewProject{
 		OrganizationID: access.OrganizationID,
 		WorkspaceID:    access.WorkspaceID,
@@ -72,6 +103,7 @@ func (s *Service) CreateProject(ctx context.Context, actor domain.Actor, in Crea
 		return domain.Project{}, err
 	}
 	project.ViewerRole = access.Role
+	project.WorkspaceArchived = access.Archived
 	return project, nil
 }
 
@@ -92,6 +124,7 @@ func (s *Service) ListProjects(ctx context.Context, actor domain.Actor, rawWorks
 	}
 	for i := range items {
 		items[i].ViewerRole = access.Role
+		items[i].WorkspaceArchived = access.Archived
 	}
 	return items, total, nil
 }
@@ -119,6 +152,9 @@ func (s *Service) UpdateProject(ctx context.Context, actor domain.Actor, in Upda
 	if !current.ViewerRole.CanManageProject() {
 		return domain.Project{}, domain.ErrForbidden
 	}
+	if current.IsReadOnly() {
+		return domain.Project{}, domain.ErrProjectReadOnly
+	}
 	if parsedName == nil {
 		return current, nil
 	}
@@ -137,22 +173,13 @@ func (s *Service) MoveProject(ctx context.Context, actor domain.Actor, rawProjec
 	if err != nil {
 		return domain.Project{}, err
 	}
-	current, err := s.projectWithAccess(ctx, actor, rawProjectID)
+	current, err := s.writableOwnerProject(ctx, actor, rawProjectID)
 	if err != nil {
 		return domain.Project{}, err
 	}
-	if !current.ViewerRole.CanManageProject() {
-		return domain.Project{}, domain.ErrForbidden
-	}
-	targetAccess, err := s.workspaces.Access(ctx, actor, targetWSID)
+	targetAccess, err := s.writableTargetWorkspace(ctx, actor, current.OrganizationID, targetWSID)
 	if err != nil {
 		return domain.Project{}, err
-	}
-	if targetAccess.OrganizationID != current.OrganizationID {
-		return domain.Project{}, domain.ErrCrossOrganizationMove
-	}
-	if !targetAccess.Role.CanManageProject() {
-		return domain.Project{}, domain.ErrForbidden
 	}
 	if targetAccess.WorkspaceID == current.WorkspaceID {
 		return current, nil
@@ -163,6 +190,42 @@ func (s *Service) MoveProject(ctx context.Context, actor domain.Actor, rawProjec
 	}
 	moved.ViewerRole = targetAccess.Role
 	return moved, nil
+}
+
+func (s *Service) writableOwnerProject(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error) {
+	current, err := s.projectWithAccess(ctx, actor, rawProjectID)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	if !current.ViewerRole.CanManageProject() {
+		return domain.Project{}, domain.ErrForbidden
+	}
+	if current.IsReadOnly() {
+		return domain.Project{}, domain.ErrProjectReadOnly
+	}
+	return current, nil
+}
+
+func (s *Service) writableTargetWorkspace(
+	ctx context.Context,
+	actor domain.Actor,
+	orgID domain.OrganizationID,
+	targetWSID domain.WorkspaceID,
+) (domain.WorkspaceAccess, error) {
+	targetAccess, err := s.workspaces.Access(ctx, actor, targetWSID)
+	if err != nil {
+		return domain.WorkspaceAccess{}, err
+	}
+	if targetAccess.OrganizationID != orgID {
+		return domain.WorkspaceAccess{}, domain.ErrCrossOrganizationMove
+	}
+	if !targetAccess.Role.CanManageProject() {
+		return domain.WorkspaceAccess{}, domain.ErrForbidden
+	}
+	if targetAccess.Archived {
+		return domain.WorkspaceAccess{}, domain.ErrProjectReadOnly
+	}
+	return targetAccess, nil
 }
 
 // ListStatuses returns the Statuses of a Project the Actor can see.
@@ -201,5 +264,6 @@ func (s *Service) projectWithAccess(ctx context.Context, actor domain.Actor, raw
 		return domain.Project{}, err
 	}
 	project.ViewerRole = access.Role
+	project.WorkspaceArchived = access.Archived
 	return project, nil
 }

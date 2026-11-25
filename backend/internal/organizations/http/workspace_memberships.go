@@ -150,6 +150,8 @@ func mapWorkspaceMembershipError(err error) error {
 		return &httpx.Error{Status: http.StatusConflict, Slug: "workspace-membership-exists", Title: "User already belongs to this Workspace"}
 	case errors.Is(err, domain.ErrUserDeactivated):
 		return errUserDeactivated()
+	case errors.Is(err, domain.ErrWorkspaceArchived):
+		return &httpx.Error{Status: http.StatusConflict, Slug: "workspace-archived", Title: "Workspace is archived and read-only"}
 	}
 	return validationOr(err, workspaceMembershipFieldErrors)
 }

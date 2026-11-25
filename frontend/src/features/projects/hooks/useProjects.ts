@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addProjectTransitionRule,
+  archiveProject,
   closeProjectEra,
   createProject,
   createProjectEra,
   createProjectStatus,
   createProjectWorkItemType,
+  deleteProject,
   deleteProjectEra,
   deleteProjectStatus,
   deleteProjectWorkItemType,
   getProject,
+  listPendingDeletionProjects,
   listProjects,
   listProjectEras,
   listProjectStatuses,
@@ -17,7 +20,9 @@ import {
   listProjectWorkItemTypes,
   removeProjectTransitionRule,
   renameProject,
+  restoreProject,
   startProjectEra,
+  unarchiveProject,
   updateProjectEra,
   updateProjectStatus,
   updateProjectWorkItemType,
@@ -35,10 +40,64 @@ const typesKey = (projectId: string) => ['project-work-item-types', projectId] a
 const rulesKey = (projectId: string) => ['project-transition-rules', projectId] as const;
 const erasKey = (projectId: string) => ['project-eras', projectId] as const;
 
-export function useProjects(workspaceId: string, page: number) {
+export function useProjects(workspaceId: string, page: number, includeArchived = false) {
   return useQuery({
-    queryKey: [...projectsKey(workspaceId), page],
-    queryFn: ({ signal }) => listProjects(workspaceId, page, signal),
+    queryKey: [...projectsKey(workspaceId), page, includeArchived],
+    queryFn: ({ signal }) => listProjects(workspaceId, page, signal, includeArchived),
+  });
+}
+
+export function usePendingDeletionProjects(workspaceId: string, page: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['projects-pending-deletion', workspaceId, page],
+    queryFn: ({ signal }) => listPendingDeletionProjects(workspaceId, page, signal),
+    enabled,
+  });
+}
+
+export function useArchiveProject(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => archiveProject(projectId),
+    onSuccess: (project) => {
+      queryClient.setQueryData(['project', projectId], project);
+      return queryClient.invalidateQueries({ queryKey: projectsKey(project.workspaceId) });
+    },
+  });
+}
+
+export function useUnarchiveProject(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => unarchiveProject(projectId),
+    onSuccess: (project) => {
+      queryClient.setQueryData(['project', projectId], project);
+      return queryClient.invalidateQueries({ queryKey: projectsKey(project.workspaceId) });
+    },
+  });
+}
+
+export function useDeleteProject(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteProject,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectsKey(workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: ['projects-pending-deletion', workspaceId] }),
+      ]),
+  });
+}
+
+export function useRestoreProject(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: restoreProject,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectsKey(workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: ['projects-pending-deletion', workspaceId] }),
+      ]),
   });
 }
 

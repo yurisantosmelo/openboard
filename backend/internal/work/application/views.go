@@ -107,6 +107,9 @@ func (s *ViewService) CreateView(ctx context.Context, actor domain.Actor, in Cre
 	if !role.CanWriteWorkItems() {
 		return domain.View{}, domain.ErrForbidden
 	}
+	if project.IsReadOnly() {
+		return domain.View{}, domain.ErrProjectReadOnly
+	}
 	name, nameErr := domain.ParseViewName(in.Name)
 	layout, layoutErr := domain.ParseViewLayout(in.Layout)
 	filters, filterErr := domain.ParseViewFilters(in.Filters)
@@ -217,6 +220,9 @@ func (s *ViewService) editableView(
 	if !domain.CanEditView(view, actor, role) {
 		return domain.Project{}, "", domain.View{}, domain.ErrForbidden
 	}
+	if project.IsReadOnly() {
+		return domain.Project{}, "", domain.View{}, domain.ErrProjectReadOnly
+	}
 	return project, role, view, nil
 }
 
@@ -236,5 +242,6 @@ func (s *ViewService) projectAccess(ctx context.Context, actor domain.Actor, raw
 	if err != nil {
 		return domain.Project{}, "", err
 	}
+	project.WorkspaceArchived = access.Archived
 	return project, access.Role, nil
 }

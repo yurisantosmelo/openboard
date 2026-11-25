@@ -28,6 +28,8 @@ var (
 	ErrWorkspaceNotFound = errors.New("workspace not found")
 	// ErrForbidden reports an Actor not allowed to perform the operation.
 	ErrForbidden = errors.New("not allowed")
+	// ErrProjectReadOnly reports a mutation on an Archived Project or Archived Workspace.
+	ErrProjectReadOnly = errors.New("project or workspace is archived and read-only")
 )
 
 // ProjectID identifies a Project.
@@ -70,22 +72,32 @@ type Actor struct {
 // WorkspaceAccess describes a Workspace the Actor can enter and their effective
 // role inside it.
 type WorkspaceAccess struct {
-	WorkspaceID    WorkspaceID
-	OrganizationID OrganizationID
-	Role           Role
+	WorkspaceID               WorkspaceID
+	OrganizationID            OrganizationID
+	Role                      Role
+	Archived                  bool
+	CanRestorePendingDeletion bool
 }
 
 // Project is the central unit of planned and executed work, owned by one Workspace.
 type Project struct {
-	ID             ProjectID
-	OrganizationID OrganizationID
-	WorkspaceID    WorkspaceID
-	Name           string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                ProjectID
+	OrganizationID    OrganizationID
+	WorkspaceID       WorkspaceID
+	Name              string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	ArchivedAt        *time.Time
+	DeletedAt         *time.Time
+	PurgeAfter        *time.Time
+	WorkspaceArchived bool
 	// ViewerRole is the effective role the Actor holds in the Project's Workspace.
 	ViewerRole Role
 }
+
+// IsReadOnly reports whether mutations on the Project are blocked because either
+// the Project itself or its owning Workspace is Archived (CONTEXT.md).
+func (p Project) IsReadOnly() bool { return p.ArchivedAt != nil || p.WorkspaceArchived }
 
 // ParseProjectID normalizes a Project ID; anything that is not a UUID names no Project.
 func ParseProjectID(raw string) (ProjectID, error) {

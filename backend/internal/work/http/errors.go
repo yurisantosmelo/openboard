@@ -73,6 +73,7 @@ var conflictErrors = []struct {
 	{domain.ErrTeamNameInUse, "team-name-taken", "Team name already in use"},
 	{domain.ErrTeamAssignmentExists, "team-assignment-exists", "User is already assigned to this Team"},
 	{domain.ErrProjectTeamExists, "project-team-exists", "Team is already associated with this Project"},
+	{domain.ErrProjectReadOnly, "project-read-only", "Project or Workspace is archived and read-only"},
 }
 
 var notFoundErrors = []error{

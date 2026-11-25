@@ -10,6 +10,8 @@ export interface Organization {
   id: string;
   name: string;
   currentUserRole: OrganizationRole;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
 }
 
 export interface OrganizationMembership {
@@ -39,6 +41,9 @@ export interface Workspace {
   name: string;
   visibility: WorkspaceVisibility;
   createdAt: string;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
   currentUserRole: WorkspaceRole;
 }
 
@@ -85,6 +90,8 @@ interface PageDto<T> {
 interface OrganizationDto {
   id: string;
   name: string;
+  deleted_at?: string | null;
+  purge_after?: string | null;
   current_user_role: OrganizationRole;
 }
 
@@ -107,6 +114,9 @@ interface WorkspaceDto {
   name: string;
   visibility: WorkspaceVisibility;
   created_at: string;
+  archived_at?: string | null;
+  deleted_at?: string | null;
+  purge_after?: string | null;
   current_user_role: WorkspaceRole;
 }
 
@@ -121,7 +131,13 @@ interface WorkspaceMembershipDto {
 }
 
 function toOrganization(dto: OrganizationDto): Organization {
-  return { id: dto.id, name: dto.name, currentUserRole: dto.current_user_role };
+  return {
+    id: dto.id,
+    name: dto.name,
+    currentUserRole: dto.current_user_role,
+    ...(dto.deleted_at !== undefined && { deletedAt: dto.deleted_at }),
+    ...(dto.purge_after !== undefined && { purgeAfter: dto.purge_after }),
+  };
 }
 
 function toOrganizationMembership(dto: OrganizationMembershipDto): OrganizationMembership {
@@ -151,6 +167,9 @@ function toWorkspace(dto: WorkspaceDto): Workspace {
     name: dto.name,
     visibility: dto.visibility,
     createdAt: dto.created_at,
+    archivedAt: dto.archived_at ?? null,
+    ...(dto.deleted_at !== undefined && { deletedAt: dto.deleted_at }),
+    ...(dto.purge_after !== undefined && { purgeAfter: dto.purge_after }),
     currentUserRole: dto.current_user_role,
   };
 }
@@ -196,18 +215,82 @@ export async function createOrganization(name: string): Promise<Organization> {
   return toOrganization(dto);
 }
 
+export async function listPendingDeletionOrganizations(
+  page: number,
+  signal?: AbortSignal,
+): Promise<Page<Organization>> {
+  const query = new URLSearchParams({
+    pending_deletion: 'true',
+    page: String(page),
+    page_size: String(PAGE_SIZE),
+  });
+  const dto = await apiRequest<PageDto<OrganizationDto>>(`/api/v1/organizations?${query}`, {
+    signal,
+  });
+  return toPage(dto, toOrganization);
+}
+
+export async function deleteOrganization(id: string): Promise<void> {
+  await apiRequest<undefined>(`/api/v1/organizations/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function restoreOrganization(id: string): Promise<Organization> {
+  const path = `/api/v1/organizations/${encodeURIComponent(id)}/restore`;
+  return toOrganization(await apiRequest<OrganizationDto>(path, { method: 'POST' }));
+}
+
 export async function listWorkspaces(
+  organizationId: string,
+  page: number,
+  signal?: AbortSignal,
+  includeArchived = false,
+): Promise<Page<Workspace>> {
+  const query = new URLSearchParams({
+    organization_id: organizationId,
+    page: String(page),
+    page_size: String(PAGE_SIZE),
+    ...(includeArchived ? { include_archived: 'true' } : {}),
+  });
+  const dto = await apiRequest<PageDto<WorkspaceDto>>(`/api/v1/workspaces?${query}`, { signal });
+  return toPage(dto, toWorkspace);
+}
+
+export async function listPendingDeletionWorkspaces(
   organizationId: string,
   page: number,
   signal?: AbortSignal,
 ): Promise<Page<Workspace>> {
   const query = new URLSearchParams({
     organization_id: organizationId,
+    pending_deletion: 'true',
     page: String(page),
     page_size: String(PAGE_SIZE),
   });
   const dto = await apiRequest<PageDto<WorkspaceDto>>(`/api/v1/workspaces?${query}`, { signal });
   return toPage(dto, toWorkspace);
+}
+
+export async function archiveWorkspace(id: string): Promise<Workspace> {
+  const path = `/api/v1/workspaces/${encodeURIComponent(id)}/archive`;
+  return toWorkspace(await apiRequest<WorkspaceDto>(path, { method: 'POST' }));
+}
+
+export async function unarchiveWorkspace(id: string): Promise<Workspace> {
+  const path = `/api/v1/workspaces/${encodeURIComponent(id)}/unarchive`;
+  return toWorkspace(await apiRequest<WorkspaceDto>(path, { method: 'POST' }));
+}
+
+export async function deleteWorkspace(id: string): Promise<void> {
+  await apiRequest<undefined>(`/api/v1/workspaces/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function restoreWorkspace(id: string): Promise<Workspace> {
+  const path = `/api/v1/workspaces/${encodeURIComponent(id)}/restore`;
+  return toWorkspace(await apiRequest<WorkspaceDto>(path, { method: 'POST' }));
 }
 
 export async function getWorkspace(id: string, signal?: AbortSignal): Promise<Workspace> {

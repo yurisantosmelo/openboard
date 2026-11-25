@@ -149,7 +149,9 @@ func (r *Memberships) IsSoleOwner(ctx context.Context, userID domain.UserID) (bo
 		SELECT EXISTS (
 			SELECT 1
 			FROM organization_memberships m
+			JOIN organizations o ON o.id = m.organization_id
 			WHERE m.user_id = $1 AND m.role = 'owner'
+			  AND o.deleted_at IS NULL
 			  AND NOT EXISTS (
 				  SELECT 1
 				  FROM organization_memberships other
@@ -211,7 +213,7 @@ func mapMembershipError(err error) error {
 
 func organizationRole(ctx context.Context, pool *pgxpool.Pool, id domain.OrganizationID, scope application.Scope, notFound error) (domain.Role, error) {
 	var role *string
-	err := pool.QueryRow(ctx, `SELECT `+viewerRole+` FROM organizations o WHERE o.id = $3`,
+	err := pool.QueryRow(ctx, `SELECT `+viewerRole+` FROM organizations o WHERE o.id = $3 AND o.deleted_at IS NULL`,
 		scope.All, nullableUser(scope), string(id)).Scan(&role)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && role == nil) {
 		return "", notFound
