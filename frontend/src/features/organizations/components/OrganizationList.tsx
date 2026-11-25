@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Button, Lozenge } from '../../../shared/design-system';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { Organization } from '../api/organizationsApi';
 import { useOrganizations } from '../hooks/useOrganizations';
 import { organizationPath } from '../paths';
@@ -10,11 +11,17 @@ import { organizationRoleLabels } from './organizationRole';
 
 function OrganizationRow(organization: Organization) {
   return (
-    <li key={organization.id} className="panel__row">
-      <Link className="entity-list__link" to={organizationPath(organization.id)}>
+    <li
+      key={organization.id}
+      className="flex flex-wrap items-center justify-between gap-2 px-6 py-3"
+    >
+      <Link
+        className="min-w-0 font-medium break-words text-foreground no-underline hover:underline"
+        to={organizationPath(organization.id)}
+      >
         {organization.name}
       </Link>
-      <Lozenge>{organizationRoleLabels[organization.currentUserRole]}</Lozenge>
+      <Badge variant="secondary">{organizationRoleLabels[organization.currentUserRole]}</Badge>
     </li>
   );
 }
@@ -43,6 +50,8 @@ export function OrganizationList({ canCreate }: OrganizationListProps) {
         canCreate &&
         !creating && (
           <Button
+            type="button"
+            size="sm"
             onClick={() => {
               setCreating(true);
             }}

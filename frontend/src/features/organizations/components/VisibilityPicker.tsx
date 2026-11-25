@@ -1,4 +1,6 @@
 import { useId } from 'react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import type { WorkspaceVisibility } from '../api/organizationsApi';
 import { visibilityLabels } from './visibility';
 
@@ -18,26 +20,25 @@ interface VisibilityPickerProps {
 export function VisibilityPicker({ value, onChange }: VisibilityPickerProps) {
   const labelId = useId();
   return (
-    <div className="field">
-      <span id={labelId} className="field__label">
-        Visibility
-      </span>
-      <div className="segmented" role="group" aria-labelledby={labelId}>
+    <div className="grid gap-1.5">
+      <Label id={labelId}>Visibility</Label>
+      <div className="flex flex-wrap gap-2" role="group" aria-labelledby={labelId}>
         {visibilities.map((option) => (
-          <button
+          <Button
             key={option}
             type="button"
-            className="btn"
+            size="sm"
+            variant={value === option ? 'default' : 'outline'}
             aria-pressed={value === option}
             onClick={() => {
               onChange(option);
             }}
           >
             {visibilityLabels[option]}
-          </button>
+          </Button>
         ))}
       </div>
-      <span className="field__help">{visibilityHelp[value]}</span>
+      <span className="text-xs text-muted-foreground">{visibilityHelp[value]}</span>
     </div>
   );
 }

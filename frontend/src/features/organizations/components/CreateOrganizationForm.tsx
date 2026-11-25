@@ -1,7 +1,10 @@
+import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
+import { FormField } from '@/components/form-field';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, TextField } from '../../../shared/design-system';
 import { useCreateOrganization } from '../hooks/useOrganizations';
 import { organizationPath } from '../paths';
 
@@ -35,9 +38,14 @@ export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps)
   }
 
   return (
-    <form className="form-stack list-form" aria-label="New Organization" onSubmit={handleSubmit}>
-      {create.isError && !nameError && <Alert tone="danger">{errorMessage(create.error)}</Alert>}
-      <TextField
+    <form className="grid gap-4 border-b p-6" aria-label="New Organization" onSubmit={handleSubmit}>
+      {create.isError && !nameError && (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription role="alert">{errorMessage(create.error)}</AlertDescription>
+        </Alert>
+      )}
+      <FormField
         label="Name"
         name="name"
         required
@@ -48,11 +56,11 @@ export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps)
           setName(e.target.value);
         }}
       />
-      <div className="form-actions">
-        <Button type="submit" busy={create.isPending}>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={create.isPending} aria-busy={create.isPending || undefined}>
           Create Organization
         </Button>
-        <Button variant="secondary" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
       </div>

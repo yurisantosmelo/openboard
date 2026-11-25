@@ -1,6 +1,10 @@
-import { useState, type SubmitEvent } from 'react';
+import { AlertCircle, Info } from 'lucide-react';
+import { useId, useState, type SubmitEvent } from 'react';
+import { FormField } from '@/components/form-field';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, Card, TextField } from '../../../shared/design-system';
 import type { Workspace, WorkspaceChange, WorkspaceVisibility } from '../api/organizationsApi';
 import { useUpdateWorkspace } from '../hooks/useOrganizations';
 import { VisibilityPicker } from './VisibilityPicker';
@@ -20,6 +24,7 @@ function changeOf(workspace: Workspace, name: string, visibility: WorkspaceVisib
 
 /** Renames a Workspace or changes its visibility, for those who manage it. */
 export function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
+  const titleId = useId();
   const update = useUpdateWorkspace(workspace.id);
   const [name, setName] = useState(workspace.name);
   const [visibility, setVisibility] = useState(workspace.visibility);
@@ -34,28 +39,51 @@ export function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <Card title="Settings">
-      <form className="form-stack" aria-label="Workspace settings" onSubmit={handleSubmit}>
-        {update.isError && !nameError && <Alert tone="danger">{errorMessage(update.error)}</Alert>}
-        {update.isSuccess && !dirty && <Alert>Changes saved.</Alert>}
-        <TextField
-          label="Name"
-          name="name"
-          required
-          maxLength={255}
-          value={name}
-          error={nameError}
-          onChange={(e) => {
-            setName(e.target.value);
-          }}
-        />
-        <VisibilityPicker value={visibility} onChange={setVisibility} />
-        <div className="form-actions">
-          <Button type="submit" busy={update.isPending} disabled={!dirty}>
-            Save changes
-          </Button>
-        </div>
-      </form>
-    </Card>
+    <section aria-labelledby={titleId}>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <h2 id={titleId}>Settings</h2>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" aria-label="Workspace settings" onSubmit={handleSubmit}>
+            {update.isError && !nameError && (
+              <Alert variant="destructive">
+                <AlertCircle aria-hidden="true" />
+                <AlertDescription role="alert">{errorMessage(update.error)}</AlertDescription>
+              </Alert>
+            )}
+            {update.isSuccess && !dirty && (
+              <Alert>
+                <Info aria-hidden="true" />
+                <AlertDescription role="status">Changes saved.</AlertDescription>
+              </Alert>
+            )}
+            <FormField
+              label="Name"
+              name="name"
+              required
+              maxLength={255}
+              value={name}
+              error={nameError}
+              onChange={(e) => {
+                setName(e.target.value);
+              }}
+            />
+            <VisibilityPicker value={visibility} onChange={setVisibility} />
+            <div className="flex gap-2">
+              <Button
+                type="submit"
+                disabled={!dirty || update.isPending}
+                aria-busy={update.isPending || undefined}
+              >
+                Save changes
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </section>
   );
 }

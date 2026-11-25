@@ -1,9 +1,18 @@
 import type { UseQueryResult } from '@tanstack/react-query';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, Spinner } from '../../../shared/design-system';
 import type { Page } from '../api/organizationsApi';
-import './Organizations.css';
 
 interface ListPanelProps<T> {
   title: string;
@@ -22,15 +31,17 @@ interface ListPanelProps<T> {
 export function ListPanel<T>({ title, query, action, form, ...list }: ListPanelProps<T>) {
   const titleId = useId();
   return (
-    <section className="panel panel--clip" aria-labelledby={titleId}>
-      <header className="panel__head">
-        <h2 id={titleId} className="panel__title">
-          {title}
-        </h2>
-        {action && <div className="list-panel__action">{action}</div>}
-      </header>
-      {form}
-      <ListBody query={query} {...list} />
+    <section aria-labelledby={titleId}>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="items-center border-b py-4">
+          <CardTitle>
+            <h2 id={titleId}>{title}</h2>
+          </CardTitle>
+          {action && <CardAction>{action}</CardAction>}
+        </CardHeader>
+        {form}
+        <ListBody query={query} {...list} />
+      </Card>
     </section>
   );
 }
@@ -49,29 +60,38 @@ function ListBody<T>({
 }: ListBodyProps<T>) {
   if (query.isPending) {
     return (
-      <div className="panel__body">
-        <Spinner />
-      </div>
+      <CardContent className="py-6">
+        <span
+          role="status"
+          aria-label="Loading"
+          className="inline-flex items-center text-muted-foreground"
+        >
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        </span>
+      </CardContent>
     );
   }
   if (query.isError) {
     return (
-      <div className="panel__body">
-        <Alert tone="danger">{errorMessage(query.error)}</Alert>
-      </div>
+      <CardContent className="py-6">
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription role="alert">{errorMessage(query.error)}</AlertDescription>
+        </Alert>
+      </CardContent>
     );
   }
   if (query.data.items.length === 0) {
     return (
-      <div className="empty">
-        <h3 className="empty__title">{emptyTitle}</h3>
-        <p className="empty__desc">{emptyDescription}</p>
+      <div className="grid gap-1 px-6 py-8 text-center">
+        <h3 className="text-sm font-medium text-foreground">{emptyTitle}</h3>
+        <p className="text-sm text-muted-foreground">{emptyDescription}</p>
       </div>
     );
   }
   return (
     <>
-      <ul className="entity-list">{query.data.items.map(renderItem)}</ul>
+      <ul className="m-0 list-none divide-y p-0">{query.data.items.map(renderItem)}</ul>
       <ListPager
         page={query.data.page}
         totalPages={query.data.totalPages}
@@ -92,13 +112,15 @@ function ListPager({ page, totalPages, onPageChange }: ListPagerProps) {
     return null;
   }
   return (
-    <footer className="panel__foot">
+    <CardFooter className="justify-between border-t py-3 text-sm text-muted-foreground">
       <span>
         Page {page} of {totalPages}
       </span>
-      <div className="list-pager">
+      <div className="flex gap-2">
         <Button
-          variant="secondary"
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={page <= 1}
           onClick={() => {
             onPageChange(page - 1);
@@ -107,7 +129,9 @@ function ListPager({ page, totalPages, onPageChange }: ListPagerProps) {
           Previous
         </Button>
         <Button
-          variant="secondary"
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={page >= totalPages}
           onClick={() => {
             onPageChange(page + 1);
@@ -116,6 +140,6 @@ function ListPager({ page, totalPages, onPageChange }: ListPagerProps) {
           Next
         </Button>
       </div>
-    </footer>
+    </CardFooter>
   );
 }

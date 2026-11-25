@@ -1,6 +1,8 @@
+import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button } from '../../../shared/design-system';
 import type { WorkspaceMembership, WorkspaceRole } from '../api/organizationsApi';
 import {
   useRemoveWorkspaceMembership,
@@ -27,22 +29,26 @@ function WorkspaceMembershipRow({
   onRemove,
 }: WorkspaceMembershipRowProps) {
   return (
-    <li key={membership.userId} className="panel__row">
-      <div className="entity-list__identity">
-        <span className="entity-list__name">{membership.name}</span>
-        <span className="entity-list__meta">@{membership.username}</span>
+    <li
+      key={membership.userId}
+      className="flex flex-wrap items-center justify-between gap-2 px-6 py-3"
+    >
+      <div className="grid min-w-0">
+        <span className="font-medium break-words">{membership.name}</span>
+        <span className="text-sm break-words text-muted-foreground">@{membership.username}</span>
       </div>
-      <div className="row-actions">
+      <div className="flex flex-wrap items-center gap-2">
         <div
-          className="segmented"
+          className="flex flex-wrap gap-1"
           role="group"
           aria-label={`Workspace role for ${membership.name}`}
         >
           {workspaceRoles.map((option) => (
-            <button
+            <Button
               key={option}
               type="button"
-              className="btn"
+              size="sm"
+              variant={membership.role === option ? 'default' : 'outline'}
               aria-pressed={membership.role === option}
               aria-label={`Set ${membership.name} as ${workspaceRoleLabels[option]}`}
               disabled={busy || membership.role === option}
@@ -51,11 +57,13 @@ function WorkspaceMembershipRow({
               }}
             >
               {workspaceRoleShortLabels[option]}
-            </button>
+            </Button>
           ))}
         </div>
         <Button
-          variant="secondary"
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={busy}
           aria-label={`Remove ${membership.name}`}
           onClick={() => {
@@ -97,8 +105,11 @@ export function WorkspaceMemberships({ workspaceId }: WorkspaceMembershipsProps)
   const formContent = (
     <>
       {actionError && (
-        <div className="list-form">
-          <Alert tone="danger">{errorMessage(actionError)}</Alert>
+        <div className="border-b p-6">
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription role="alert">{errorMessage(actionError)}</AlertDescription>
+          </Alert>
         </div>
       )}
       {adding && (
@@ -121,6 +132,8 @@ export function WorkspaceMemberships({ workspaceId }: WorkspaceMembershipsProps)
       action={
         !adding && (
           <Button
+            type="button"
+            size="sm"
             onClick={() => {
               update.reset();
               remove.reset();

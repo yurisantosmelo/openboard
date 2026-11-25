@@ -1,9 +1,12 @@
+import { AlertCircle, Info } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
+import { FormField } from '@/components/form-field';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, Card, TextField } from '../../../shared/design-system';
 import { useChangePassword, useCurrentUser } from '../hooks/useAuth';
-import './AuthPage.css';
 
 type FieldMessages = Partial<Record<'current_password' | 'new_password', string>>;
 
@@ -50,58 +53,77 @@ export function ChangePasswordPage() {
   }
 
   return (
-    <div className="auth-page">
-      <Card title="Change password">
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {user?.mustChangePassword && (
-            <Alert>
-              You signed in with a Temporary Password. Choose a new password to continue.
-            </Alert>
-          )}
-          {change.isError && !fieldMessages && (
-            <Alert tone="danger">{errorMessage(change.error)}</Alert>
-          )}
-          <TextField
-            label="Current password"
-            name="current-password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={currentPassword}
-            error={fieldMessages?.current_password}
-            onChange={(e) => {
-              setCurrentPassword(e.target.value);
-            }}
-          />
-          <TextField
-            label="New password"
-            name="new-password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={newPassword}
-            error={fieldMessages?.new_password}
-            onChange={(e) => {
-              setNewPassword(e.target.value);
-            }}
-          />
-          <p className="auth-form__hint">Use 12 to 128 characters. A long passphrase works well.</p>
-          <TextField
-            label="Confirm new password"
-            name="confirm-password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={confirmation}
-            error={mismatch ? 'The passwords do not match.' : undefined}
-            onChange={(e) => {
-              setConfirmation(e.target.value);
-            }}
-          />
-          <Button type="submit" busy={change.isPending}>
-            Change password
-          </Button>
-        </form>
+    <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <h2>Change password</h2>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={handleSubmit}>
+            {user?.mustChangePassword && (
+              <Alert>
+                <Info aria-hidden="true" />
+                <AlertDescription role="status">
+                  You signed in with a Temporary Password. Choose a new password to continue.
+                </AlertDescription>
+              </Alert>
+            )}
+            {change.isError && !fieldMessages && (
+              <Alert variant="destructive">
+                <AlertCircle aria-hidden="true" />
+                <AlertDescription role="alert">{errorMessage(change.error)}</AlertDescription>
+              </Alert>
+            )}
+            <FormField
+              label="Current password"
+              name="current-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={currentPassword}
+              error={fieldMessages?.current_password}
+              onChange={(e) => {
+                setCurrentPassword(e.target.value);
+              }}
+            />
+            <FormField
+              label="New password"
+              name="new-password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={newPassword}
+              error={fieldMessages?.new_password}
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Use 12 to 128 characters. A long passphrase works well.
+            </p>
+            <FormField
+              label="Confirm new password"
+              name="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={confirmation}
+              error={mismatch ? 'The passwords do not match.' : undefined}
+              onChange={(e) => {
+                setConfirmation(e.target.value);
+              }}
+            />
+            <Button
+              type="submit"
+              disabled={change.isPending}
+              aria-busy={change.isPending || undefined}
+            >
+              Change password
+            </Button>
+          </form>
+        </CardContent>
       </Card>
     </div>
   );

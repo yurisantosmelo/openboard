@@ -1,11 +1,11 @@
-import { Lozenge } from '../../../shared/design-system';
+import { Badge } from '@/components/ui/badge';
 import type { WorkspaceVisibility } from '../api/organizationsApi';
 import { visibilityLabels } from './visibility';
 
 export function VisibilityLozenge({ visibility }: { visibility: WorkspaceVisibility }) {
   return (
-    <Lozenge tone={visibility === 'open' ? 'success' : 'neutral'}>
+    <Badge variant={visibility === 'open' ? 'secondary' : 'outline'}>
       {visibilityLabels[visibility]}
-    </Lozenge>
+    </Badge>
   );
 }

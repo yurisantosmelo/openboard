@@ -26,6 +26,16 @@ async function signInAs(user: ReturnType<typeof renderRoute>['user'], password =
 }
 
 describe('sign-in', () => {
+  it('opens with empty inputs and focuses Username', async () => {
+    stubApi({ 'GET /api/v1/users/me': unauthenticated() });
+    renderRoute('/login');
+
+    const username = await screen.findByLabelText('Username');
+    expect(username).toHaveFocus();
+    expect(username).toHaveValue('');
+    expect(screen.getByLabelText('Password')).toHaveValue('');
+  });
+
   it('sends signed-out visitors to sign-in and back after signing in', async () => {
     stubSignIn();
     const { router, user } = renderRoute('/');

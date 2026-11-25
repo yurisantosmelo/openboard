@@ -1,6 +1,9 @@
+import { AlertCircle, Info } from 'lucide-react';
 import { useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, Lozenge } from '../../../shared/design-system';
 import type {
   AddedOrganizationMembership,
   OrganizationMembership,
@@ -23,15 +26,19 @@ interface TemporaryPasswordNoticeProps {
 
 function TemporaryPasswordNotice({ username, password, onDismiss }: TemporaryPasswordNoticeProps) {
   return (
-    <div className="form-stack list-form">
-      <Alert tone="info">
-        <p className="notice-text">
-          New User <strong>{username}</strong> created with Temporary Password{' '}
-          <code>{password}</code>. Share it now — it will not be shown again.
-        </p>
+    <div className="grid gap-3 border-b p-6">
+      <Alert>
+        <Info aria-hidden="true" />
+        <AlertDescription role="status">
+          <p className="m-0 break-words">
+            New User <strong>{username}</strong> created with Temporary Password{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{password}</code>.
+            Share it now — it will not be shown again.
+          </p>
+        </AlertDescription>
       </Alert>
-      <div className="form-actions">
-        <Button variant="secondary" onClick={onDismiss}>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
           Dismiss
         </Button>
       </div>
@@ -51,15 +58,20 @@ function MembershipRow({ membership, busy, onChangeRole, onRemove }: MembershipR
   const roleActionLabel =
     nextRole === 'owner' ? 'Make Organization Owner' : 'Make Organization Contributor';
   return (
-    <li key={membership.userId} className="panel__row">
-      <div className="entity-list__identity">
-        <span className="entity-list__name">{membership.name}</span>
-        <span className="entity-list__meta">@{membership.username}</span>
+    <li
+      key={membership.userId}
+      className="flex flex-wrap items-center justify-between gap-2 px-6 py-3"
+    >
+      <div className="grid min-w-0">
+        <span className="font-medium break-words">{membership.name}</span>
+        <span className="text-sm break-words text-muted-foreground">@{membership.username}</span>
       </div>
-      <div className="row-actions">
-        <Lozenge>{organizationRoleLabels[membership.role]}</Lozenge>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary">{organizationRoleLabels[membership.role]}</Badge>
         <Button
-          variant="secondary"
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={busy}
           aria-label={`${roleActionLabel}: ${membership.name}`}
           onClick={() => {
@@ -69,7 +81,9 @@ function MembershipRow({ membership, busy, onChangeRole, onRemove }: MembershipR
           {nextRole === 'owner' ? 'Make Owner' : 'Make Contributor'}
         </Button>
         <Button
-          variant="secondary"
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={busy}
           aria-label={`Remove ${membership.name}`}
           onClick={() => {
@@ -124,8 +138,11 @@ export function OrganizationMemberships({ organizationId }: OrganizationMembersh
   const formContent = (
     <>
       {actionError && (
-        <div className="list-form">
-          <Alert tone="danger">{errorMessage(actionError)}</Alert>
+        <div className="border-b p-6">
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription role="alert">{errorMessage(actionError)}</AlertDescription>
+          </Alert>
         </div>
       )}
       {adding ? (
@@ -159,6 +176,8 @@ export function OrganizationMemberships({ organizationId }: OrganizationMembersh
       action={
         !adding && (
           <Button
+            type="button"
+            size="sm"
             onClick={() => {
               update.reset();
               remove.reset();

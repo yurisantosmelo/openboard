@@ -1,6 +1,9 @@
+import { AlertCircle } from 'lucide-react';
 import { useState, type SubmitEvent } from 'react';
+import { FormField } from '@/components/form-field';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, TextField } from '../../../shared/design-system';
 import type { WorkspaceRole } from '../api/organizationsApi';
 import { useAddWorkspaceMembership } from '../hooks/useOrganizations';
 import { WorkspaceRolePicker } from './WorkspaceRolePicker';
@@ -37,12 +40,17 @@ export function AddWorkspaceMembershipForm({
 
   return (
     <form
-      className="form-stack list-form"
+      className="grid gap-4 border-b p-6"
       aria-label="Add Workspace Membership"
       onSubmit={handleSubmit}
     >
-      {add.isError && !usernameError && <Alert tone="danger">{errorMessage(add.error)}</Alert>}
-      <TextField
+      {add.isError && !usernameError && (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription role="alert">{errorMessage(add.error)}</AlertDescription>
+        </Alert>
+      )}
+      <FormField
         label="Username"
         name="username"
         required
@@ -54,11 +62,11 @@ export function AddWorkspaceMembershipForm({
         }}
       />
       <WorkspaceRolePicker value={role} onChange={setRole} />
-      <div className="form-actions">
-        <Button type="submit" busy={add.isPending}>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={add.isPending} aria-busy={add.isPending || undefined}>
           Add person
         </Button>
-        <Button variant="secondary" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
       </div>

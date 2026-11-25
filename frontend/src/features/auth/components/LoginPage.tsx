@@ -1,10 +1,9 @@
 import { useState, type SubmitEvent } from 'react';
 import { Navigate, useLocation } from 'react-router';
+import { LoginForm } from '@/components/login-form';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert, Button, Card, TextField } from '../../../shared/design-system';
 import { useCurrentUser, useSignIn } from '../hooks/useAuth';
 import { CHANGE_PASSWORD_PATH, type SignInState } from '../paths';
-import './AuthPage.css';
 
 export function LoginPage() {
   const { data: user } = useCurrentUser();
@@ -24,39 +23,18 @@ export function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
-      <h1 className="auth-page__brand">OpenBoard</h1>
-      <Card title="Sign in">
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {signIn.isError && <Alert tone="danger">{errorMessage(signIn.error)}</Alert>}
-          <TextField
-            label="Username"
-            name="username"
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-            value={username}
-            onChange={(e) => {
-              setUsername(e.target.value);
-            }}
-          />
-          <TextField
-            label="Password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-            }}
-          />
-          <Button type="submit" busy={signIn.isPending}>
-            Sign in
-          </Button>
-        </form>
-      </Card>
+    <main className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-sm">
+        <LoginForm
+          username={username}
+          password={password}
+          pending={signIn.isPending}
+          error={signIn.isError ? errorMessage(signIn.error) : undefined}
+          onUsernameChange={setUsername}
+          onPasswordChange={setPassword}
+          onSubmit={handleSubmit}
+        />
+      </div>
     </main>
   );
 }

@@ -1,37 +1,43 @@
-import { Link, NavLink, Outlet } from 'react-router';
+import { Outlet } from 'react-router';
+import { AppSidebar } from '@/components/app-sidebar';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from '@/components/ui/breadcrumb';
+import { Separator } from '@/components/ui/separator';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { CurrentUserMenu } from '../features/auth';
-import { Icon } from '../shared/design-system';
-import './App.css';
 
 export function AppLayout() {
   return (
-    <div className="workspace">
-      <aside className="sidebar workspace__sidebar">
-        <Link to="/" className="wordmark wordmark--sm">
-          <span className="wordmark__glyph wordmark__glyph--neutral">
-            <Icon name="grid" />
-          </span>
-          OpenBoard
-        </Link>
-        <nav className="nav-group" aria-label="Main">
-          <NavLink to="/" end className="nav-item">
-            <Icon name="grid" />
-            <span className="nav-item__text">Home</span>
-          </NavLink>
-        </nav>
-      </aside>
-      <main className="workspace__main">
-        <header className="workspace__topbar">
-          <span className="workspace__crumb">OpenBoard</span>
-          <span />
-          <div className="workspace__topbar-end">
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>OpenBoard</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
             <CurrentUserMenu />
-          </div>
-        </header>
-        <div className="app-content">
-          <Outlet />
-        </div>
-      </main>
-    </div>
+          </header>
+          <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+            <div className="mx-auto w-full max-w-4xl">
+              <Outlet />
+            </div>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

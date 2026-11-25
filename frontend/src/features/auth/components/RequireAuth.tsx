@@ -1,6 +1,7 @@
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Navigate, Outlet, useLocation } from 'react-router';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { errorMessage } from '../../../shared/api/httpClient';
-import { Alert } from '../../../shared/design-system';
 import { useCurrentUser } from '../hooks/useAuth';
 import { CHANGE_PASSWORD_PATH, SIGN_IN_PATH, type SignInState } from '../paths';
 
@@ -13,10 +14,24 @@ export function RequireAuth() {
   const location = useLocation();
 
   if (isPending) {
-    return <p role="status">Loading…</p>;
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          Loading…
+        </p>
+      </div>
+    );
   }
   if (isError) {
-    return <Alert tone="danger">{errorMessage(error)}</Alert>;
+    return (
+      <div className="mx-auto max-w-md p-6">
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription role="alert">{errorMessage(error)}</AlertDescription>
+        </Alert>
+      </div>
+    );
   }
   if (!user) {
     const state: SignInState = { from: location.pathname };
