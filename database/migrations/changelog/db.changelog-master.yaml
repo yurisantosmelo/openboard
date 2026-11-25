@@ -34,6 +34,18 @@ databaseChangeLog:
   - include:
       file: ../tables/20261124220501_add_users_deactivated_at.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261124230501_create_projects_table.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261124230502_create_project_statuses_table.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261124230503_create_project_work_item_types_table.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261124230504_create_project_work_item_type_hierarchy_table.sql
+      relativeToChangelogFile: true
 
   # 3. constraints
   - include:
