@@ -3,16 +3,25 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const alertVariants = cva(
-  'relative w-full rounded-lg border px-4 py-3 text-sm grid has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-3 gap-y-0.5 items-start [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current',
+  'relative w-full rounded-xl border px-3.5 py-3 text-sm grid has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-2.5 gap-y-0.5 items-start [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current',
   {
     variants: {
+      surface: {
+        default: '',
+        glass: 'alert-glass',
+      },
       variant: {
-        default: 'bg-card text-card-foreground',
+        default: 'bg-card text-card-foreground dark:bg-input/32 [&>svg]:text-muted-foreground',
         destructive:
-          'text-destructive bg-card border-destructive/50 [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90',
+          'border-error/32 bg-error-surface text-error-foreground [&>svg]:text-error *:data-[slot=alert-description]:text-error-foreground/90',
+        info: 'border-info/32 bg-info/4 text-info-foreground [&>svg]:text-info',
+        success: 'border-success/32 bg-success/4 text-success-foreground [&>svg]:text-success',
+        warning:
+          'border-warning/32 bg-warning-surface text-warning-foreground [&>svg]:text-warning *:data-[slot=alert-description]:text-warning-foreground/90',
       },
     },
     defaultVariants: {
+      surface: 'default',
       variant: 'default',
     },
   },
@@ -21,9 +30,17 @@ const alertVariants = cva(
 export function Alert({
   className,
   variant,
+  surface,
   ...props
 }: ComponentProps<'div'> & VariantProps<typeof alertVariants>) {
-  return <div data-slot="alert" className={cn(alertVariants({ variant }), className)} {...props} />;
+  return (
+    <div
+      data-slot="alert"
+      data-variant={variant ?? 'default'}
+      className={cn(alertVariants({ variant, surface }), className)}
+      {...props}
+    />
+  );
 }
 
 export function AlertDescription({ className, ...props }: ComponentProps<'div'>) {

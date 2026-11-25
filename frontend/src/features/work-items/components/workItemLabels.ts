@@ -24,10 +24,10 @@ export const priorityVariants: Record<
 };
 
 export const selectClassName =
-  'h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
+  'h-9 w-full min-w-0 rounded-lg border border-input bg-background not-dark:bg-clip-padding px-3 py-1 text-sm text-foreground shadow-xs/5 transition-[color,box-shadow,border-color] outline-none sm:h-8 dark:bg-input/32 focus-visible:border-ring focus-visible:shadow-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/24 disabled:pointer-events-none disabled:opacity-64';
 
 export const textareaClassName =
-  'min-h-24 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
+  'min-h-24 w-full min-w-0 rounded-lg border border-input bg-background not-dark:bg-clip-padding px-3 py-2 text-sm text-foreground shadow-xs/5 transition-[color,box-shadow,border-color] outline-none placeholder:text-placeholder dark:bg-input/32 focus-visible:border-ring focus-visible:shadow-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/24 disabled:pointer-events-none disabled:opacity-64';
 
 export function formatEstimate(item: Pick<WorkItem, 'storyPoints' | 'hours'>): string | null {
   if (item.storyPoints !== null) return `${String(item.storyPoints)} pts`;

@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
 import { AppSidebar } from '@/components/app-sidebar';
+import { ThemeToggle } from '@/components/theme-toggle';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -17,22 +18,27 @@ export function AppLayout() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+          <header className="surface-glass sticky top-0 z-20 flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-between gap-2 border-b border-border px-4 transition-[width,height] ease-linear">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbPage>OpenBoard</BreadcrumbPage>
+                    <BreadcrumbPage className="font-medium tracking-tight">
+                      OpenBoard
+                    </BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
-            <CurrentUserMenu />
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <CurrentUserMenu />
+            </div>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-            <div className="mx-auto w-full max-w-4xl">
+            <div className="mx-auto w-full max-w-5xl">
               <Outlet />
             </div>
           </main>

@@ -39,12 +39,14 @@ export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link to="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-xs shadow-primary/24">
                   <LayoutGrid className="size-4" aria-hidden="true" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">OpenBoard</span>
-                  <span className="truncate text-xs">Work tracking</span>
+                  <span className="truncate font-semibold tracking-tight">OpenBoard</span>
+                  <span className="truncate text-2xs text-sidebar-muted-foreground">
+                    Work tracking
+                  </span>
                 </div>
               </Link>
             </SidebarMenuButton>
