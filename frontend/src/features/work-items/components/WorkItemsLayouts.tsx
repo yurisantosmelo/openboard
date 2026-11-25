@@ -71,61 +71,67 @@ export function WorkItemsTableView({
 }: LayoutViewProps) {
   const eraNames = new Map(eras.map((e) => [e.id, e.name]));
   return (
-    <div className="overflow-x-auto" role="region" aria-label="Work Items table">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground">
-            <th className="px-5 py-2.5">Title</th>
-            <th className="px-3 py-2.5">Type</th>
-            <th className="px-3 py-2.5">Status</th>
-            <th className="px-3 py-2.5">Priority</th>
-            <th className="px-3 py-2.5">Estimate</th>
-            <th className="px-3 py-2.5">Era</th>
-            <th className="px-5 py-2.5">Assignee</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {items.map((item) => (
-            <tr key={item.id} className="hover:bg-accent/40">
-              <td className="px-5 py-2.5 font-medium">
-                <Link
-                  to={workItemPath(item.id)}
-                  className="hover:underline focus-visible:underline"
-                >
-                  {item.title}
-                </Link>
-              </td>
-              <td className="px-3 py-2.5">
-                <Badge variant="outline">{typeNames.get(item.workItemTypeId) ?? 'Item'}</Badge>
-              </td>
-              <td className="px-3 py-2.5">
-                <InlineStatusCell
-                  item={item}
-                  statuses={statuses}
-                  statusName={statusNames.get(item.statusId) ?? 'Status'}
-                  canWrite={canWrite}
-                  busy={busy}
-                  onTransition={onTransition}
-                />
-              </td>
-              <td className="px-3 py-2.5">
-                <Badge variant={priorityVariants[item.priority]}>
-                  {priorityLabels[item.priority]}
-                </Badge>
-              </td>
-              <td className="px-3 py-2.5 text-xs text-muted-foreground tabular-nums">
-                {formatEstimate(item) ?? '—'}
-              </td>
-              <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                {item.eraId ? (eraNames.get(item.eraId) ?? '—') : '—'}
-              </td>
-              <td className="px-5 py-2.5 text-xs text-muted-foreground">
-                {item.assigneeUsername ? `@${item.assigneeUsername}` : 'Unassigned'}
-              </td>
+    <div className="p-4 md:p-6">
+      <div
+        className="overflow-x-auto rounded-xl border border-border bg-card"
+        role="region"
+        aria-label="Work Items table"
+      >
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground">
+              <th className="px-5 py-2.5">Title</th>
+              <th className="px-3 py-2.5">Type</th>
+              <th className="px-3 py-2.5">Status</th>
+              <th className="px-3 py-2.5">Priority</th>
+              <th className="px-3 py-2.5">Estimate</th>
+              <th className="px-3 py-2.5">Era</th>
+              <th className="px-5 py-2.5">Assignee</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {items.map((item) => (
+              <tr key={item.id} className="hover:bg-accent/40">
+                <td className="px-5 py-2.5 font-medium">
+                  <Link
+                    to={workItemPath(item.id)}
+                    className="hover:underline focus-visible:underline"
+                  >
+                    {item.title}
+                  </Link>
+                </td>
+                <td className="px-3 py-2.5">
+                  <Badge variant="outline">{typeNames.get(item.workItemTypeId) ?? 'Item'}</Badge>
+                </td>
+                <td className="px-3 py-2.5">
+                  <InlineStatusCell
+                    item={item}
+                    statuses={statuses}
+                    statusName={statusNames.get(item.statusId) ?? 'Status'}
+                    canWrite={canWrite}
+                    busy={busy}
+                    onTransition={onTransition}
+                  />
+                </td>
+                <td className="px-3 py-2.5">
+                  <Badge variant={priorityVariants[item.priority]}>
+                    {priorityLabels[item.priority]}
+                  </Badge>
+                </td>
+                <td className="px-3 py-2.5 text-xs text-muted-foreground tabular-nums">
+                  {formatEstimate(item) ?? '—'}
+                </td>
+                <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                  {item.eraId ? (eraNames.get(item.eraId) ?? '—') : '—'}
+                </td>
+                <td className="px-5 py-2.5 text-xs text-muted-foreground">
+                  {item.assigneeUsername ? `@${item.assigneeUsername}` : 'Unassigned'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

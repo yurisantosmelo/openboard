@@ -215,12 +215,17 @@ describe('Workspace Teams, Project Teams and Move Project', () => {
     });
 
     renderRoute('/projects/p1');
-    const ptRegion = await screen.findByRole('region', { name: 'Project Teams' });
+    await user.click(await screen.findByRole('button', { name: 'Configure' }));
+    const configPanel = screen.getByRole('complementary', { name: 'Project configuration' });
+
+    await user.click(within(configPanel).getByRole('tab', { name: 'Teams' }));
+    const ptRegion = await within(configPanel).findByRole('region', { name: 'Project Teams' });
     await user.selectOptions(await within(ptRegion).findByLabelText('Team'), 'team-1');
     await user.click(within(ptRegion).getByRole('button', { name: 'Add Team' }));
     expect(await within(ptRegion).findByText('Backend Squad')).toBeInTheDocument();
 
-    const moveForm = await screen.findByRole('form', { name: 'Move Project' });
+    await user.click(within(configPanel).getByRole('tab', { name: 'Settings' }));
+    const moveForm = await within(configPanel).findByRole('form', { name: 'Move Project' });
     await user.selectOptions(within(moveForm).getByLabelText('Destination Workspace'), 'w2');
     await user.click(within(moveForm).getByRole('button', { name: 'Move Project' }));
     expect(await within(moveForm).findByRole('status')).toHaveTextContent('Project moved.');

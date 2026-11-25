@@ -202,34 +202,39 @@ describe('ProjectPage', () => {
     });
 
     renderRoute('/projects/p1');
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
-    expect(await screen.findByText('Not Committed')).toBeInTheDocument();
-    expect(screen.getByText('Completed')).toBeInTheDocument();
-    expect(await screen.findByText('Children: User Story')).toBeInTheDocument();
-    expect(screen.getByText('No children')).toBeInTheDocument();
-    expect(screen.getByText('Story Points')).toBeInTheDocument();
-    expect(screen.getByText('Hours')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Workspace' })).toHaveAttribute(
+    const breadcrumb = await screen.findByRole('navigation', { name: 'Project breadcrumb' });
+    expect(within(breadcrumb).getByText('Core Platform')).toBeInTheDocument();
+    expect(within(breadcrumb).getByRole('link', { name: 'Projects' })).toHaveAttribute(
       'href',
       '/workspaces/w2',
     );
+    expect(screen.getByRole('heading', { name: 'Board', level: 1 })).toBeInTheDocument();
 
-    const form = screen.getByRole('form', { name: 'Project settings' });
+    // Open Right Configuration Sidebar -> Workflow tab is active by default
+    await user.click(screen.getByRole('button', { name: 'Configure' }));
+    const configPanel = screen.getByRole('complementary', { name: 'Project configuration' });
+    expect(await within(configPanel).findByText('Not Committed')).toBeInTheDocument();
+    expect(within(configPanel).getByText('Completed')).toBeInTheDocument();
+    expect(await within(configPanel).findByText('Children: User Story')).toBeInTheDocument();
+    expect(within(configPanel).getByText('No children')).toBeInTheDocument();
+    expect(within(configPanel).getByText('Story Points')).toBeInTheDocument();
+    expect(within(configPanel).getByText('Hours')).toBeInTheDocument();
+
+    // Switch to Settings tab and rename Project
+    await user.click(within(configPanel).getByRole('tab', { name: 'Settings' }));
+    const form = within(configPanel).getByRole('form', { name: 'Project settings' });
     await user.clear(within(form).getByLabelText('Name'));
     await user.type(within(form).getByLabelText('Name'), 'Platform v2');
     await user.click(within(form).getByRole('button', { name: 'Save changes' }));
     expect(await within(form).findByText('name is invalid')).toBeInTheDocument();
 
     await user.click(within(form).getByRole('button', { name: 'Save changes' }));
-    expect(
-      await screen.findByRole('heading', { name: 'Platform v2', level: 1 }),
-    ).toBeInTheDocument();
+    expect(await within(breadcrumb).findByText('Platform v2')).toBeInTheDocument();
     expect(await within(form).findByRole('status')).toHaveTextContent('Changes saved.');
   });
 
   it('hides Settings from Contributors and reports API errors', async () => {
+    const user = userEvent.setup();
     stubApi({
       ...signedIn,
       'GET /api/v1/projects/p1': Response.json(projectDto({ current_user_role: 'contributor' })),
@@ -253,12 +258,14 @@ describe('ProjectPage', () => {
     });
 
     renderRoute('/projects/p1');
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('form', { name: 'Project settings' })).not.toBeInTheDocument();
-    expect(await screen.findByText('Statuses unavailable.')).toBeInTheDocument();
-    expect(await screen.findByText('Types unavailable.')).toBeInTheDocument();
+    const breadcrumb = await screen.findByRole('navigation', { name: 'Project breadcrumb' });
+    expect(within(breadcrumb).getByText('Core Platform')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Configure' }));
+    const configPanel = screen.getByRole('complementary', { name: 'Project configuration' });
+    expect(within(configPanel).queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(await within(configPanel).findByText('Statuses unavailable.')).toBeInTheDocument();
+    expect(await within(configPanel).findByText('Types unavailable.')).toBeInTheDocument();
   });
 
   it('reports a Project that cannot be opened', async () => {
@@ -293,7 +300,10 @@ describe('ProjectPage', () => {
     });
 
     renderRoute('/projects/p1');
-    const form = await screen.findByRole('form', { name: 'Project settings' });
+    await user.click(await screen.findByRole('button', { name: 'Configure' }));
+    const configPanel = screen.getByRole('complementary', { name: 'Project configuration' });
+    await user.click(within(configPanel).getByRole('tab', { name: 'Settings' }));
+    const form = await within(configPanel).findByRole('form', { name: 'Project settings' });
     await user.clear(within(form).getByLabelText('Name'));
     await user.type(within(form).getByLabelText('Name'), 'Platform v2');
     await user.click(within(form).getByRole('button', { name: 'Save changes' }));

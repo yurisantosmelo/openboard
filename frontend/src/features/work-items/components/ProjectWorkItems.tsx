@@ -1,19 +1,15 @@
-import {
-  AlertCircle,
-  Calendar,
-  GanttChart,
-  Kanban,
-  List,
-  Loader2,
-  Plus,
-  Table2,
-} from 'lucide-react';
-import { useState } from 'react';
+import { AlertCircle, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
+import {
+  useProjectShell,
+  type ProjectConfigTab,
+  type ProjectShellState,
+} from '@/app/project-shell-context';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCurrentUser } from '@/features/auth';
 import { errorMessage } from '../../../shared/api/httpClient';
 import type {
   Project,
@@ -28,11 +24,19 @@ import {
   useProjectStatuses,
   useProjectWorkItemTypes,
 } from '../../projects/hooks/useProjects';
+import {
+  useCreateProjectView,
+  useDeleteProjectView,
+  useProjectViews,
+  useUpdateProjectView,
+} from '../../projects/hooks/useProjectViews';
 import type { Priority, WorkItem, WorkItemFilters } from '../api/workItemsApi';
 import { useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
 import { workItemPath } from '../paths';
 import { CreateWorkItemForm } from './CreateWorkItemForm';
-import { ProjectViewsBar } from './ProjectViewsBar';
+import { SaveViewBanner } from './ProjectViewsBar';
+import { ProjectWorkspaceHeader, type Participant } from './ProjectWorkspaceHeader';
+import { WorkItemsBoardView } from './WorkItemsBoardView';
 import {
   WorkItemsCalendarView,
   WorkItemsTableView,
@@ -40,13 +44,80 @@ import {
 } from './WorkItemsLayouts';
 import {
   formatEstimate,
-  PRIORITIES,
   priorityLabels,
   priorityVariants,
   selectClassName,
 } from './workItemLabels';
 
-type ViewMode = ViewLayout;
+const LAYOUT_TITLES: Record<ViewLayout, string> = {
+  board: 'Board',
+  timeline: 'Timeline',
+  list: 'Backlog',
+  table: 'Table',
+  calendar: 'Calendar',
+};
+
+function canEditSavedView(
+  view: ProjectView,
+  userId: string | undefined,
+  project: Project,
+): boolean {
+  if (project.currentUserRole === 'viewer') return false;
+  if (view.visibility === 'personal') return view.createdBy === userId;
+  return view.createdBy === userId || project.currentUserRole === 'owner';
+}
+
+function toSavedFilters(filters: WorkItemFilters) {
+  return {
+    ...(filters.statusId ? { statusId: filters.statusId } : {}),
+    ...(filters.workItemTypeId ? { workItemTypeId: filters.workItemTypeId } : {}),
+    ...(filters.priority ? { priority: filters.priority } : {}),
+    ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
+    ...(filters.eraId ? { eraId: filters.eraId } : {}),
+  };
+}
+
+function filtersFromView(view: ProjectView): WorkItemFilters {
+  return {
+    ...(view.filters.statusId ? { statusId: view.filters.statusId } : {}),
+    ...(view.filters.workItemTypeId ? { workItemTypeId: view.filters.workItemTypeId } : {}),
+    ...(view.filters.priority ? { priority: view.filters.priority as Priority } : {}),
+    ...(view.filters.assigneeId ? { assigneeId: view.filters.assigneeId } : {}),
+    ...(view.filters.eraId ? { eraId: view.filters.eraId } : {}),
+  };
+}
+
+function collectParticipants(
+  items: WorkItem[],
+  currentUser: { id: string; name: string; username: string } | null | undefined,
+): Participant[] {
+  const map = new Map<string, Participant>();
+  if (currentUser) {
+    map.set(currentUser.id, {
+      id: currentUser.id,
+      name: currentUser.name,
+      username: currentUser.username,
+    });
+  }
+  for (const item of items) {
+    if (item.assigneeId && !map.has(item.assigneeId)) {
+      map.set(item.assigneeId, {
+        id: item.assigneeId,
+        name: item.assigneeName,
+        username: item.assigneeUsername,
+      });
+    }
+  }
+  return [...map.values()];
+}
+
+function filterBySearch(items: WorkItem[], query: string): WorkItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return items;
+  return items.filter(
+    (item) => item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
+  );
+}
 
 function WorkItemMeta({ item, typeName }: { item: WorkItem; typeName: string }) {
   const estimate = formatEstimate(item);
@@ -59,33 +130,6 @@ function WorkItemMeta({ item, typeName }: { item: WorkItem; typeName: string }) 
       {estimate && <Badge variant="secondary">{estimate}</Badge>}
       {item.assigneeUsername && <span>@{item.assigneeUsername}</span>}
     </div>
-  );
-}
-
-interface StatusSelectProps {
-  item: WorkItem;
-  statuses: ProjectStatus[];
-  disabled: boolean;
-  onTransition: (workItemId: string, statusId: string) => void;
-}
-
-function WorkItemStatusSelect({ item, statuses, disabled, onTransition }: StatusSelectProps) {
-  return (
-    <select
-      aria-label={`Status for ${item.title}`}
-      className={`${selectClassName} h-8 w-auto min-w-32 text-xs`}
-      value={item.statusId}
-      disabled={disabled}
-      onChange={(e) => {
-        onTransition(item.id, e.target.value);
-      }}
-    >
-      {statuses.map((st) => (
-        <option key={st.id} value={st.id}>
-          {st.name}
-        </option>
-      ))}
-    </select>
   );
 }
 
@@ -109,189 +153,46 @@ function WorkItemsListView({
   onTransition,
 }: WorkItemsListViewProps) {
   return (
-    <ul className="divide-y">
-      {items.map((item) => (
-        <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
-          <div className="grid min-w-0 gap-1">
-            <Link
-              to={workItemPath(item.id)}
-              className="font-medium break-words hover:underline focus-visible:underline"
-            >
-              {item.title}
-            </Link>
-            <WorkItemMeta item={item} typeName={typeNames.get(item.workItemTypeId) ?? 'Item'} />
-          </div>
-          <div className="flex items-center gap-2">
-            {canWrite && statuses.length > 0 ? (
-              <WorkItemStatusSelect
-                item={item}
-                statuses={statuses}
-                disabled={busy}
-                onTransition={onTransition}
-              />
-            ) : (
-              <Badge variant="secondary">{statusNames.get(item.statusId) ?? 'Status'}</Badge>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-interface WorkItemsBoardViewProps {
-  items: WorkItem[];
-  statuses: ProjectStatus[];
-  typeNames: Map<string, string>;
-  canWrite: boolean;
-  busy: boolean;
-  onTransition: (workItemId: string, statusId: string) => void;
-}
-
-function WorkItemsBoardView({
-  items,
-  statuses,
-  typeNames,
-  canWrite,
-  busy,
-  onTransition,
-}: WorkItemsBoardViewProps) {
-  return (
-    <div
-      className="grid gap-4 p-6 md:grid-cols-2 lg:grid-cols-4"
-      role="region"
-      aria-label="Work Items board"
-    >
-      {statuses.map((status) => {
-        const columnItems = items.filter((item) => item.statusId === status.id);
-        return (
-          <section
-            key={status.id}
-            aria-label={status.name}
-            className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3"
+    <div className="p-4 md:p-6">
+      <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+        {items.map((item) => (
+          <li
+            key={item.id}
+            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-accent/35"
           >
-            <div className="flex items-center justify-between gap-2 px-1">
-              <h3 className="text-sm font-semibold">{status.name}</h3>
-              <Badge variant="outline">{columnItems.length}</Badge>
+            <div className="grid min-w-0 gap-1">
+              <Link
+                to={workItemPath(item.id)}
+                className="font-medium break-words hover:underline focus-visible:underline"
+              >
+                {item.title}
+              </Link>
+              <WorkItemMeta item={item} typeName={typeNames.get(item.workItemTypeId) ?? 'Item'} />
             </div>
-            <div className="grid gap-2">
-              {columnItems.length === 0 ? (
-                <p className="px-1 py-4 text-center text-xs text-muted-foreground">No items</p>
+            <div className="flex items-center gap-2">
+              {canWrite && statuses.length > 0 ? (
+                <select
+                  aria-label={`Status for ${item.title}`}
+                  className={`${selectClassName} h-8 w-auto min-w-32 text-xs`}
+                  value={item.statusId}
+                  disabled={busy}
+                  onChange={(e) => {
+                    onTransition(item.id, e.target.value);
+                  }}
+                >
+                  {statuses.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
               ) : (
-                columnItems.map((item) => (
-                  <div key={item.id} className="grid gap-2 rounded-md border bg-card p-3 shadow-xs">
-                    <Link
-                      to={workItemPath(item.id)}
-                      className="text-sm font-medium break-words hover:underline"
-                    >
-                      {item.title}
-                    </Link>
-                    <WorkItemMeta
-                      item={item}
-                      typeName={typeNames.get(item.workItemTypeId) ?? 'Item'}
-                    />
-                    {canWrite && (
-                      <WorkItemStatusSelect
-                        item={item}
-                        statuses={statuses}
-                        disabled={busy}
-                        onTransition={onTransition}
-                      />
-                    )}
-                  </div>
-                ))
+                <Badge variant="secondary">{statusNames.get(item.statusId) ?? 'Status'}</Badge>
               )}
             </div>
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-interface FilterBarProps {
-  viewMode: ViewMode;
-  filters: WorkItemFilters;
-  types: ProjectWorkItemType[];
-  statuses: ProjectStatus[];
-  eras: ProjectEra[];
-  onChange: (patch: Partial<WorkItemFilters>) => void;
-}
-
-function WorkItemsFilterBar({
-  viewMode,
-  filters,
-  types,
-  statuses,
-  eras,
-  onChange,
-}: FilterBarProps) {
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-b px-6 py-3">
-      <select
-        aria-label="Filter by Work Item Type"
-        className={`${selectClassName} h-8 w-auto min-w-36 text-xs`}
-        value={filters.workItemTypeId ?? ''}
-        onChange={(e) => {
-          onChange({ workItemTypeId: e.target.value || undefined });
-        }}
-      >
-        <option value="">All types</option>
-        {types.map((wt) => (
-          <option key={wt.id} value={wt.id}>
-            {wt.name}
-          </option>
+          </li>
         ))}
-      </select>
-      <select
-        aria-label="Filter by Priority"
-        className={`${selectClassName} h-8 w-auto min-w-32 text-xs`}
-        value={filters.priority ?? ''}
-        onChange={(e) => {
-          onChange({ priority: (e.target.value as Priority | '') || undefined });
-        }}
-      >
-        <option value="">All priorities</option>
-        {PRIORITIES.map((p) => (
-          <option key={p} value={p}>
-            {priorityLabels[p]}
-          </option>
-        ))}
-      </select>
-      {viewMode !== 'board' && (
-        <select
-          aria-label="Filter by Status"
-          className={`${selectClassName} h-8 w-auto min-w-36 text-xs`}
-          value={filters.statusId ?? ''}
-          onChange={(e) => {
-            onChange({ statusId: e.target.value || undefined });
-          }}
-        >
-          <option value="">All statuses</option>
-          {statuses.map((st) => (
-            <option key={st.id} value={st.id}>
-              {st.name}
-            </option>
-          ))}
-        </select>
-      )}
-      {eras.length > 0 && (
-        <select
-          aria-label="Filter by Era"
-          className={`${selectClassName} h-8 w-auto min-w-36 text-xs`}
-          value={filters.eraId ?? ''}
-          onChange={(e) => {
-            onChange({ eraId: e.target.value || undefined });
-          }}
-        >
-          <option value="">All Eras</option>
-          {eras.map((era) => (
-            <option key={era.id} value={era.id}>
-              {era.name}
-            </option>
-          ))}
-        </select>
-      )}
+      </ul>
     </div>
   );
 }
@@ -300,13 +201,15 @@ interface BodyProps {
   isPending: boolean;
   error: unknown;
   items: WorkItem[];
-  viewMode: ViewMode;
+  viewMode: ViewLayout;
+  statusFilterId?: string;
   statuses: ProjectStatus[];
   types: ProjectWorkItemType[];
   eras: ProjectEra[];
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
+  onStartCreate?: () => void;
 }
 
 function renderActiveLayout(props: Omit<BodyProps, 'isPending' | 'error'>) {
@@ -346,9 +249,21 @@ function WorkItemsBody({ isPending, error, ...rest }: BodyProps) {
       </div>
     );
   }
-  if (rest.items.length === 0) {
+  if (rest.items.length === 0 && rest.viewMode !== 'board') {
     return (
-      <div className="grid gap-1 p-6 text-center">
+      <div className="grid gap-1 p-10 text-center">
+        <p className="text-sm font-medium">No Work Items yet</p>
+        <p className="text-sm text-muted-foreground">
+          {rest.canWrite
+            ? 'Create the first Work Item to start planning and tracking work.'
+            : 'Work Items created in this Project will appear here.'}
+        </p>
+      </div>
+    );
+  }
+  if (rest.items.length === 0 && rest.statuses.length === 0) {
+    return (
+      <div className="grid gap-1 p-10 text-center">
         <p className="text-sm font-medium">No Work Items yet</p>
         <p className="text-sm text-muted-foreground">
           {rest.canWrite
@@ -361,17 +276,19 @@ function WorkItemsBody({ isPending, error, ...rest }: BodyProps) {
   return renderActiveLayout(rest);
 }
 
-interface PaginationProps {
+function WorkItemsPagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
   page: number;
   totalPages: number;
   onPageChange: (next: number) => void;
-}
-
-function WorkItemsPagination({ page, totalPages, onPageChange }: PaginationProps) {
+}) {
   if (totalPages <= 1) return null;
   return (
-    <div className="flex items-center justify-between border-t px-6 py-3 text-sm">
-      <span className="text-muted-foreground">
+    <div className="flex items-center justify-between border-t border-border bg-card px-6 py-3 text-sm">
+      <span className="text-muted-foreground tabular-nums">
         Page {page} of {totalPages}
       </span>
       <div className="flex gap-2">
@@ -402,125 +319,167 @@ function WorkItemsPagination({ page, totalPages, onPageChange }: PaginationProps
   );
 }
 
-interface WorkItemsToolbarProps {
-  viewMode: ViewMode;
-  showCreateButton: boolean;
-  onSelectView: (mode: ViewMode) => void;
-  onStartCreate: () => void;
-}
-
-const LAYOUT_OPTIONS: Array<{ mode: ViewMode; label: string; icon: typeof List }> = [
-  { mode: 'list', label: 'List', icon: List },
-  { mode: 'board', label: 'Board', icon: Kanban },
-  { mode: 'table', label: 'Table', icon: Table2 },
-  { mode: 'timeline', label: 'Timeline', icon: GanttChart },
-  { mode: 'calendar', label: 'Calendar', icon: Calendar },
-];
-
-function WorkItemsToolbar({
-  viewMode,
-  showCreateButton,
-  onSelectView,
-  onStartCreate,
-}: WorkItemsToolbarProps) {
-  return (
-    <CardAction className="flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap gap-1" role="group" aria-label="View mode">
-        {LAYOUT_OPTIONS.map(({ mode, label, icon: Icon }) => (
-          <Button
-            key={mode}
-            type="button"
-            size="sm"
-            variant={viewMode === mode ? 'default' : 'outline'}
-            aria-pressed={viewMode === mode}
-            onClick={() => {
-              onSelectView(mode);
-            }}
-          >
-            <Icon className="size-4" aria-hidden="true" />
-            {label}
-          </Button>
-        ))}
-      </div>
-      {showCreateButton && (
-        <Button type="button" size="sm" onClick={onStartCreate}>
-          <Plus className="size-4" aria-hidden="true" />
-          New Work Item
-        </Button>
-      )}
-    </CardAction>
-  );
-}
-
-function TransitionAlert({ error }: { error: unknown }) {
-  if (!error) return null;
-  return (
-    <div className="border-b p-4">
-      <Alert variant="destructive">
-        <AlertCircle aria-hidden="true" />
-        <AlertDescription role="alert">{errorMessage(error)}</AlertDescription>
-      </Alert>
-    </div>
-  );
-}
-
 interface ProjectWorkItemsProps {
   project: Project;
+  configOpen: boolean;
+  configTab: ProjectConfigTab;
+  onToggleConfig: () => void;
+  onOpenConfigTab: (tab: ProjectConfigTab) => void;
 }
 
+const EMPTY_STATUSES: ProjectStatus[] = [];
+const EMPTY_TYPES: ProjectWorkItemType[] = [];
+const EMPTY_ERAS: ProjectEra[] = [];
+const EMPTY_VIEWS: ProjectView[] = [];
+const EMPTY_ITEMS: WorkItem[] = [];
+
 function useProjectWorkItemsData(projectId: string, filters: WorkItemFilters, page: number) {
-  const statuses = useProjectStatuses(projectId).data ?? [];
-  const types = useProjectWorkItemTypes(projectId).data ?? [];
-  const eras = useProjectEras(projectId).data ?? [];
+  const { data: currentUser } = useCurrentUser();
+  const statuses = useProjectStatuses(projectId).data ?? EMPTY_STATUSES;
+  const types = useProjectWorkItemTypes(projectId).data ?? EMPTY_TYPES;
+  const eras = useProjectEras(projectId).data ?? EMPTY_ERAS;
+  const views = useProjectViews(projectId).data ?? EMPTY_VIEWS;
   const itemsQuery = useWorkItems(projectId, filters, page);
   const transition = useTransitionWorkItem(projectId);
+  const createView = useCreateProjectView(projectId);
+  const updateView = useUpdateProjectView(projectId);
+  const deleteView = useDeleteProjectView(projectId);
+
   return {
+    currentUser,
     statuses,
     types,
     eras,
-    items: itemsQuery.data?.items ?? [],
+    views,
+    items: itemsQuery.data?.items ?? EMPTY_ITEMS,
     totalPages: itemsQuery.data?.totalPages ?? 1,
     isPending: itemsQuery.isPending,
     error: itemsQuery.error,
     transition,
+    createView,
+    updateView,
+    deleteView,
   };
 }
 
-function filtersFromView(view: ProjectView): WorkItemFilters {
+function useSyncProjectShell(shellState: ProjectShellState) {
+  const { setShell } = useProjectShell();
+
+  useEffect(() => {
+    setShell(shellState);
+  }, [shellState, setShell]);
+
+  useEffect(() => {
+    return () => {
+      setShell(null);
+    };
+  }, [setShell]);
+}
+
+function useActiveViewMeta(
+  project: Project,
+  views: ProjectView[],
+  activeViewId: string | null,
+  userId: string | undefined,
+  viewMode: ViewLayout,
+) {
+  const activeView = views.find((v) => v.id === activeViewId) ?? null;
+  const canEditActiveView = activeView ? canEditSavedView(activeView, userId, project) : false;
   return {
-    ...(view.filters.statusId && view.layout !== 'board'
-      ? { statusId: view.filters.statusId }
-      : {}),
-    ...(view.filters.workItemTypeId ? { workItemTypeId: view.filters.workItemTypeId } : {}),
-    ...(view.filters.priority ? { priority: view.filters.priority as Priority } : {}),
-    ...(view.filters.assigneeId ? { assigneeId: view.filters.assigneeId } : {}),
-    ...(view.filters.eraId ? { eraId: view.filters.eraId } : {}),
+    activeView,
+    canEditActiveView,
+    isActiveViewCreator: activeView?.createdBy === userId,
+    viewTitle: activeView ? activeView.name : LAYOUT_TITLES[viewMode],
+    viewKey: activeView ? `view:${activeView.id}` : viewMode,
   };
 }
 
-/** Displays a Project's Work Items in List, Board, Table, Timeline or Calendar layout with saved Views. */
-export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+function useSavedViewHandlers(
+  data: ReturnType<typeof useProjectWorkItemsData>,
+  activeView: ProjectView | null,
+  viewMode: ViewLayout,
+  filters: WorkItemFilters,
+  onClearActiveView: () => void,
+) {
+  const viewBusy =
+    data.createView.isPending || data.updateView.isPending || data.deleteView.isPending;
+  const viewError = data.createView.error ?? data.updateView.error ?? data.deleteView.error;
+
+  function onUpdateActiveView() {
+    if (!activeView) return;
+    data.updateView.mutate({
+      viewId: activeView.id,
+      payload: { layout: viewMode, filters: toSavedFilters(filters) },
+    });
+  }
+
+  function onToggleActiveViewVisibility() {
+    if (!activeView) return;
+    data.updateView.mutate({
+      viewId: activeView.id,
+      payload: {
+        visibility: activeView.visibility === 'personal' ? 'shared' : 'personal',
+      },
+    });
+  }
+
+  function onDeleteActiveView() {
+    if (!activeView) return;
+    data.deleteView.mutate(activeView.id, { onSuccess: onClearActiveView });
+  }
+
+  return {
+    viewBusy,
+    viewError,
+    onUpdateActiveView,
+    onToggleActiveViewVisibility,
+    onDeleteActiveView,
+  };
+}
+
+/** Displays a Project's persistent 4-row view header and active Board/Timeline/Table/Calendar/List canvas. */
+export function ProjectWorkItems({
+  project,
+  configOpen,
+  configTab,
+  onToggleConfig,
+  onOpenConfigTab,
+}: ProjectWorkItemsProps) {
+  const [viewMode, setViewMode] = useState<ViewLayout>('board');
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [savingView, setSavingView] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<WorkItemFilters>({});
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
 
-  const { statuses, types, eras, items, totalPages, isPending, error, transition } =
-    useProjectWorkItemsData(project.id, filters, page);
+  const data = useProjectWorkItemsData(project.id, filters, page);
   const canWrite = project.currentUserRole !== 'viewer';
+  const canCreateWorkItem = canWrite && !creating && data.types.length > 0;
+  const viewMeta = useActiveViewMeta(
+    project,
+    data.views,
+    activeViewId,
+    data.currentUser?.id,
+    viewMode,
+  );
 
-  function updateFilter(patch: Partial<WorkItemFilters>) {
-    setPage(1);
-    setFilters((prev) => ({ ...prev, ...patch }));
-  }
+  const visibleItems = useMemo(
+    () => filterBySearch(data.items, searchQuery),
+    [data.items, searchQuery],
+  );
+  const participants = useMemo(
+    () => collectParticipants(data.items, data.currentUser),
+    [data.items, data.currentUser],
+  );
 
-  function handleSelectView(mode: ViewMode) {
+  const handleSelectLayout = useCallback((mode: ViewLayout) => {
+    setActiveViewId(null);
     setViewMode(mode);
-    if (mode === 'board' && filters.statusId) updateFilter({ statusId: '' });
-  }
+  }, []);
 
-  function handleApplySavedView(view: ProjectView | null) {
+  const handleApplySavedView = useCallback((view: ProjectView | null) => {
     setPage(1);
     if (!view) {
       setActiveViewId(null);
@@ -530,65 +489,177 @@ export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
     setActiveViewId(view.id);
     setViewMode(view.layout);
     setFilters(filtersFromView(view));
+  }, []);
+
+  const handleRequestSaveView = useCallback(() => {
+    setSavingView(true);
+  }, []);
+
+  const handleStartCreate = useCallback(() => {
+    setCreating(true);
+  }, []);
+
+  const viewHandlers = useSavedViewHandlers(data, viewMeta.activeView, viewMode, filters, () => {
+    handleApplySavedView(null);
+  });
+
+  const shellState = useMemo<ProjectShellState>(
+    () => ({
+      project,
+      activeViewMode: viewMode,
+      activeViewId,
+      views: data.views,
+      searchQuery,
+      configOpen,
+      configTab,
+      canWrite,
+      canCreateWorkItem,
+      onSelectLayout: handleSelectLayout,
+      onSelectSavedView: handleApplySavedView,
+      onRequestSaveView: handleRequestSaveView,
+      onSearchChange: setSearchQuery,
+      onToggleConfig,
+      onOpenConfigTab,
+      onStartCreateWorkItem: handleStartCreate,
+    }),
+    [
+      project,
+      viewMode,
+      activeViewId,
+      data.views,
+      searchQuery,
+      configOpen,
+      configTab,
+      canWrite,
+      canCreateWorkItem,
+      handleSelectLayout,
+      handleApplySavedView,
+      handleRequestSaveView,
+      onToggleConfig,
+      onOpenConfigTab,
+      handleStartCreate,
+    ],
+  );
+
+  useSyncProjectShell(shellState);
+
+  function updateFilter(patch: Partial<WorkItemFilters>) {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, ...patch }));
+  }
+
+  function resetFilters() {
+    setPage(1);
+    setSearchQuery('');
+    setFilters({});
   }
 
   return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle>Work Items</CardTitle>
-        <WorkItemsToolbar
-          viewMode={viewMode}
-          showCreateButton={canWrite && !creating && types.length > 0}
-          onSelectView={handleSelectView}
-          onStartCreate={() => {
-            setCreating(true);
-          }}
-        />
-      </CardHeader>
-      <CardContent className="p-0">
-        {creating && (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Main Row 1: Persistent 4-sub-row header */}
+      <ProjectWorkspaceHeader
+        project={project}
+        viewKey={viewMeta.viewKey}
+        viewTitle={viewMeta.viewTitle}
+        visibleCount={visibleItems.length}
+        searchQuery={searchQuery}
+        filters={filters}
+        filtersOpen={filtersOpen}
+        configOpen={configOpen}
+        types={data.types}
+        statuses={data.statuses}
+        eras={data.eras}
+        participants={participants}
+        canWrite={canWrite}
+        showCreateButton={canCreateWorkItem}
+        activeView={viewMeta.activeView}
+        canEditActiveView={viewMeta.canEditActiveView}
+        isActiveViewCreator={viewMeta.isActiveViewCreator}
+        viewBusy={viewHandlers.viewBusy}
+        onSearchChange={setSearchQuery}
+        onFilterChange={updateFilter}
+        onResetFilters={resetFilters}
+        onToggleFilters={() => {
+          setFiltersOpen((prev) => !prev);
+        }}
+        onToggleConfig={onToggleConfig}
+        onOpenConfigTab={onOpenConfigTab}
+        onStartCreate={handleStartCreate}
+        onRequestSaveView={handleRequestSaveView}
+        onUpdateActiveView={viewHandlers.onUpdateActiveView}
+        onToggleActiveViewVisibility={viewHandlers.onToggleActiveViewVisibility}
+        onDeleteActiveView={viewHandlers.onDeleteActiveView}
+      />
+
+      <SaveViewBanner
+        open={savingView}
+        busy={data.createView.isPending}
+        error={viewHandlers.viewError}
+        onSave={(name) => {
+          data.createView.mutate(
+            { name, layout: viewMode, filters: toSavedFilters(filters) },
+            {
+              onSuccess: (saved) => {
+                setSavingView(false);
+                handleApplySavedView(saved);
+              },
+            },
+          );
+        }}
+        onCancel={() => {
+          setSavingView(false);
+        }}
+      />
+
+      {creating && (
+        <div className="shrink-0 border-b border-border bg-card">
           <CreateWorkItemForm
             projectId={project.id}
-            statuses={statuses}
-            workItemTypes={types}
-            existingItems={items}
+            statuses={data.statuses}
+            workItemTypes={data.types}
+            existingItems={data.items}
             onClose={() => {
               setCreating(false);
             }}
           />
-        )}
-        <ProjectViewsBar
-          project={project}
-          activeViewId={activeViewId}
-          currentLayout={viewMode}
-          currentFilters={filters}
-          onSelectView={handleApplySavedView}
-        />
-        <WorkItemsFilterBar
-          viewMode={viewMode}
-          filters={filters}
-          types={types}
-          statuses={statuses}
-          eras={eras}
-          onChange={updateFilter}
-        />
-        <TransitionAlert error={transition.error} />
+        </div>
+      )}
+
+      {Boolean(data.transition.error) && (
+        <div className="shrink-0 border-b border-border px-4 py-2.5 md:px-6">
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription role="alert">{errorMessage(data.transition.error)}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+
+      {/* Main Row 2: Active Visualization Canvas */}
+      <div className="min-h-0 flex-1 overflow-auto bg-background">
         <WorkItemsBody
-          isPending={isPending}
-          error={error}
-          items={items}
+          isPending={data.isPending}
+          error={data.error}
+          items={visibleItems}
           viewMode={viewMode}
-          statuses={statuses}
-          types={types}
-          eras={eras}
+          statusFilterId={filters.statusId}
+          statuses={data.statuses}
+          types={data.types}
+          eras={data.eras}
           canWrite={canWrite}
-          busy={transition.isPending}
+          busy={data.transition.isPending}
           onTransition={(workItemId, statusId) => {
-            transition.mutate({ workItemId, statusId });
+            data.transition.mutate({ workItemId, statusId });
           }}
+          onStartCreate={
+            canCreateWorkItem
+              ? () => {
+                  setCreating(true);
+                }
+              : undefined
+          }
         />
-        <WorkItemsPagination page={page} totalPages={totalPages} onPageChange={setPage} />
-      </CardContent>
-    </Card>
+        <WorkItemsPagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
+      </div>
+    </div>
   );
 }

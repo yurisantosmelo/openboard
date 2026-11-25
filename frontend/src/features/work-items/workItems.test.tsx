@@ -165,12 +165,25 @@ describe('Work Items on ProjectPage', () => {
     });
 
     renderRoute('/projects/p1');
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
+    const breadcrumb = await screen.findByRole('navigation', { name: 'Project breadcrumb' });
+    expect(within(breadcrumb).getByText('Core Platform')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Board', level: 1 })).toBeInTheDocument();
     const link = await screen.findByRole('link', { name: 'Implement OAuth' });
     expect(link).toHaveAttribute('href', '/work-items/wi1');
     expect(screen.getByText('5 pts')).toBeInTheDocument();
+
+    // Verify Epic is always ordered first in the Work Item Type dropdown
+    const typeSelect = screen.getByLabelText('Filter by Work Item Type');
+    const typeOptions = Array.from(typeSelect.querySelectorAll('option')).map((o) => o.textContent);
+    expect(typeOptions).toEqual(['All types', 'Epic', 'Task', 'User Story']);
+
+    // Favorite Star toggles and persists
+    const starBtn = screen.getByRole('button', { name: 'Favorite board' });
+    await user.click(starBtn);
+    expect(screen.getByRole('button', { name: 'Remove from favorites' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     // Create a Task child under the User Story with Hours estimate
     await user.click(screen.getByRole('button', { name: 'New Work Item' }));
@@ -185,8 +198,7 @@ describe('Work Items on ProjectPage', () => {
     expect(await screen.findByRole('link', { name: 'Write unit tests' })).toBeInTheDocument();
     expect(screen.getByText('3 h')).toBeInTheDocument();
 
-    // Switch to Board view and transition Status
-    await user.click(screen.getByRole('button', { name: 'Board' }));
+    // Board view transitions Status
     const board = await screen.findByRole('region', { name: 'Work Items board' });
     expect(within(board).getByRole('heading', { name: 'Backlog' })).toBeInTheDocument();
     await user.selectOptions(within(board).getByLabelText('Status for Implement OAuth'), 's2');
@@ -196,9 +208,20 @@ describe('Work Items on ProjectPage', () => {
       }),
     ).toBeInTheDocument();
 
-    // Filter by Priority
-    await user.click(screen.getByRole('button', { name: 'List' }));
-    await user.selectOptions(screen.getByLabelText('Filter by Priority'), 'urgent');
+    // Live search filters items client-side
+    const searchInput = screen.getByLabelText('Search work items');
+    await user.type(searchInput, 'unit');
+    expect(screen.getByRole('link', { name: 'Write unit tests' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Implement OAuth' })).not.toBeInTheDocument();
+    await user.clear(searchInput);
+
+    // Switch to Backlog (List) and filter by Priority via collapsible Notion-style filter bar
+    await user.click(screen.getByRole('button', { name: 'Backlog' }));
+    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+    const filtersRegion = screen.getByRole('region', { name: 'Filters' });
+    await user.click(within(filtersRegion).getByRole('button', { name: 'Filter' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Priority' }));
+    await user.selectOptions(within(filtersRegion).getByLabelText('Filter by Priority'), 'urgent');
     expect(await screen.findByRole('link', { name: 'Write unit tests' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Implement OAuth' })).not.toBeInTheDocument();
   });
@@ -308,9 +331,8 @@ describe('WorkItemPage', () => {
 
     // Delete navigates back to ProjectPage
     await user.click(screen.getByRole('button', { name: 'Delete Work Item' }));
-    expect(
-      await screen.findByRole('heading', { name: 'Core Platform', level: 1 }),
-    ).toBeInTheDocument();
+    const breadcrumb = await screen.findByRole('navigation', { name: 'Project breadcrumb' });
+    expect(within(breadcrumb).getByText('Core Platform')).toBeInTheDocument();
   });
 
   it('renders read-only mode for Viewers and reports 404 errors', async () => {
