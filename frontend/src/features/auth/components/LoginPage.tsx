@@ -34,7 +34,7 @@ export function LoginPage() {
           <CardTitle>Sign in</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4" onSubmit={handleSubmit}>
+          <form className="grid gap-4" autoComplete="off" onSubmit={handleSubmit}>
             {signIn.isError && (
               <Alert variant="destructive">
                 <AlertCircle aria-hidden="true" />
@@ -44,9 +44,10 @@ export function LoginPage() {
             <Field
               label="Username"
               name="username"
-              autoComplete="username"
+              autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
+              autoFocus
               required
               value={username}
               onChange={(e) => {
@@ -57,7 +58,7 @@ export function LoginPage() {
               label="Password"
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="off"
               required
               value={password}
               onChange={(e) => {
