@@ -64,6 +64,9 @@ databaseChangeLog:
   - include:
       file: ../tables/20261125124501_create_teams_tables.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261125150001_add_lifecycle_columns.sql
+      relativeToChangelogFile: true
 
   # 3. constraints
   - include:
@@ -111,6 +114,9 @@ databaseChangeLog:
   - include:
       file: ../constraints/20261125124502_add_teams_constraints.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../constraints/20261125150002_add_lifecycle_constraints.sql
+      relativeToChangelogFile: true
 
   # 4. indexes
   - include:
@@ -136,4 +142,7 @@ databaseChangeLog:
       relativeToChangelogFile: true
   - include:
       file: ../indexes/20261125124503_create_teams_indexes.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../indexes/20261125150003_create_lifecycle_indexes.sql
       relativeToChangelogFile: true
