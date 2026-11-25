@@ -32,6 +32,9 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 	if err != nil {
 		return Principal{}, fmt.Errorf("find session user: %w", err)
 	}
+	if user.IsDeactivated() {
+		return Principal{}, domain.ErrUnauthenticated
+	}
 	return Principal{User: user, SessionID: session.ID}, nil
 }
 

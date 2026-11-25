@@ -60,7 +60,7 @@ func (s *Service) verifyCredentials(ctx context.Context, username domain.Usernam
 	if err != nil {
 		return domain.User{}, fmt.Errorf("verify password: %w", err)
 	}
-	if !ok {
+	if !ok || user.IsDeactivated() {
 		return domain.User{}, domain.ErrInvalidCredentials
 	}
 	return user, nil
