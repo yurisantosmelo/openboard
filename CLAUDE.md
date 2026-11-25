@@ -39,9 +39,9 @@ Full product and architecture context: `docs/product-vision.md`. Read the releva
 
 ## Frontend (React + TypeScript)
 
-- Organized by feature (`src/features/<feature>/`), with a centralized Design System.
+- Organized by feature (`src/features/<feature>/`), with shadcn/ui components in `src/components/ui/`.
 - Separate presentation, state and API communication.
-- Build every screen only with the tokens and components of the OCaml Design System (ADR 0011). Propose what is missing to the design system instead of creating it here.
+- Build every screen only with **shadcn/ui** components (`src/components/ui/`), Tailwind CSS and **Lucide** icons (`lucide-react`) (ADR 0012). Do not create custom UI primitives — only compose existing shadcn/ui components when no single component covers the need.
 - Tools: ESLint, TypeScript in `strict` mode, Prettier.
 
 ## Before considering a task done

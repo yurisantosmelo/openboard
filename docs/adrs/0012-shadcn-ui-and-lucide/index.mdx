@@ -1,0 +1,39 @@
+---
+id: 0012-shadcn-ui-and-lucide
+name: "0012. The interface is built with shadcn/ui, Tailwind CSS and Lucide icons"
+version: 1.0.0
+summary: "Every OpenBoard screen is built with shadcn/ui components, Tailwind CSS semantic theme tokens and Lucide icons, replacing the OCaml Design System (ADR 0011)."
+owners:
+  - maintainers
+decisionMakers:
+  - maintainers
+status: accepted
+date: 2026-11-24
+appliesTo:
+  - type: service
+    id: WebApp
+---
+
+## Context
+
+ADR 0011 pinned OpenBoard to the external OCaml Design System package fetched directly from GitHub. As product features grow across Identity, Organizational Structure and Work Management, waiting on an external package for every UI primitive slows iteration and ties builds to an external GitHub repository.
+
+OpenBoard needs a widely adopted, accessible, self-contained component foundation where every primitive lives in the repository, ships with light and dark semantic theme tokens, and pairs with a complete icon set.
+
+## Decision
+
+1. **shadcn/ui** (`frontend/src/components/ui/`) on top of **Tailwind CSS** is the component system for the OpenBoard interface, superseding ADR 0011.
+2. **Lucide (`lucide-react`)** is the sole icon library for the interface.
+3. Screens must use shadcn/ui components and Lucide icons directly. Do not create new custom UI primitives; only compose existing shadcn/ui components when no single component covers the need.
+4. `ocaml-design-system` is removed from the frontend dependencies and build pipeline.
+
+### Alternatives rejected
+
+- **Keeping the OCaml Design System (ADR 0011):** blocks UI progress on external package releases and requires GitHub network access during Docker and CI builds.
+- **Building a bespoke component library from scratch:** duplicates accessibility, keyboard navigation and theming work that shadcn/ui and Radix UI already solve.
+
+## Consequences
+
+- Frontend builds are self-contained on npm without depending on external GitHub package builds.
+- Accessible primitives (dialogs, menus, tables, forms, alerts, badges) can be added on demand using standard shadcn/ui patterns.
+- All UI components and theme tokens are owned directly in `frontend/src/components/ui/` and `frontend/src/index.css`.
