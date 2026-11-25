@@ -41,7 +41,10 @@ export function ProjectPage() {
         </h1>
       </header>
       <ProjectWorkItems project={project.data} />
-      <ProjectWorkflow projectId={project.data.id} />
+      <ProjectWorkflow
+        projectId={project.data.id}
+        canManage={project.data.currentUserRole === 'owner'}
+      />
       {project.data.currentUserRole === 'owner' && <ProjectSettings project={project.data} />}
       <div>
         <Link
