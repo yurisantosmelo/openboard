@@ -1,4 +1,13 @@
-import { AlertCircle, Kanban, List, Loader2, Plus } from 'lucide-react';
+import {
+  AlertCircle,
+  Calendar,
+  GanttChart,
+  Kanban,
+  List,
+  Loader2,
+  Plus,
+  Table2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -6,7 +15,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { errorMessage } from '../../../shared/api/httpClient';
-import type { Project, ProjectEra, ProjectStatus, ProjectWorkItemType } from '../../projects';
+import type {
+  Project,
+  ProjectEra,
+  ProjectStatus,
+  ProjectView,
+  ProjectWorkItemType,
+  ViewLayout,
+} from '../../projects';
 import {
   useProjectEras,
   useProjectStatuses,
@@ -16,6 +32,12 @@ import type { Priority, WorkItem, WorkItemFilters } from '../api/workItemsApi';
 import { useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
 import { workItemPath } from '../paths';
 import { CreateWorkItemForm } from './CreateWorkItemForm';
+import { ProjectViewsBar } from './ProjectViewsBar';
+import {
+  WorkItemsCalendarView,
+  WorkItemsTableView,
+  WorkItemsTimelineView,
+} from './WorkItemsLayouts';
 import {
   formatEstimate,
   PRIORITIES,
@@ -24,7 +46,7 @@ import {
   selectClassName,
 } from './workItemLabels';
 
-type ViewMode = 'list' | 'board';
+type ViewMode = ViewLayout;
 
 function WorkItemMeta({ item, typeName }: { item: WorkItem; typeName: string }) {
   const estimate = formatEstimate(item);
@@ -236,7 +258,7 @@ function WorkItemsFilterBar({
           </option>
         ))}
       </select>
-      {viewMode === 'list' && (
+      {viewMode !== 'board' && (
         <select
           aria-label="Filter by Status"
           className={`${selectClassName} h-8 w-auto min-w-36 text-xs`}
@@ -281,22 +303,26 @@ interface BodyProps {
   viewMode: ViewMode;
   statuses: ProjectStatus[];
   types: ProjectWorkItemType[];
+  eras: ProjectEra[];
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
 }
 
-function WorkItemsBody({
-  isPending,
-  error,
-  items,
-  viewMode,
-  statuses,
-  types,
-  canWrite,
-  busy,
-  onTransition,
-}: BodyProps) {
+function renderActiveLayout(props: Omit<BodyProps, 'isPending' | 'error'>) {
+  const typeNames = new Map(props.types.map((t) => [t.id, t.name]));
+  const statusNames = new Map(props.statuses.map((s) => [s.id, s.name]));
+  const shared = { ...props, typeNames, statusNames };
+  if (props.viewMode === 'board' && props.statuses.length > 0) {
+    return <WorkItemsBoardView {...shared} />;
+  }
+  if (props.viewMode === 'table') return <WorkItemsTableView {...shared} />;
+  if (props.viewMode === 'timeline') return <WorkItemsTimelineView {...shared} />;
+  if (props.viewMode === 'calendar') return <WorkItemsCalendarView {...shared} />;
+  return <WorkItemsListView {...shared} />;
+}
+
+function WorkItemsBody({ isPending, error, ...rest }: BodyProps) {
   if (isPending) {
     return (
       <div className="p-6">
@@ -320,43 +346,19 @@ function WorkItemsBody({
       </div>
     );
   }
-  if (items.length === 0) {
+  if (rest.items.length === 0) {
     return (
       <div className="grid gap-1 p-6 text-center">
         <p className="text-sm font-medium">No Work Items yet</p>
         <p className="text-sm text-muted-foreground">
-          {canWrite
+          {rest.canWrite
             ? 'Create the first Work Item to start planning and tracking work.'
             : 'Work Items created in this Project will appear here.'}
         </p>
       </div>
     );
   }
-  const typeNames = new Map(types.map((t) => [t.id, t.name]));
-  const statusNames = new Map(statuses.map((s) => [s.id, s.name]));
-  if (viewMode === 'board' && statuses.length > 0) {
-    return (
-      <WorkItemsBoardView
-        items={items}
-        statuses={statuses}
-        typeNames={typeNames}
-        canWrite={canWrite}
-        busy={busy}
-        onTransition={onTransition}
-      />
-    );
-  }
-  return (
-    <WorkItemsListView
-      items={items}
-      statuses={statuses}
-      typeNames={typeNames}
-      statusNames={statusNames}
-      canWrite={canWrite}
-      busy={busy}
-      onTransition={onTransition}
-    />
-  );
+  return renderActiveLayout(rest);
 }
 
 interface PaginationProps {
@@ -407,6 +409,14 @@ interface WorkItemsToolbarProps {
   onStartCreate: () => void;
 }
 
+const LAYOUT_OPTIONS: Array<{ mode: ViewMode; label: string; icon: typeof List }> = [
+  { mode: 'list', label: 'List', icon: List },
+  { mode: 'board', label: 'Board', icon: Kanban },
+  { mode: 'table', label: 'Table', icon: Table2 },
+  { mode: 'timeline', label: 'Timeline', icon: GanttChart },
+  { mode: 'calendar', label: 'Calendar', icon: Calendar },
+];
+
 function WorkItemsToolbar({
   viewMode,
   showCreateButton,
@@ -415,31 +425,22 @@ function WorkItemsToolbar({
 }: WorkItemsToolbarProps) {
   return (
     <CardAction className="flex flex-wrap items-center gap-2">
-      <div className="flex gap-1" role="group" aria-label="View mode">
-        <Button
-          type="button"
-          size="sm"
-          variant={viewMode === 'list' ? 'default' : 'outline'}
-          aria-pressed={viewMode === 'list'}
-          onClick={() => {
-            onSelectView('list');
-          }}
-        >
-          <List className="size-4" aria-hidden="true" />
-          List
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={viewMode === 'board' ? 'default' : 'outline'}
-          aria-pressed={viewMode === 'board'}
-          onClick={() => {
-            onSelectView('board');
-          }}
-        >
-          <Kanban className="size-4" aria-hidden="true" />
-          Board
-        </Button>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="View mode">
+        {LAYOUT_OPTIONS.map(({ mode, label, icon: Icon }) => (
+          <Button
+            key={mode}
+            type="button"
+            size="sm"
+            variant={viewMode === mode ? 'default' : 'outline'}
+            aria-pressed={viewMode === mode}
+            onClick={() => {
+              onSelectView(mode);
+            }}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+            {label}
+          </Button>
+        ))}
       </div>
       {showCreateButton && (
         <Button type="button" size="sm" onClick={onStartCreate}>
@@ -485,12 +486,25 @@ function useProjectWorkItemsData(projectId: string, filters: WorkItemFilters, pa
   };
 }
 
-/** Displays a Project's Work Items in List or Board view with filters and inline creation. */
+function filtersFromView(view: ProjectView): WorkItemFilters {
+  return {
+    ...(view.filters.statusId && view.layout !== 'board'
+      ? { statusId: view.filters.statusId }
+      : {}),
+    ...(view.filters.workItemTypeId ? { workItemTypeId: view.filters.workItemTypeId } : {}),
+    ...(view.filters.priority ? { priority: view.filters.priority as Priority } : {}),
+    ...(view.filters.assigneeId ? { assigneeId: view.filters.assigneeId } : {}),
+    ...(view.filters.eraId ? { eraId: view.filters.eraId } : {}),
+  };
+}
+
+/** Displays a Project's Work Items in List, Board, Table, Timeline or Calendar layout with saved Views. */
 export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [filters, setFilters] = useState<WorkItemFilters>({});
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
 
   const { statuses, types, eras, items, totalPages, isPending, error, transition } =
     useProjectWorkItemsData(project.id, filters, page);
@@ -504,6 +518,18 @@ export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
   function handleSelectView(mode: ViewMode) {
     setViewMode(mode);
     if (mode === 'board' && filters.statusId) updateFilter({ statusId: '' });
+  }
+
+  function handleApplySavedView(view: ProjectView | null) {
+    setPage(1);
+    if (!view) {
+      setActiveViewId(null);
+      setFilters({});
+      return;
+    }
+    setActiveViewId(view.id);
+    setViewMode(view.layout);
+    setFilters(filtersFromView(view));
   }
 
   return (
@@ -531,6 +557,13 @@ export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
             }}
           />
         )}
+        <ProjectViewsBar
+          project={project}
+          activeViewId={activeViewId}
+          currentLayout={viewMode}
+          currentFilters={filters}
+          onSelectView={handleApplySavedView}
+        />
         <WorkItemsFilterBar
           viewMode={viewMode}
           filters={filters}
@@ -547,6 +580,7 @@ export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
           viewMode={viewMode}
           statuses={statuses}
           types={types}
+          eras={eras}
           canWrite={canWrite}
           busy={transition.isPending}
           onTransition={(workItemId, statusId) => {
