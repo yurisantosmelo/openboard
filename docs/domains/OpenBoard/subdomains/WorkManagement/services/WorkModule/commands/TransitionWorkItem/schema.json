@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TransitionWorkItemRequest",
+  "type": "object",
+  "required": ["status_id"],
+  "properties": {
+    "status_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Destination Status belonging to the same Project."
+    }
+  }
+}

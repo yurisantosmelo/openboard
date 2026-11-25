@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CreateWorkItemRequest",
+  "type": "object",
+  "required": ["work_item_type_id", "title"],
+  "properties": {
+    "work_item_type_id": { "type": "string", "format": "uuid" },
+    "status_id": { "type": "string", "format": "uuid" },
+    "parent_id": { "type": ["string", "null"], "format": "uuid" },
+    "era_id": { "type": ["string", "null"], "format": "uuid" },
+    "assignee_id": { "type": ["string", "null"], "format": "uuid" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "description": { "type": "string" },
+    "priority": { "type": "string", "enum": ["urgent", "high", "medium", "low", "none"], "default": "none" },
+    "story_points": { "type": ["number", "null"], "minimum": 0 },
+    "hours": { "type": ["number", "null"], "minimum": 0 }
+  }
+}

@@ -1,0 +1,23 @@
+---
+id: CreateProject
+name: Create Project
+version: 0.1.0
+summary: Creates a Project inside a Workspace and seeds its default Statuses, Work Item Types and hierarchy.
+owners:
+  - maintainers
+schemaPath: schema.json
+operation:
+  method: POST
+  path: /api/v1/projects
+  statusCodes: ['201', '400', '401', '403', '404', '405', '409', '415', '422']
+---
+
+## Overview
+
+Only a Workspace Owner (including Organization Owners and Administrators) can create a [[entity|Project]]. Creating a Project in an Archived Workspace fails with `409 Conflict`.
+
+<NodeGraph />
+
+## Schema
+
+<SchemaViewer file="schema.json" />

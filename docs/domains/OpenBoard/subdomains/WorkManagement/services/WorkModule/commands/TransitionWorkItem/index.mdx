@@ -1,0 +1,23 @@
+---
+id: TransitionWorkItem
+name: Transition Work Item
+version: 0.1.0
+summary: Moves a Work Item to another Status inside its Project, enforcing configured Transition Rules.
+owners:
+  - maintainers
+schemaPath: schema.json
+operation:
+  method: POST
+  path: /api/v1/work-items/{work_item_id}/transitions
+  statusCodes: ['200', '400', '401', '403', '404', '405', '409', '415', '422']
+---
+
+## Overview
+
+Moves a [[entity|WorkItem]] to a target [[entity|Status]] in the same Project. If the Project defines [[entity|TransitionRule]] records for the current Status, only allowed target Statuses succeed; otherwise `409 Conflict` is returned.
+
+<NodeGraph />
+
+## Schema
+
+<SchemaViewer file="schema.json" />

@@ -1,0 +1,23 @@
+---
+id: ListProjects
+name: List Projects
+version: 0.1.0
+summary: Lists Projects inside a Workspace, excluding Archived and Pending Deletion Projects by default.
+owners:
+  - maintainers
+schemaPath: schema.json
+operation:
+  method: GET
+  path: /api/v1/projects
+  statusCodes: ['200', '401', '403', '404', '405', '422']
+---
+
+## Overview
+
+Returns a paginated list of [[entity|Project]] records in a [[entity|Workspace]]. Pass `include_archived=true` to include Archived Projects, or `pending_deletion=true` (Organization Owners and Administrators only) to list Pending Deletion Projects.
+
+<NodeGraph />
+
+## Schema
+
+<SchemaViewer file="schema.json" />
