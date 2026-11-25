@@ -16,7 +16,7 @@ import (
 
 const (
 	uxProjectWorkspaceName = "ux_projects_workspace_name"
-	projectColumns         = `id::text, organization_id::text, workspace_id::text, name, created_at, updated_at`
+	projectColumns         = `id::text, organization_id::text, workspace_id::text, name, created_at, updated_at, archived_at`
 )
 
 // Projects stores Projects and their workflow configuration in PostgreSQL.
@@ -55,9 +55,9 @@ func (r *Projects) Create(ctx context.Context, n application.NewProject) (domain
 	return created, err
 }
 
-// Find returns the Project with id, or domain.ErrNotFound.
+// Find returns the Project with id (excluding Pending Deletion), or domain.ErrNotFound.
 func (r *Projects) Find(ctx context.Context, id domain.ProjectID) (domain.Project, error) {
-	project, err := scanProject(r.pool.QueryRow(ctx, `SELECT `+projectColumns+` FROM projects WHERE id = $1`, string(id)))
+	project, err := scanProject(r.pool.QueryRow(ctx, `SELECT `+projectColumns+` FROM projects WHERE id = $1 AND deleted_at IS NULL`, string(id)))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Project{}, domain.ErrNotFound
 	}
@@ -67,30 +67,10 @@ func (r *Projects) Find(ctx context.Context, id domain.ProjectID) (domain.Projec
 	return project, nil
 }
 
-// ListByWorkspace returns one page of Projects inside workspaceID ordered by
-// name ignoring case and then by ID, along with the total count.
+// ListByWorkspace returns one page of active (non-Archived, non-Pending-Deletion)
+// Projects inside workspaceID ordered by name ignoring case and then by ID.
 func (r *Projects) ListByWorkspace(ctx context.Context, workspaceID domain.WorkspaceID, page application.PageRequest) ([]domain.Project, int, error) {
-	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM projects WHERE workspace_id = $1`, string(workspaceID)).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count projects: %w", err)
-	}
-	rows, err := r.pool.Query(ctx, `
-		SELECT `+projectColumns+`
-		FROM projects
-		WHERE workspace_id = $1
-		ORDER BY lower(name), id
-		LIMIT $2 OFFSET $3`,
-		string(workspaceID), page.Limit, page.Offset)
-	if err != nil {
-		return nil, 0, fmt.Errorf("list projects: %w", err)
-	}
-	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Project, error) {
-		return scanProject(row)
-	})
-	if err != nil {
-		return nil, 0, fmt.Errorf("scan projects: %w", err)
-	}
-	return items, total, nil
+	return r.ListByWorkspaceFiltered(ctx, workspaceID, false, page)
 }
 
 // Rename changes a Project's name and returns the updated Project.
@@ -98,7 +78,7 @@ func (r *Projects) Rename(ctx context.Context, id domain.ProjectID, name string)
 	row := r.pool.QueryRow(ctx, `
 		UPDATE projects
 		SET name = $2, updated_at = NOW()
-		WHERE id = $1
+		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING `+projectColumns,
 		string(id), name)
 	project, err := scanProject(row)
@@ -122,7 +102,7 @@ func (r *Projects) Move(ctx context.Context, id domain.ProjectID, targetWorkspac
 		row := tx.QueryRow(ctx, `
 			UPDATE projects
 			SET workspace_id = $2, updated_at = NOW()
-			WHERE id = $1
+			WHERE id = $1 AND deleted_at IS NULL
 			RETURNING `+projectColumns,
 			string(id), string(targetWorkspaceID))
 		p, err := scanProject(row)
@@ -143,7 +123,7 @@ func scanProject(row pgx.Row) (domain.Project, error) {
 		p                        domain.Project
 		id, organizationID, wsID string
 	)
-	if err := row.Scan(&id, &organizationID, &wsID, &p.Name, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&id, &organizationID, &wsID, &p.Name, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt); err != nil {
 		return domain.Project{}, err
 	}
 	p.ID = domain.ProjectID(id)

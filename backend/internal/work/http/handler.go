@@ -41,6 +41,15 @@ func NewHandler(svc Service, auth Auth, logger *slog.Logger) *Handler {
 	return &Handler{svc: svc, auth: auth, logger: logger}
 }
 
+type projectLifecycleService interface {
+	ListProjectsFiltered(ctx context.Context, actor domain.Actor, rawWorkspaceID string, includeArchived bool, page application.PageRequest) ([]domain.Project, int, error)
+	ListPendingDeletionProjects(ctx context.Context, actor domain.Actor, rawWorkspaceID string, page application.PageRequest) ([]domain.Project, int, error)
+	ArchiveProject(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error)
+	UnarchiveProject(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error)
+	DeleteProject(ctx context.Context, actor domain.Actor, rawProjectID string) error
+	RestoreProject(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error)
+}
+
 // Register adds the Work Management routes to mux.
 func (h *Handler) Register(mux *http.ServeMux) {
 	httpx.RouteMethods(mux, h.logger, "/api/v1/projects", map[string]httpx.HandlerFunc{
@@ -48,11 +57,18 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		http.MethodPost: h.auth.Authenticated(h.create),
 	})
 	httpx.RouteMethods(mux, h.logger, "/api/v1/projects/{project_id}", map[string]httpx.HandlerFunc{
-		http.MethodGet:   h.auth.Authenticated(h.get),
-		http.MethodPatch: h.auth.Authenticated(h.update),
+		http.MethodGet:    h.auth.Authenticated(h.get),
+		http.MethodPatch:  h.auth.Authenticated(h.update),
+		http.MethodDelete: h.auth.Authenticated(h.delete),
 	})
 	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/projects/{project_id}/move",
 		h.auth.Authenticated(h.move))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/projects/{project_id}/archive",
+		h.auth.Authenticated(h.archive))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/projects/{project_id}/unarchive",
+		h.auth.Authenticated(h.unarchive))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/projects/{project_id}/restore",
+		h.auth.Authenticated(h.restore))
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
@@ -60,8 +76,8 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	projects, total, err := h.svc.ListProjects(r.Context(), h.auth.Actor(r.Context()), r.URL.Query().Get("workspace_id"),
-		application.PageRequest{Limit: q.PageSize, Offset: q.Offset()})
+	page := application.PageRequest{Limit: q.PageSize, Offset: q.Offset()}
+	projects, total, err := h.queryProjects(r, h.auth.Actor(r.Context()), r.URL.Query().Get("workspace_id"), page)
 	if err != nil {
 		return mapError(err)
 	}
@@ -70,6 +86,22 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 		items = append(items, toProjectResponse(p))
 	}
 	return httpx.WriteJSON(w, http.StatusOK, httpx.NewPageResponse(items, q, total))
+}
+
+func (h *Handler) queryProjects(r *http.Request, actor domain.Actor, wsID string, page application.PageRequest) ([]domain.Project, int, error) {
+	if r.URL.Query().Get("pending_deletion") == "true" {
+		lc, ok := h.svc.(projectLifecycleService)
+		if !ok {
+			return nil, 0, domain.ErrNotFound
+		}
+		return lc.ListPendingDeletionProjects(r.Context(), actor, wsID, page)
+	}
+	if r.URL.Query().Get("include_archived") == "true" {
+		if lc, ok := h.svc.(projectLifecycleService); ok {
+			return lc.ListProjectsFiltered(r.Context(), actor, wsID, true, page)
+		}
+	}
+	return h.svc.ListProjects(r.Context(), actor, wsID, page)
 }
 
 type createProjectRequest struct {
@@ -134,24 +166,82 @@ func (h *Handler) move(w http.ResponseWriter, r *http.Request) error {
 	return httpx.WriteJSON(w, http.StatusOK, toProjectResponse(project))
 }
 
+func (h *Handler) archive(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(projectLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	project, err := lc.ArchiveProject(r.Context(), h.auth.Actor(r.Context()), r.PathValue("project_id"))
+	if err != nil {
+		return mapError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toProjectResponse(project))
+}
+
+func (h *Handler) unarchive(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(projectLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	project, err := lc.UnarchiveProject(r.Context(), h.auth.Actor(r.Context()), r.PathValue("project_id"))
+	if err != nil {
+		return mapError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toProjectResponse(project))
+}
+
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(projectLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	if err := lc.DeleteProject(r.Context(), h.auth.Actor(r.Context()), r.PathValue("project_id")); err != nil {
+		return mapError(err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (h *Handler) restore(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(projectLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	project, err := lc.RestoreProject(r.Context(), h.auth.Actor(r.Context()), r.PathValue("project_id"))
+	if err != nil {
+		return mapError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toProjectResponse(project))
+}
+
 type projectResponse struct {
-	ID              domain.ProjectID      `json:"id"`
-	OrganizationID  domain.OrganizationID `json:"organization_id"`
-	WorkspaceID     domain.WorkspaceID    `json:"workspace_id"`
-	Name            string                `json:"name"`
-	CreatedAt       time.Time             `json:"created_at"`
-	UpdatedAt       time.Time             `json:"updated_at"`
-	CurrentUserRole domain.Role           `json:"current_user_role"`
+	ID                domain.ProjectID      `json:"id"`
+	OrganizationID    domain.OrganizationID `json:"organization_id"`
+	WorkspaceID       domain.WorkspaceID    `json:"workspace_id"`
+	Name              string                `json:"name"`
+	CreatedAt         time.Time             `json:"created_at"`
+	UpdatedAt         time.Time             `json:"updated_at"`
+	ArchivedAt        *time.Time            `json:"archived_at"`
+	WorkspaceArchived bool                  `json:"workspace_archived"`
+	IsReadOnly        bool                  `json:"is_read_only"`
+	DeletedAt         *time.Time            `json:"deleted_at,omitempty"`
+	PurgeAfter        *time.Time            `json:"purge_after,omitempty"`
+	CurrentUserRole   domain.Role           `json:"current_user_role"`
 }
 
 func toProjectResponse(p domain.Project) projectResponse {
 	return projectResponse{
-		ID:              p.ID,
-		OrganizationID:  p.OrganizationID,
-		WorkspaceID:     p.WorkspaceID,
-		Name:            p.Name,
-		CreatedAt:       p.CreatedAt,
-		UpdatedAt:       p.UpdatedAt,
-		CurrentUserRole: p.ViewerRole,
+		ID:                p.ID,
+		OrganizationID:    p.OrganizationID,
+		WorkspaceID:       p.WorkspaceID,
+		Name:              p.Name,
+		CreatedAt:         p.CreatedAt,
+		UpdatedAt:         p.UpdatedAt,
+		ArchivedAt:        p.ArchivedAt,
+		WorkspaceArchived: p.WorkspaceArchived,
+		IsReadOnly:        p.IsReadOnly(),
+		DeletedAt:         p.DeletedAt,
+		PurgeAfter:        p.PurgeAfter,
+		CurrentUserRole:   p.ViewerRole,
 	}
 }
