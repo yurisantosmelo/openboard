@@ -2,16 +2,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addOrganizationMembership,
   addWorkspaceMembership,
+  archiveWorkspace,
   createOrganization,
   createWorkspace,
+  deleteOrganization,
+  deleteWorkspace,
   getOrganization,
   getWorkspace,
   listOrganizationMemberships,
   listOrganizations,
+  listPendingDeletionOrganizations,
+  listPendingDeletionWorkspaces,
   listWorkspaceMemberships,
   listWorkspaces,
   removeOrganizationMembership,
   removeWorkspaceMembership,
+  restoreOrganization,
+  restoreWorkspace,
+  unarchiveWorkspace,
   updateOrganizationMembership,
   updateWorkspace,
   updateWorkspaceMembership,
@@ -48,10 +56,104 @@ export function useOrganization(id: string) {
   });
 }
 
-export function useWorkspaces(organizationId: string, page: number) {
+export function usePendingDeletionOrganizations(page: number, enabled: boolean) {
   return useQuery({
-    queryKey: [...workspacesKey(organizationId), page],
-    queryFn: ({ signal }) => listWorkspaces(organizationId, page, signal),
+    queryKey: ['organizations-pending-deletion', page],
+    queryFn: ({ signal }) => listPendingDeletionOrganizations(page, signal),
+    enabled,
+  });
+}
+
+export function useDeleteOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteOrganization,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+        queryClient.invalidateQueries({ queryKey: ['organizations-pending-deletion'] }),
+      ]),
+  });
+}
+
+export function useRestoreOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: restoreOrganization,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+        queryClient.invalidateQueries({ queryKey: ['organizations-pending-deletion'] }),
+      ]),
+  });
+}
+
+export function useWorkspaces(organizationId: string, page: number, includeArchived = false) {
+  return useQuery({
+    queryKey: [...workspacesKey(organizationId), page, includeArchived],
+    queryFn: ({ signal }) => listWorkspaces(organizationId, page, signal, includeArchived),
+  });
+}
+
+export function usePendingDeletionWorkspaces(
+  organizationId: string,
+  page: number,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ['workspaces-pending-deletion', organizationId, page],
+    queryFn: ({ signal }) => listPendingDeletionWorkspaces(organizationId, page, signal),
+    enabled,
+  });
+}
+
+export function useArchiveWorkspace(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => archiveWorkspace(id),
+    onSuccess: (workspace) => {
+      queryClient.setQueryData(['workspace', id], workspace);
+      return queryClient.invalidateQueries({ queryKey: workspacesKey(workspace.organizationId) });
+    },
+  });
+}
+
+export function useUnarchiveWorkspace(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => unarchiveWorkspace(id),
+    onSuccess: (workspace) => {
+      queryClient.setQueryData(['workspace', id], workspace);
+      return queryClient.invalidateQueries({ queryKey: workspacesKey(workspace.organizationId) });
+    },
+  });
+}
+
+export function useDeleteWorkspace(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteWorkspace,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: workspacesKey(organizationId) }),
+        queryClient.invalidateQueries({
+          queryKey: ['workspaces-pending-deletion', organizationId],
+        }),
+      ]),
+  });
+}
+
+export function useRestoreWorkspace(organizationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: restoreWorkspace,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: workspacesKey(organizationId) }),
+        queryClient.invalidateQueries({
+          queryKey: ['workspaces-pending-deletion', organizationId],
+        }),
+      ]),
   });
 }
 

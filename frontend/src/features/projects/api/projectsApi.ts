@@ -13,6 +13,11 @@ export interface Project {
   name: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
+  workspaceArchived?: boolean;
+  isReadOnly?: boolean;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
   currentUserRole: WorkspaceRole;
 }
 
@@ -110,6 +115,11 @@ interface ProjectDto {
   name: string;
   created_at: string;
   updated_at: string;
+  archived_at?: string | null;
+  workspace_archived?: boolean;
+  is_read_only?: boolean;
+  deleted_at?: string | null;
+  purge_after?: string | null;
   current_user_role: WorkspaceRole;
 }
 
@@ -170,6 +180,11 @@ function toProject(dto: ProjectDto): Project {
     name: dto.name,
     createdAt: dto.created_at,
     updatedAt: dto.updated_at,
+    archivedAt: dto.archived_at ?? null,
+    workspaceArchived: dto.workspace_archived ?? false,
+    isReadOnly: dto.is_read_only ?? Boolean(dto.archived_at || dto.workspace_archived),
+    ...(dto.deleted_at !== undefined && { deletedAt: dto.deleted_at }),
+    ...(dto.purge_after !== undefined && { purgeAfter: dto.purge_after }),
     currentUserRole: dto.current_user_role,
   };
 }
@@ -225,9 +240,30 @@ export async function listProjects(
   workspaceId: string,
   page: number,
   signal?: AbortSignal,
+  includeArchived = false,
 ): Promise<ProjectsPage> {
   const query = new URLSearchParams({
     workspace_id: workspaceId,
+    page: String(page),
+    page_size: String(PAGE_SIZE),
+    ...(includeArchived ? { include_archived: 'true' } : {}),
+  });
+  const dto = await apiRequest<PageDto<ProjectDto>>(`/api/v1/projects?${query}`, { signal });
+  return {
+    items: dto.items.map(toProject),
+    page: dto.page,
+    totalPages: dto.total_pages,
+  };
+}
+
+export async function listPendingDeletionProjects(
+  workspaceId: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<ProjectsPage> {
+  const query = new URLSearchParams({
+    workspace_id: workspaceId,
+    pending_deletion: 'true',
     page: String(page),
     page_size: String(PAGE_SIZE),
   });
@@ -237,6 +273,27 @@ export async function listProjects(
     page: dto.page,
     totalPages: dto.total_pages,
   };
+}
+
+export async function archiveProject(projectId: string): Promise<Project> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/archive`;
+  return toProject(await apiRequest<ProjectDto>(path, { method: 'POST' }));
+}
+
+export async function unarchiveProject(projectId: string): Promise<Project> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/unarchive`;
+  return toProject(await apiRequest<ProjectDto>(path, { method: 'POST' }));
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  await apiRequest<undefined>(`/api/v1/projects/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function restoreProject(projectId: string): Promise<Project> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/restore`;
+  return toProject(await apiRequest<ProjectDto>(path, { method: 'POST' }));
 }
 
 export async function getProject(projectId: string, signal?: AbortSignal): Promise<Project> {
