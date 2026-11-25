@@ -28,6 +28,16 @@ func mapError(err error) error {
 		})
 	case errors.Is(err, domain.ErrWeakPassword):
 		return httpx.ErrValidation(httpx.FieldError{Field: "new_password", Code: "weak", Message: weakReason(err)})
+	case errors.Is(err, domain.ErrForbidden):
+		return &httpx.Error{Status: http.StatusForbidden, Slug: "forbidden", Title: "Not allowed"}
+	case errors.Is(err, domain.ErrUserNotFound):
+		return httpx.ErrNotFound()
+	case errors.Is(err, domain.ErrCannotDeactivateSelf):
+		return &httpx.Error{Status: http.StatusConflict, Slug: "cannot-deactivate-self", Title: "You cannot deactivate yourself"}
+	case errors.Is(err, domain.ErrLastOrganizationOwner):
+		return &httpx.Error{Status: http.StatusConflict, Slug: "last-organization-owner", Title: "User is the last Organization Owner of an Organization"}
+	case errors.Is(err, domain.ErrUserDeactivated):
+		return &httpx.Error{Status: http.StatusConflict, Slug: "user-deactivated", Title: "User is Deactivated"}
 	}
 	return err
 }
