@@ -43,6 +43,10 @@ var workFieldErrors = []fieldRule{
 	{domain.ErrInvalidEraDates, httpx.FieldError{Field: "dates", Code: "invalid", Message: domain.ErrInvalidEraDates.Error()}},
 	{domain.ErrInvalidNextEra, httpx.FieldError{Field: "next_era_id", Code: "invalid", Message: domain.ErrInvalidNextEra.Error()}},
 	{domain.ErrInvalidEra, httpx.FieldError{Field: "era_id", Code: "invalid", Message: domain.ErrInvalidEra.Error()}},
+	{domain.ErrInvalidViewName, httpx.FieldError{Field: "name", Code: "invalid", Message: domain.ErrInvalidViewName.Error()}},
+	{domain.ErrInvalidViewLayout, httpx.FieldError{Field: "layout", Code: "invalid", Message: domain.ErrInvalidViewLayout.Error()}},
+	{domain.ErrInvalidViewVisibility, httpx.FieldError{Field: "visibility", Code: "invalid", Message: domain.ErrInvalidViewVisibility.Error()}},
+	{domain.ErrInvalidViewFilters, httpx.FieldError{Field: "filters", Code: "invalid", Message: domain.ErrInvalidViewFilters.Error()}},
 }
 
 var conflictErrors = []struct {
@@ -61,6 +65,7 @@ var conflictErrors = []struct {
 	{domain.ErrEraNotPlanned, "era-not-planned", "Only a Planned Era can be started or deleted"},
 	{domain.ErrEraNotActive, "era-not-active", "Only an Active Era can be closed"},
 	{domain.ErrEraCompleted, "era-completed", "Completed Eras cannot be modified"},
+	{domain.ErrViewNameInUse, "view-name-taken", "View name already in use"},
 }
 
 var notFoundErrors = []error{
@@ -71,6 +76,7 @@ var notFoundErrors = []error{
 	domain.ErrTransitionRuleNotFound,
 	domain.ErrLinkNotFound,
 	domain.ErrEraNotFound,
+	domain.ErrViewNotFound,
 }
 
 func mapError(err error) error {

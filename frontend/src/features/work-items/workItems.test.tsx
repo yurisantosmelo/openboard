@@ -138,6 +138,7 @@ describe('Work Items on ProjectPage', () => {
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: workItemTypes }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': () => pageOf(items),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20&priority=urgent': () =>
         pageOf(items.filter((i) => i.priority === 'urgent')),
@@ -208,6 +209,7 @@ describe('Work Items on ProjectPage', () => {
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: workItemTypes }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([
         workItemDto({ current_user_role: 'viewer' }),
       ]),
@@ -244,6 +246,7 @@ describe('WorkItemPage', () => {
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: workItemTypes }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': () => pageOf([current, epic]),
       'PATCH /api/v1/work-items/wi1': ({ body }) => {
         const patch = parseBody(body);
@@ -313,6 +316,7 @@ describe('WorkItemPage', () => {
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: workItemTypes }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
     });
 
@@ -344,6 +348,7 @@ describe('WorkItemPage', () => {
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: workItemTypes }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
       'POST /api/v1/projects/p1/work-items': problem(422, 'validation-error', 'Invalid', {
         errors: [{ field: 'estimate', code: 'invalid', message: 'estimate must be non-negative' }],

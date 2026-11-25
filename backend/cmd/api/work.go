@@ -27,6 +27,7 @@ type workModule struct {
 	workItems *workhttp.WorkItemHandler
 	links     *workhttp.LinkHandler
 	eras      *workhttp.EraHandler
+	views     *workhttp.ViewHandler
 }
 
 func (m workModule) Register(mux *http.ServeMux) {
@@ -35,6 +36,7 @@ func (m workModule) Register(mux *http.ServeMux) {
 	m.workItems.Register(mux)
 	m.links.Register(mux)
 	m.eras.Register(mux)
+	m.views.Register(mux)
 }
 
 // setupWork wires the Work Management core domain module, checking Workspace
@@ -47,6 +49,7 @@ func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.H
 	workItemsRepo := workpostgres.NewWorkItems(pool)
 	linksRepo := workpostgres.NewLinks(pool)
 	erasRepo := workpostgres.NewEras(pool)
+	viewsRepo := workpostgres.NewViews(pool)
 	auth := workhttp.Auth{Authenticated: identity.Authenticated, Actor: workActorOf}
 	workItemSvc := workapp.NewWorkItemService(projectsRepo, workItemsRepo, access, access).
 		WithTransitionRules(workflowRepo).
@@ -57,6 +60,7 @@ func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.H
 		workItems: workhttp.NewWorkItemHandler(workItemSvc, auth, logger),
 		links:     workhttp.NewLinkHandler(workapp.NewLinkService(projectsRepo, workItemsRepo, linksRepo, access), auth, logger),
 		eras:      workhttp.NewEraHandler(workapp.NewEraService(projectsRepo, erasRepo, access), auth, logger),
+		views:     workhttp.NewViewHandler(workapp.NewViewService(projectsRepo, viewsRepo, access), auth, logger),
 	}
 }
 
