@@ -46,6 +46,9 @@ databaseChangeLog:
   - include:
       file: ../tables/20261124230504_create_project_work_item_type_hierarchy_table.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261125073001_create_work_items_table.sql
+      relativeToChangelogFile: true
 
   # 3. constraints
   - include:
@@ -78,6 +81,9 @@ databaseChangeLog:
   - include:
       file: ../constraints/20261124230507_add_project_work_item_types_constraints.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../constraints/20261125073002_add_work_items_constraints.sql
+      relativeToChangelogFile: true
 
   # 4. indexes
   - include:
@@ -91,4 +97,7 @@ databaseChangeLog:
       relativeToChangelogFile: true
   - include:
       file: ../indexes/20261124230508_create_project_indexes.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../indexes/20261125073003_create_work_items_indexes.sql
       relativeToChangelogFile: true
