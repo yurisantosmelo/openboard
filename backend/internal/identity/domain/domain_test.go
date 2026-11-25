@@ -91,3 +91,28 @@ func TestSessionExpiry(t *testing.T) {
 		t.Error("session must expire at its lifetime even when recently used")
 	}
 }
+
+func TestParseUserID(t *testing.T) {
+	const raw = "  550E8400-E29B-41D4-A716-446655440000  "
+	got, err := ParseUserID(raw)
+	if err != nil || got != "550e8400-e29b-41d4-a716-446655440000" {
+		t.Fatalf("ParseUserID = %q, %v", got, err)
+	}
+	for _, bad := range []string{"", "not-a-uuid", "550e8400-e29b-41d4-a716-44665544000z"} {
+		if _, err := ParseUserID(bad); !errors.Is(err, ErrUserNotFound) {
+			t.Errorf("ParseUserID(%q) err = %v, want ErrUserNotFound", bad, err)
+		}
+	}
+}
+
+func TestUserIsDeactivated(t *testing.T) {
+	u := User{ID: "u1"}
+	if u.IsDeactivated() {
+		t.Error("active user should not report IsDeactivated")
+	}
+	now := time.Now().UTC()
+	u.DeactivatedAt = &now
+	if !u.IsDeactivated() {
+		t.Error("user with DeactivatedAt should report IsDeactivated")
+	}
+}

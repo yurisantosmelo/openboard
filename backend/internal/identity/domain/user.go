@@ -9,7 +9,10 @@ import (
 
 const maxNameLength = 255
 
-var usernamePattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
+var (
+	usernamePattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
+	uuidPattern     = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+)
 
 // Username is the unique identifier of a User within an Instance, always lowercase.
 type Username string
@@ -37,6 +40,16 @@ func ParseName(raw string) (string, error) {
 // UserID identifies a User.
 type UserID string
 
+// ParseUserID normalizes a User ID path parameter; anything that is not a UUID
+// names no User.
+func ParseUserID(raw string) (UserID, error) {
+	id := strings.ToLower(strings.TrimSpace(raw))
+	if !uuidPattern.MatchString(id) {
+		return "", ErrUserNotFound
+	}
+	return UserID(id), nil
+}
+
 // User is a person's identity and credentials, global to the Instance.
 type User struct {
 	ID                 UserID
@@ -45,6 +58,10 @@ type User struct {
 	PasswordHash       string
 	MustChangePassword bool
 	IsAdministrator    bool
+	DeactivatedAt      *time.Time
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
+
+// IsDeactivated reports whether the User has been Deactivated by an Administrator.
+func (u User) IsDeactivated() bool { return u.DeactivatedAt != nil }
