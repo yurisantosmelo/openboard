@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { errorMessage } from '../../../shared/api/httpClient';
 import { workspacePath } from '../../organizations/paths';
+import { ProjectWorkItems } from '../../work-items/components/ProjectWorkItems';
 import { useProject } from '../hooks/useProjects';
 import { ProjectSettings } from './ProjectSettings';
 import { ProjectWorkflow } from './ProjectWorkflow';
@@ -39,6 +40,7 @@ export function ProjectPage() {
           {project.data.name}
         </h1>
       </header>
+      <ProjectWorkItems project={project.data} />
       <ProjectWorkflow projectId={project.data.id} />
       {project.data.currentUserRole === 'owner' && <ProjectSettings project={project.data} />}
       <div>

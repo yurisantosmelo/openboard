@@ -57,6 +57,10 @@ const (
 // Owners and Administrators).
 func (r Role) CanManageProject() bool { return r == RoleOwner }
 
+// CanWriteWorkItems reports whether the Actor may create, edit, transition or
+// delete Work Items in the Workspace (Workspace Owners and Contributors).
+func (r Role) CanWriteWorkItems() bool { return r == RoleOwner || r == RoleContributor }
+
 // Actor is the signed-in User behind a request.
 type Actor struct {
 	UserID          UserID

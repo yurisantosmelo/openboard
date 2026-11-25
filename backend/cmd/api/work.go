@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	identityapp "github.com/elyosemite/openboard/backend/internal/identity/application"
+	identitydomain "github.com/elyosemite/openboard/backend/internal/identity/domain"
 	identityhttp "github.com/elyosemite/openboard/backend/internal/identity/http"
+	identitypostgres "github.com/elyosemite/openboard/backend/internal/identity/infrastructure/postgres"
 	orgapp "github.com/elyosemite/openboard/backend/internal/organizations/application"
 	orgdomain "github.com/elyosemite/openboard/backend/internal/organizations/domain"
 	orgpostgres "github.com/elyosemite/openboard/backend/internal/organizations/infrastructure/postgres"
@@ -17,17 +21,33 @@ import (
 	workpostgres "github.com/elyosemite/openboard/backend/internal/work/infrastructure/postgres"
 )
 
+type workModule struct {
+	projects  *workhttp.Handler
+	workItems *workhttp.WorkItemHandler
+}
+
+func (m workModule) Register(mux *http.ServeMux) {
+	m.projects.Register(mux)
+	m.workItems.Register(mux)
+}
+
 // setupWork wires the Work Management core domain module, checking Workspace
-// access through the Organization module's Workspace service.
-func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) *workhttp.Handler {
+// access through the Organization module and User active status through identity.
+func setupWork(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) module {
 	workspaces := orgapp.NewWorkspaceService(orgpostgres.NewWorkspaces(pool))
-	svc := workapp.NewService(workpostgres.NewProjects(pool), workspaceAccessAdapter{workspaces: workspaces})
+	access := workspaceAccessAdapter{workspaces: workspaces, users: identitypostgres.NewUsers(pool)}
+	projectsRepo := workpostgres.NewProjects(pool)
+	workItemsRepo := workpostgres.NewWorkItems(pool)
 	auth := workhttp.Auth{Authenticated: identity.Authenticated, Actor: workActorOf}
-	return workhttp.NewHandler(svc, auth, logger)
+	return workModule{
+		projects:  workhttp.NewHandler(workapp.NewService(projectsRepo, access), auth, logger),
+		workItems: workhttp.NewWorkItemHandler(workapp.NewWorkItemService(projectsRepo, workItemsRepo, access, access), auth, logger),
+	}
 }
 
 type workspaceAccessAdapter struct {
 	workspaces *orgapp.WorkspaceService
+	users      *identitypostgres.Users
 }
 
 func (a workspaceAccessAdapter) Access(ctx context.Context, actor workdomain.Actor, workspaceID workdomain.WorkspaceID) (workdomain.WorkspaceAccess, error) {
@@ -46,6 +66,30 @@ func (a workspaceAccessAdapter) Access(ctx context.Context, actor workdomain.Act
 		OrganizationID: workdomain.OrganizationID(ws.OrganizationID),
 		Role:           workdomain.Role(ws.ViewerRole),
 	}, nil
+}
+
+func (a workspaceAccessAdapter) CanBeAssigned(ctx context.Context, userID workdomain.UserID, workspaceID workdomain.WorkspaceID) (bool, error) {
+	user, err := a.users.FindByID(ctx, identitydomain.UserID(userID))
+	if errors.Is(err, identityapp.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if user.IsDeactivated() {
+		return false, nil
+	}
+	_, err = a.workspaces.GetWorkspace(ctx, orgdomain.Actor{
+		UserID:          orgdomain.UserID(user.ID),
+		IsAdministrator: user.IsAdministrator,
+	}, string(workspaceID))
+	if errors.Is(err, orgdomain.ErrWorkspaceNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func workActorOf(ctx context.Context) workdomain.Actor {

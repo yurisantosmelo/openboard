@@ -57,7 +57,20 @@ func (s *Service) DeactivateUser(ctx context.Context, actor Principal, rawUserID
 	if err := s.sessions.DeleteAll(ctx, userID); err != nil {
 		return domain.User{}, fmt.Errorf("revoke user sessions: %w", err)
 	}
+	if err := s.notifyDeactivated(ctx, userID); err != nil {
+		return domain.User{}, err
+	}
 	return user, nil
+}
+
+func (s *Service) notifyDeactivated(ctx context.Context, userID domain.UserID) error {
+	if s.onDeactivated == nil {
+		return nil
+	}
+	if err := s.onDeactivated(ctx, userID); err != nil {
+		return fmt.Errorf("clean up deactivated user: %w", err)
+	}
+	return nil
 }
 
 // ReactivateUser restores a Deactivated User so they can sign in again and

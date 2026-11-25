@@ -19,24 +19,26 @@ const timingEqualizerPassword = "openboard-timing-equalizer"
 // Deps are the collaborators of the Service. Now, Random and Ownership default
 // to the real clock, crypto/rand and a no-op checker when nil.
 type Deps struct {
-	Users     UserRepository
-	Sessions  SessionRepository
-	Hasher    PasswordHasher
-	Throttle  SignInThrottle
-	Ownership OwnershipChecker
-	Now       func() time.Time
-	Random    io.Reader
+	Users             UserRepository
+	Sessions          SessionRepository
+	Hasher            PasswordHasher
+	Throttle          SignInThrottle
+	Ownership         OwnershipChecker
+	OnUserDeactivated func(ctx context.Context, userID domain.UserID) error
+	Now               func() time.Time
+	Random            io.Reader
 }
 
 // Service runs the identity use cases.
 type Service struct {
-	users     UserRepository
-	sessions  SessionRepository
-	hasher    PasswordHasher
-	throttle  SignInThrottle
-	ownership OwnershipChecker
-	now       func() time.Time
-	random    io.Reader
+	users         UserRepository
+	sessions      SessionRepository
+	hasher        PasswordHasher
+	throttle      SignInThrottle
+	ownership     OwnershipChecker
+	onDeactivated func(ctx context.Context, userID domain.UserID) error
+	now           func() time.Time
+	random        io.Reader
 	// dummyHash is verified when a Username does not exist, so a failed
 	// sign-in takes the same time whether or not the User exists.
 	dummyHash string
@@ -49,14 +51,15 @@ func NewService(d Deps) (*Service, error) {
 		return nil, fmt.Errorf("prepare timing equalizer: %w", err)
 	}
 	s := &Service{
-		users:     d.Users,
-		sessions:  d.Sessions,
-		hasher:    d.Hasher,
-		throttle:  d.Throttle,
-		ownership: d.Ownership,
-		now:       d.Now,
-		random:    d.Random,
-		dummyHash: dummy,
+		users:         d.Users,
+		sessions:      d.Sessions,
+		hasher:        d.Hasher,
+		throttle:      d.Throttle,
+		ownership:     d.Ownership,
+		onDeactivated: d.OnUserDeactivated,
+		now:           d.Now,
+		random:        d.Random,
+		dummyHash:     dummy,
 	}
 	if s.ownership == nil {
 		s.ownership = noopOwnershipChecker{}

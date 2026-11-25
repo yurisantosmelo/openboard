@@ -12,6 +12,8 @@ import (
 	"github.com/elyosemite/openboard/backend/internal/organizations/domain"
 	organizationshttp "github.com/elyosemite/openboard/backend/internal/organizations/http"
 	"github.com/elyosemite/openboard/backend/internal/organizations/infrastructure/postgres"
+	workdomain "github.com/elyosemite/openboard/backend/internal/work/domain"
+	workpostgres "github.com/elyosemite/openboard/backend/internal/work/infrastructure/postgres"
 )
 
 // setupOrganizations wires the Organization module, authenticating its
@@ -25,21 +27,33 @@ func setupOrganizations(logger *slog.Logger, pool *pgxpool.Pool, identity *ident
 // setupOrganizationMemberships wires the Organization Membership endpoints,
 // delegating User creation and lookup to the identity service.
 func setupOrganizationMemberships(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler, identitySvc *identityapp.Service) *organizationshttp.MembershipHandler {
-	svc := application.NewMembershipService(postgres.NewMemberships(pool), userProvisioner{svc: identitySvc})
+	workItems := workpostgres.NewWorkItems(pool)
+	svc := application.NewMembershipService(postgres.NewMemberships(pool), userProvisioner{svc: identitySvc}).
+		WithAccessLostHook(func(ctx context.Context, orgID domain.OrganizationID, userID domain.UserID) error {
+			return workItems.ClearInaccessibleAssigneesInOrganization(ctx, workdomain.OrganizationID(orgID), workdomain.UserID(userID))
+		})
 	auth := organizationshttp.Auth{Authenticated: identity.Authenticated, Actor: actorOf}
 	return organizationshttp.NewMembershipHandler(svc, auth, logger)
 }
 
 // setupWorkspaces wires the Workspace endpoints of the Organization module.
 func setupWorkspaces(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) *organizationshttp.WorkspaceHandler {
-	svc := application.NewWorkspaceService(postgres.NewWorkspaces(pool))
+	workItems := workpostgres.NewWorkItems(pool)
+	svc := application.NewWorkspaceService(postgres.NewWorkspaces(pool)).
+		WithVisibilityRestrictedHook(func(ctx context.Context, wsID domain.WorkspaceID) error {
+			return workItems.ClearInaccessibleAssigneesInWorkspace(ctx, workdomain.WorkspaceID(wsID))
+		})
 	auth := organizationshttp.Auth{Authenticated: identity.Authenticated, Actor: actorOf}
 	return organizationshttp.NewWorkspaceHandler(svc, auth, logger)
 }
 
 // setupWorkspaceMemberships wires the Workspace Membership endpoints.
 func setupWorkspaceMemberships(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) *organizationshttp.WorkspaceMembershipHandler {
-	svc := application.NewWorkspaceMembershipService(postgres.NewWorkspaceMemberships(pool))
+	workItems := workpostgres.NewWorkItems(pool)
+	svc := application.NewWorkspaceMembershipService(postgres.NewWorkspaceMemberships(pool)).
+		WithAccessLostHook(func(ctx context.Context, wsID domain.WorkspaceID) error {
+			return workItems.ClearInaccessibleAssigneesInWorkspace(ctx, workdomain.WorkspaceID(wsID))
+		})
 	auth := organizationshttp.Auth{Authenticated: identity.Authenticated, Actor: actorOf}
 	return organizationshttp.NewWorkspaceMembershipHandler(svc, auth, logger)
 }

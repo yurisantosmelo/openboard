@@ -61,6 +61,25 @@ func TestDeactivateUserRevokesSessions(t *testing.T) {
 	}
 }
 
+func TestDeactivateUserCallsHook(t *testing.T) {
+	h := newHarness(t, adminPrincipal().User, userWithUUID())
+	var calledWith domain.UserID
+	h.svc.onDeactivated = func(_ context.Context, id domain.UserID) error {
+		calledWith = id
+		return nil
+	}
+	if _, err := h.svc.DeactivateUser(context.Background(), adminPrincipal(), string(gabrielUUID)); err != nil {
+		t.Fatalf("DeactivateUser err = %v", err)
+	}
+	if calledWith != gabrielUUID {
+		t.Fatalf("hook called with %q, want %q", calledWith, gabrielUUID)
+	}
+	h.svc.onDeactivated = func(context.Context, domain.UserID) error { return errBoom }
+	if _, err := h.svc.DeactivateUser(context.Background(), adminPrincipal(), string(gabrielUUID)); !errors.Is(err, errBoom) {
+		t.Fatalf("hook err = %v, want boom", err)
+	}
+}
+
 func TestDeactivateUserRejections(t *testing.T) {
 	cases := map[string]struct {
 		actor  Principal
