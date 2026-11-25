@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -19,7 +20,11 @@ import (
 // setupOrganizations wires the Organization module, authenticating its
 // requests through the identity module.
 func setupOrganizations(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) *organizationshttp.Handler {
-	svc := application.NewService(postgres.NewOrganizations(pool))
+	return setupOrganizationsWithGrace(logger, pool, identity, 0)
+}
+
+func setupOrganizationsWithGrace(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler, grace time.Duration) *organizationshttp.Handler {
+	svc := application.NewService(postgres.NewOrganizations(pool)).WithDeletionGracePeriod(grace)
 	auth := organizationshttp.Auth{Authenticated: identity.Authenticated, Actor: actorOf}
 	return organizationshttp.NewHandler(svc, auth, logger)
 }
@@ -38,13 +43,28 @@ func setupOrganizationMemberships(logger *slog.Logger, pool *pgxpool.Pool, ident
 
 // setupWorkspaces wires the Workspace endpoints of the Organization module.
 func setupWorkspaces(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler) *organizationshttp.WorkspaceHandler {
+	return setupWorkspacesWithGrace(logger, pool, identity, 0)
+}
+
+func setupWorkspacesWithGrace(logger *slog.Logger, pool *pgxpool.Pool, identity *identityhttp.Handler, grace time.Duration) *organizationshttp.WorkspaceHandler {
 	workItems := workpostgres.NewWorkItems(pool)
 	svc := application.NewWorkspaceService(postgres.NewWorkspaces(pool)).
+		WithDeletionGracePeriod(grace).
 		WithVisibilityRestrictedHook(func(ctx context.Context, wsID domain.WorkspaceID) error {
 			return workItems.ClearInaccessibleAssigneesInWorkspace(ctx, workdomain.WorkspaceID(wsID))
 		})
 	auth := organizationshttp.Auth{Authenticated: identity.Authenticated, Actor: actorOf}
 	return organizationshttp.NewWorkspaceHandler(svc, auth, logger)
+}
+
+func purgeExpiredDeletions(ctx context.Context, pool *pgxpool.Pool) error {
+	if err := workpostgres.NewProjects(pool).PurgeExpired(ctx); err != nil {
+		return err
+	}
+	if err := postgres.NewWorkspaces(pool).PurgeExpired(ctx); err != nil {
+		return err
+	}
+	return postgres.NewOrganizations(pool).PurgeExpired(ctx)
 }
 
 // setupWorkspaceMemberships wires the Workspace Membership endpoints.

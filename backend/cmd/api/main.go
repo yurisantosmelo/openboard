@@ -48,11 +48,14 @@ func run(ctx context.Context, getenv func(string) string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	organizations := setupOrganizations(logger, pool, identity)
+	if err := purgeExpiredDeletions(ctx, pool); err != nil {
+		return fmt.Errorf("purge expired deletions: %w", err)
+	}
+	organizations := setupOrganizationsWithGrace(logger, pool, identity, cfg.DeletionGracePeriod)
 	memberships := setupOrganizationMemberships(logger, pool, identity, identitySvc)
-	workspaces := setupWorkspaces(logger, pool, identity)
+	workspaces := setupWorkspacesWithGrace(logger, pool, identity, cfg.DeletionGracePeriod)
 	workspaceMemberships := setupWorkspaceMemberships(logger, pool, identity)
-	work := setupWork(logger, pool, identity)
+	work := setupWorkWithGrace(logger, pool, identity, cfg.DeletionGracePeriod)
 
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", cfg.HTTPAddr)
