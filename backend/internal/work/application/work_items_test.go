@@ -445,3 +445,21 @@ func TestTransitionAndDeleteWorkItem(t *testing.T) {
 		t.Fatalf("viewer delete err = %v", err)
 	}
 }
+
+func TestTransitionWorkItemRespectsTransitionRules(t *testing.T) {
+	svc, projects, _, _, _ := newTestWorkItemHarness(domain.RoleContributor)
+	projects.statuses = append(projects.statuses, domain.Status{
+		ID: statusDoneUUID, ProjectID: projectUUID, Name: "Done", Group: domain.StatusGroupCompleted, Position: 2,
+	})
+	rules := &fakeWorkflowRepo{
+		rules: []domain.TransitionRule{{ProjectID: projectUUID, FromStatusID: statusBacklogUUID, ToStatusID: statusDoingUUID}},
+	}
+	svc.WithTransitionRules(rules)
+
+	if _, err := svc.TransitionWorkItem(context.Background(), contribActor, string(workItem1UUID), string(statusDoneUUID)); !errors.Is(err, domain.ErrTransitionNotAllowed) {
+		t.Fatalf("disallowed transition err = %v, want ErrTransitionNotAllowed", err)
+	}
+	if _, err := svc.TransitionWorkItem(context.Background(), contribActor, string(workItem1UUID), string(statusDoingUUID)); err != nil {
+		t.Fatalf("allowed transition err = %v", err)
+	}
+}
