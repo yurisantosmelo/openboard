@@ -1,8 +1,10 @@
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router';
+import { saveNavigationContext } from '@/app/navigationContext';
 import type { ProjectConfigTab } from '@/app/project-shell-context';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useCurrentUser } from '@/features/auth';
 import { errorMessage } from '../../../shared/api/httpClient';
 import { ProjectWorkItems } from '../../work-items/components/ProjectWorkItems';
 import { useProject } from '../hooks/useProjects';
@@ -10,9 +12,21 @@ import { ProjectConfigSidebar } from './ProjectConfigSidebar';
 
 export function ProjectPage() {
   const { projectId = '' } = useParams();
+  const { data: currentUser } = useCurrentUser();
   const project = useProject(projectId);
   const [configOpen, setConfigOpen] = useState(false);
   const [configTab, setConfigTab] = useState<ProjectConfigTab>('workflow');
+
+  useEffect(() => {
+    if (!project.data) return;
+    saveNavigationContext({
+      userId: currentUser?.id,
+      organizationId: project.data.organizationId,
+      workspaceId: project.data.workspaceId,
+      projectId: project.data.id,
+      projectName: project.data.name,
+    });
+  }, [currentUser?.id, project.data]);
 
   const handleToggleConfig = useCallback(() => {
     setConfigOpen((prev) => !prev);

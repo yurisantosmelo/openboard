@@ -34,10 +34,11 @@ const membershipsKey = (organizationId: string) =>
 const workspaceMembershipsKey = (workspaceId: string) =>
   ['workspace-memberships', workspaceId] as const;
 
-export function useOrganizations(page: number) {
+export function useOrganizations(page: number, enabled = true) {
   return useQuery({
     queryKey: ['organizations', page],
     queryFn: ({ signal }) => listOrganizations(page, signal),
+    enabled,
   });
 }
 
@@ -49,10 +50,11 @@ export function useCreateOrganization() {
   });
 }
 
-export function useOrganization(id: string) {
+export function useOrganization(id: string, enabled = true) {
   return useQuery({
     queryKey: ['organization', id],
     queryFn: ({ signal }) => getOrganization(id, signal),
+    enabled: enabled && Boolean(id),
   });
 }
 
@@ -88,10 +90,16 @@ export function useRestoreOrganization() {
   });
 }
 
-export function useWorkspaces(organizationId: string, page: number, includeArchived = false) {
+export function useWorkspaces(
+  organizationId: string,
+  page: number,
+  includeArchived = false,
+  enabled = true,
+) {
   return useQuery({
     queryKey: [...workspacesKey(organizationId), page, includeArchived],
     queryFn: ({ signal }) => listWorkspaces(organizationId, page, signal, includeArchived),
+    enabled: enabled && Boolean(organizationId),
   });
 }
 
@@ -157,10 +165,11 @@ export function useRestoreWorkspace(organizationId: string) {
   });
 }
 
-export function useWorkspace(id: string) {
+export function useWorkspace(id: string, enabled = true) {
   return useQuery({
     queryKey: ['workspace', id],
     queryFn: ({ signal }) => getWorkspace(id, signal),
+    enabled: enabled && Boolean(id),
   });
 }
 

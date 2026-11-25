@@ -40,10 +40,16 @@ const typesKey = (projectId: string) => ['project-work-item-types', projectId] a
 const rulesKey = (projectId: string) => ['project-transition-rules', projectId] as const;
 const erasKey = (projectId: string) => ['project-eras', projectId] as const;
 
-export function useProjects(workspaceId: string, page: number, includeArchived = false) {
+export function useProjects(
+  workspaceId: string,
+  page: number,
+  includeArchived = false,
+  enabled = true,
+) {
   return useQuery({
     queryKey: [...projectsKey(workspaceId), page, includeArchived],
     queryFn: ({ signal }) => listProjects(workspaceId, page, signal, includeArchived),
+    enabled: enabled && Boolean(workspaceId),
   });
 }
 

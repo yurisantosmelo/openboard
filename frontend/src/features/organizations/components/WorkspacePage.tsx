@@ -1,11 +1,13 @@
 import { AlertCircle, Archive, ArrowLeft, Loader2, RotateCcw } from 'lucide-react';
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import { Link, useParams } from 'react-router';
+import { saveNavigationContext } from '@/app/navigationContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCurrentUser } from '@/features/auth';
 import { errorMessage } from '../../../shared/api/httpClient';
 import { ProjectList, WorkspaceTeamsCard } from '../../projects';
 import { useUnarchiveWorkspace, useWorkspace } from '../hooks/useOrganizations';
@@ -17,11 +19,53 @@ import { WorkspaceSettings } from './WorkspaceSettings';
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 
+function useSyncWorkspaceContext(
+  userId: string | undefined,
+  workspace: { id: string; organizationId: string; name: string } | undefined,
+) {
+  useEffect(() => {
+    if (!workspace) return;
+    saveNavigationContext({
+      userId,
+      organizationId: workspace.organizationId,
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+    });
+  }, [userId, workspace]);
+}
+
+function ArchivedWorkspaceBanner({
+  isOwner,
+  busy,
+  onRestore,
+}: {
+  isOwner: boolean;
+  busy: boolean;
+  onRestore: () => void;
+}) {
+  return (
+    <Alert>
+      <Archive aria-hidden="true" />
+      <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+        <span>This Workspace and all of its Projects are Archived and read-only.</span>
+        {isOwner && (
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={onRestore}>
+            <RotateCcw className="size-3.5" aria-hidden="true" />
+            Restore Workspace
+          </Button>
+        )}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 export function WorkspacePage() {
   const detailsTitleId = useId();
   const { workspaceId = '' } = useParams();
+  const { data: currentUser } = useCurrentUser();
   const workspace = useWorkspace(workspaceId);
   const unarchive = useUnarchiveWorkspace(workspaceId);
+  useSyncWorkspaceContext(currentUser?.id, workspace.data);
 
   if (workspace.isPending) {
     return (
@@ -55,26 +99,13 @@ export function WorkspacePage() {
         {isArchived && <Badge variant="secondary">Archived</Badge>}
       </header>
       {isArchived && (
-        <Alert>
-          <Archive aria-hidden="true" />
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-            <span>This Workspace and all of its Projects are Archived and read-only.</span>
-            {isOwner && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={unarchive.isPending}
-                onClick={() => {
-                  unarchive.mutate();
-                }}
-              >
-                <RotateCcw className="size-3.5" aria-hidden="true" />
-                Restore Workspace
-              </Button>
-            )}
-          </AlertDescription>
-        </Alert>
+        <ArchivedWorkspaceBanner
+          isOwner={isOwner}
+          busy={unarchive.isPending}
+          onRestore={() => {
+            unarchive.mutate();
+          }}
+        />
       )}
       <section aria-labelledby={detailsTitleId}>
         <Card>

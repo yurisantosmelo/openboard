@@ -1,4 +1,5 @@
-import { Calendar, Plus } from 'lucide-react';
+import { Calendar, GripVertical, Plus } from 'lucide-react';
+import { useState, type DragEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +9,8 @@ import { cn } from '@/lib/utils';
 import type { WorkItem } from '../api/workItemsApi';
 import { workItemPath } from '../paths';
 import { formatEstimate, priorityLabels, priorityVariants } from './workItemLabels';
+
+const DRAG_ITEM_MIME = 'application/x-openboard-work-item';
 
 const STATUS_DOT_CLASS: Record<StatusGroup, string> = {
   not_committed: 'bg-muted-foreground',
@@ -34,6 +37,30 @@ function initialsOf(name: string, username: string): string {
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
 }
 
+interface DragPayload {
+  id: string;
+  statusId: string;
+}
+
+function readDragPayload(event: DragEvent, fallback: DragPayload | null): DragPayload | null {
+  const raw = event.dataTransfer.getData(DRAG_ITEM_MIME);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Partial<DragPayload>;
+      if (parsed.id && parsed.statusId) {
+        return { id: parsed.id, statusId: parsed.statusId };
+      }
+    } catch {
+      // Fall through to text/plain or state fallback.
+    }
+  }
+  const plainId = event.dataTransfer.getData('text/plain');
+  if (plainId) {
+    return { id: plainId, statusId: fallback?.id === plainId ? fallback.statusId : '' };
+  }
+  return fallback;
+}
+
 export interface WorkItemsBoardViewProps {
   items: WorkItem[];
   statuses: ProjectStatus[];
@@ -43,7 +70,7 @@ export interface WorkItemsBoardViewProps {
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
-  onStartCreate?: () => void;
+  onStartCreate?: (statusId?: string) => void;
 }
 
 interface BoardCardProps {
@@ -53,7 +80,60 @@ interface BoardCardProps {
   era?: ProjectEra;
   canWrite: boolean;
   busy: boolean;
+  isDragging: boolean;
+  onDragStart: (item: WorkItem, event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
   onTransition: (workItemId: string, statusId: string) => void;
+}
+
+function BoardCardFooter({
+  item,
+  statuses,
+  canWrite,
+  busy,
+  onTransition,
+}: {
+  item: WorkItem;
+  statuses: ProjectStatus[];
+  canWrite: boolean;
+  busy: boolean;
+  onTransition: (workItemId: string, statusId: string) => void;
+}) {
+  const hasAssignee = Boolean(item.assigneeUsername);
+  return (
+    <div className="flex items-center justify-between gap-2 pt-0.5">
+      {canWrite ? (
+        <select
+          aria-label={`Status for ${item.title}`}
+          className="h-7 max-w-36 rounded-md border border-border bg-muted/40 px-2 text-2xs font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+          value={item.statusId}
+          disabled={busy}
+          onChange={(e) => {
+            onTransition(item.id, e.target.value);
+          }}
+        >
+          {statuses.map((st) => (
+            <option key={st.id} value={st.id}>
+              {st.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span />
+      )}
+
+      {hasAssignee && (
+        <div className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
+          <Avatar size="sm" className="size-5">
+            <AvatarFallback className="text-3xs font-semibold">
+              {initialsOf(item.assigneeName, item.assigneeUsername)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="max-w-24 truncate">@{item.assigneeUsername}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function BoardCard({
@@ -63,15 +143,35 @@ function BoardCard({
   era,
   canWrite,
   busy,
+  isDragging,
+  onDragStart,
+  onDragEnd,
   onTransition,
 }: BoardCardProps) {
   const estimate = formatEstimate(item);
-  const hasAssignee = Boolean(item.assigneeUsername);
+  const canDrag = canWrite && !busy;
 
   return (
-    <article className="flex flex-col gap-2.5 rounded-lg border border-border bg-card p-3 shadow-xs transition-colors hover:border-input">
+    <article
+      draggable={canDrag}
+      onDragStart={(event) => {
+        if (canDrag) onDragStart(item, event);
+      }}
+      onDragEnd={onDragEnd}
+      className={cn(
+        'flex flex-col gap-2.5 rounded-lg border border-border bg-card p-3 shadow-xs transition-all hover:border-input',
+        canDrag && 'cursor-grab hover:shadow-sm active:cursor-grabbing',
+        isDragging && 'scale-[0.98] opacity-50',
+      )}
+    >
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5 font-medium">
+          {canDrag && (
+            <GripVertical
+              className="size-3.5 shrink-0 text-muted-foreground/60"
+              aria-hidden="true"
+            />
+          )}
           <span className={cn('size-2 rounded-xs', typeDotClass(typeName))} aria-hidden="true" />
           {typeName}
         </span>
@@ -105,43 +205,18 @@ function BoardCard({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 pt-0.5">
-        {canWrite ? (
-          <select
-            aria-label={`Status for ${item.title}`}
-            className="h-7 max-w-36 rounded-md border border-border bg-muted/40 px-2 text-2xs font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
-            value={item.statusId}
-            disabled={busy}
-            onChange={(e) => {
-              onTransition(item.id, e.target.value);
-            }}
-          >
-            {statuses.map((st) => (
-              <option key={st.id} value={st.id}>
-                {st.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span />
-        )}
-
-        {hasAssignee && (
-          <div className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-            <Avatar size="sm" className="size-5">
-              <AvatarFallback className="text-3xs font-semibold">
-                {initialsOf(item.assigneeName, item.assigneeUsername)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="max-w-24 truncate">@{item.assigneeUsername}</span>
-          </div>
-        )}
-      </div>
+      <BoardCardFooter
+        item={item}
+        statuses={statuses}
+        canWrite={canWrite}
+        busy={busy}
+        onTransition={onTransition}
+      />
     </article>
   );
 }
 
-/** Kanban board view displaying Status columns and dense Work Item cards. */
+/** Kanban board view displaying Status columns and draggable Work Item cards. */
 export function WorkItemsBoardView({
   items,
   statuses,
@@ -153,10 +228,52 @@ export function WorkItemsBoardView({
   onTransition,
   onStartCreate,
 }: WorkItemsBoardViewProps) {
+  const [dragging, setDragging] = useState<DragPayload | null>(null);
+  const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null);
   const eraMap = new Map(eras.map((e) => [e.id, e]));
   const visibleStatuses = statusFilterId
     ? statuses.filter((s) => s.id === statusFilterId)
     : statuses;
+
+  function handleCardDragStart(item: WorkItem, event: DragEvent<HTMLElement>) {
+    const payload: DragPayload = { id: item.id, statusId: item.statusId };
+    setDragging(payload);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(DRAG_ITEM_MIME, JSON.stringify(payload));
+    event.dataTransfer.setData('text/plain', item.id);
+  }
+
+  function handleCardDragEnd() {
+    setDragging(null);
+    setDragOverStatusId(null);
+  }
+
+  function handleColumnDragOver(statusId: string, event: DragEvent<HTMLElement>) {
+    if (!canWrite || busy) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (dragOverStatusId !== statusId) {
+      setDragOverStatusId(statusId);
+    }
+  }
+
+  function handleColumnDragLeave(statusId: string, event: DragEvent<HTMLElement>) {
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+    if (dragOverStatusId === statusId) {
+      setDragOverStatusId(null);
+    }
+  }
+
+  function handleColumnDrop(targetStatusId: string, event: DragEvent<HTMLElement>) {
+    if (!canWrite || busy) return;
+    event.preventDefault();
+    const payload = readDragPayload(event, dragging);
+    setDragging(null);
+    setDragOverStatusId(null);
+    if (!payload || payload.statusId === targetStatusId) return;
+    onTransition(payload.id, targetStatusId);
+  }
 
   return (
     <div
@@ -166,11 +283,24 @@ export function WorkItemsBoardView({
     >
       {visibleStatuses.map((status) => {
         const columnItems = items.filter((item) => item.statusId === status.id);
+        const isDropTarget = dragOverStatusId === status.id && dragging?.statusId !== status.id;
         return (
           <section
             key={status.id}
             aria-label={status.name}
-            className="flex w-76 shrink-0 flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-2.5"
+            onDragOver={(event) => {
+              handleColumnDragOver(status.id, event);
+            }}
+            onDragLeave={(event) => {
+              handleColumnDragLeave(status.id, event);
+            }}
+            onDrop={(event) => {
+              handleColumnDrop(status.id, event);
+            }}
+            className={cn(
+              'flex w-76 shrink-0 flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-2.5 transition-colors',
+              isDropTarget && 'border-primary/50 bg-primary/5 ring-2 ring-primary/35',
+            )}
           >
             <div className="flex items-center justify-between gap-2 px-1.5 py-0.5">
               <div className="flex min-w-0 items-center gap-2">
@@ -192,7 +322,9 @@ export function WorkItemsBoardView({
                   size="icon-xs"
                   variant="ghost"
                   aria-label={`Add Work Item to ${status.name}`}
-                  onClick={onStartCreate}
+                  onClick={() => {
+                    onStartCreate(status.id);
+                  }}
                 >
                   <Plus className="size-3.5" aria-hidden="true" />
                 </Button>
@@ -201,7 +333,9 @@ export function WorkItemsBoardView({
 
             <div className="grid gap-2">
               {columnItems.length === 0 ? (
-                <p className="px-2 py-6 text-center text-xs text-muted-foreground">No items</p>
+                <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+                  {isDropTarget ? 'Drop here' : 'No items'}
+                </p>
               ) : (
                 columnItems.map((item) => (
                   <BoardCard
@@ -212,6 +346,9 @@ export function WorkItemsBoardView({
                     era={item.eraId ? eraMap.get(item.eraId) : undefined}
                     canWrite={canWrite}
                     busy={busy}
+                    isDragging={dragging?.id === item.id}
+                    onDragStart={handleCardDragStart}
+                    onDragEnd={handleCardDragEnd}
                     onTransition={onTransition}
                   />
                 ))
@@ -224,7 +361,9 @@ export function WorkItemsBoardView({
                 size="compact"
                 variant="ghost"
                 className="w-full justify-start text-muted-foreground hover:text-foreground"
-                onClick={onStartCreate}
+                onClick={() => {
+                  onStartCreate(status.id);
+                }}
               >
                 <Plus className="size-3.5" aria-hidden="true" />
                 New work item

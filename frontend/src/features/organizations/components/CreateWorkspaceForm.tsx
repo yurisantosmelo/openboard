@@ -4,7 +4,7 @@ import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { errorMessage } from '../../../shared/api/httpClient';
-import type { WorkspaceVisibility } from '../api/organizationsApi';
+import type { Workspace, WorkspaceVisibility } from '../api/organizationsApi';
 import { useCreateWorkspace } from '../hooks/useOrganizations';
 import { VisibilityPicker } from './VisibilityPicker';
 import { workspaceNameError } from './workspaceNameError';
@@ -12,9 +12,16 @@ import { workspaceNameError } from './workspaceNameError';
 interface CreateWorkspaceFormProps {
   organizationId: string;
   onClose: () => void;
+  onCreated?: (workspace: Workspace) => void;
+  compact?: boolean;
 }
 
-export function CreateWorkspaceForm({ organizationId, onClose }: CreateWorkspaceFormProps) {
+export function CreateWorkspaceForm({
+  organizationId,
+  onClose,
+  onCreated,
+  compact = false,
+}: CreateWorkspaceFormProps) {
   const create = useCreateWorkspace(organizationId);
   const [name, setName] = useState('');
   const [visibility, setVisibility] = useState<WorkspaceVisibility>('restricted');
@@ -23,11 +30,23 @@ export function CreateWorkspaceForm({ organizationId, onClose }: CreateWorkspace
 
   function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    create.mutate({ organizationId, name, visibility }, { onSuccess: onClose });
+    create.mutate(
+      { organizationId, name, visibility },
+      {
+        onSuccess: (workspace) => {
+          onClose();
+          onCreated?.(workspace);
+        },
+      },
+    );
   }
 
   return (
-    <form className="grid gap-4 border-b p-6" aria-label="New Workspace" onSubmit={handleSubmit}>
+    <form
+      className={compact ? 'grid gap-4' : 'grid gap-4 border-b p-6'}
+      aria-label="New Workspace"
+      onSubmit={handleSubmit}
+    >
       {create.isError && !nameError && (
         <Alert variant="destructive">
           <AlertCircle aria-hidden="true" />

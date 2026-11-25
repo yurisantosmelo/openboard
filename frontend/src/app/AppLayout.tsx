@@ -10,6 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { CurrentUserMenu, useCurrentUser } from '@/features/auth';
 import { USERS_PATH } from '@/features/users';
 import { cn } from '@/lib/utils';
+import { ContextSwitchers } from './ContextSwitchers';
 import { useProjectShell } from './project-shell-context';
 import { ProjectShellProvider } from './ProjectShellProvider';
 
@@ -17,27 +18,22 @@ function TopHeaderNav() {
   const { data: user } = useCurrentUser();
   const { pathname } = useLocation();
   const { shell } = useProjectShell();
-  const isProjectRoute = pathname.startsWith('/projects/');
 
-  const linkClass = (active: boolean) =>
-    cn(
-      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-      active
-        ? 'bg-primary/10 text-primary'
-        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-    );
+  if (!shell || !user?.isAdministrator) return null;
 
   return (
     <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
-      <Link to="/" className={linkClass(pathname === '/')}>
-        Home
+      <Link
+        to={USERS_PATH}
+        className={cn(
+          'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+          pathname === USERS_PATH
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+        )}
+      >
+        Users
       </Link>
-      {isProjectRoute && <span className={linkClass(true)}>Projects</span>}
-      {shell && user?.isAdministrator && (
-        <Link to={USERS_PATH} className={linkClass(pathname === USERS_PATH)}>
-          Users
-        </Link>
-      )}
     </nav>
   );
 }
@@ -47,18 +43,20 @@ function AppTopHeader() {
 
   return (
     <header className="surface-glass sticky top-0 z-30 flex h-[var(--workspace-topbar-height)] w-full shrink-0 items-center justify-between gap-3 border-b border-border px-3 md:px-4">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-1.5">
         <SidebarTrigger className="-ml-0.5" />
         <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
         <Link
           to="/"
-          className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm font-semibold tracking-tight hover:bg-accent/60"
+          className="flex shrink-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm font-semibold tracking-tight hover:bg-accent/60"
         >
           <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-xs shadow-primary/24">
             <LayoutGrid className="size-3.5" aria-hidden="true" />
           </span>
-          <span className="truncate">OpenBoard</span>
+          <span className="hidden sm:inline">OpenBoard</span>
         </Link>
+        <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
+        <ContextSwitchers />
         <TopHeaderNav />
         {shell?.canCreateWorkItem && (
           <Button

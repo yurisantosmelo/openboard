@@ -34,7 +34,7 @@ import {
 import type { Priority, WorkItem, WorkItemFilters } from '../api/workItemsApi';
 import { useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
 import { workItemPath } from '../paths';
-import { CreateWorkItemForm } from './CreateWorkItemForm';
+import { CreateWorkItemDialog } from './CreateWorkItemForm';
 import { SaveViewBanner } from './ProjectViewsBar';
 import { ProjectWorkspaceHeader, type Participant } from './ProjectWorkspaceHeader';
 import { WorkItemsBoardView } from './WorkItemsBoardView';
@@ -210,7 +210,7 @@ interface BodyProps {
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
-  onStartCreate?: () => void;
+  onStartCreate?: (statusId?: string) => void;
 }
 
 function renderActiveLayout(props: Omit<BodyProps, 'isPending' | 'error'>) {
@@ -488,6 +488,7 @@ export function ProjectWorkItems({
   const [viewMode, setViewMode] = useState<ViewLayout>('board');
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [createStatusId, setCreateStatusId] = useState<string | undefined>(undefined);
   const [savingView, setSavingView] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -537,7 +538,8 @@ export function ProjectWorkItems({
     setSavingView(true);
   }, []);
 
-  const handleStartCreate = useCallback(() => {
+  const handleStartCreate = useCallback((preferredStatusId?: string) => {
+    setCreateStatusId(preferredStatusId);
     setCreating(true);
   }, []);
 
@@ -661,19 +663,20 @@ export function ProjectWorkItems({
         }}
       />
 
-      {creating && (
-        <div className="shrink-0 border-b border-border bg-card">
-          <CreateWorkItemForm
-            projectId={project.id}
-            statuses={data.statuses}
-            workItemTypes={data.types}
-            existingItems={data.items}
-            onClose={() => {
-              setCreating(false);
-            }}
-          />
-        </div>
-      )}
+      <CreateWorkItemDialog
+        open={creating}
+        onOpenChange={(nextOpen) => {
+          setCreating(nextOpen);
+          if (!nextOpen) setCreateStatusId(undefined);
+        }}
+        projectId={project.id}
+        statuses={data.statuses}
+        workItemTypes={data.types}
+        existingItems={data.items}
+        eras={data.eras}
+        participants={participants}
+        initialStatusId={createStatusId}
+      />
 
       {Boolean(data.transition.error) && (
         <div className="shrink-0 border-b border-border px-4 py-2.5 md:px-6">
@@ -700,13 +703,7 @@ export function ProjectWorkItems({
           onTransition={(workItemId, statusId) => {
             data.transition.mutate({ workItemId, statusId });
           }}
-          onStartCreate={
-            canCreateWorkItem
-              ? () => {
-                  setCreating(true);
-                }
-              : undefined
-          }
+          onStartCreate={canCreateWorkItem ? handleStartCreate : undefined}
         />
         <WorkItemsPagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
       </div>
