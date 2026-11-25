@@ -15,6 +15,7 @@ type CreateWorkItemInput struct {
 	WorkItemTypeID string
 	StatusID       *string
 	ParentID       *string
+	EraID          *string
 	AssigneeID     *string
 	Title          string
 	Description    string
@@ -29,6 +30,7 @@ type ListWorkItemsFilter struct {
 	WorkItemTypeID string
 	Priority       string
 	AssigneeID     string
+	EraID          string
 }
 
 // UpdateWorkItemInput is the raw request to partially update a Work Item.
@@ -39,6 +41,7 @@ type UpdateWorkItemInput struct {
 	Priority       *string
 	WorkItemTypeID *string
 	ParentID       Optional[string]
+	EraID          Optional[string]
 	AssigneeID     Optional[string]
 	StoryPoints    Optional[float64]
 	Hours          Optional[float64]
@@ -51,6 +54,7 @@ type WorkItemService struct {
 	workspaces WorkspaceAccessChecker
 	assignees  AssigneeChecker
 	rules      TransitionRuleReader
+	eras       EraReader
 }
 
 // NewWorkItemService builds a WorkItemService from its dependencies.
@@ -72,6 +76,12 @@ func NewWorkItemService(
 // when moving a Work Item between Statuses (CONTEXT.md, ADR 0010).
 func (s *WorkItemService) WithTransitionRules(rules TransitionRuleReader) *WorkItemService {
 	s.rules = rules
+	return s
+}
+
+// WithEras enables validation of Project Era references on Work Items.
+func (s *WorkItemService) WithEras(eras EraReader) *WorkItemService {
+	s.eras = eras
 	return s
 }
 
@@ -103,12 +113,16 @@ func (s *WorkItemService) CreateWorkItem(ctx context.Context, actor domain.Actor
 	if err := s.validateWorkItemRelations(ctx, project, nil, wt, parsed.parentID, parsed.assigneeID, parsed.storyPoints, parsed.hours, types); err != nil {
 		return domain.WorkItem{}, err
 	}
+	if err := s.validateEra(ctx, project.ID, parsed.eraID); err != nil {
+		return domain.WorkItem{}, err
+	}
 	created, err := s.items.Create(ctx, NewWorkItem{
 		OrganizationID: project.OrganizationID,
 		ProjectID:      project.ID,
 		WorkItemTypeID: wt.ID,
 		StatusID:       statusID,
 		ParentID:       parsed.parentID,
+		EraID:          parsed.eraID,
 		AssigneeID:     parsed.assigneeID,
 		Title:          parsed.title,
 		Description:    in.Description,
@@ -180,12 +194,13 @@ func (s *WorkItemService) UpdateWorkItem(ctx context.Context, actor domain.Actor
 	if !ok {
 		return domain.WorkItem{}, domain.ErrInvalidWorkItemType
 	}
-	if next.WorkItemTypeID != current.WorkItemTypeID {
-		if err := s.validateChildrenAllowType(ctx, current.ID, wt); err != nil {
-			return domain.WorkItem{}, err
-		}
+	if err := s.validateChildrenIfTypeChanged(ctx, current, wt); err != nil {
+		return domain.WorkItem{}, err
 	}
 	if err := s.validateWorkItemRelations(ctx, project, &current.ID, wt, next.ParentID, next.AssigneeID, next.StoryPoints, next.Hours, types); err != nil {
+		return domain.WorkItem{}, err
+	}
+	if err := s.validateEraIfSet(ctx, project.ID, in.EraID.Set, next.EraID); err != nil {
 		return domain.WorkItem{}, err
 	}
 	updated, err := s.items.Update(ctx, next)
@@ -386,6 +401,13 @@ func (s *WorkItemService) checkParentCycle(ctx context.Context, selfID, parentID
 	return nil
 }
 
+func (s *WorkItemService) validateChildrenIfTypeChanged(ctx context.Context, current domain.WorkItem, newType domain.WorkItemType) error {
+	if newType.ID == current.WorkItemTypeID {
+		return nil
+	}
+	return s.validateChildrenAllowType(ctx, current.ID, newType)
+}
+
 func (s *WorkItemService) validateChildrenAllowType(ctx context.Context, itemID domain.WorkItemID, newType domain.WorkItemType) error {
 	childTypes, err := s.items.ListChildTypes(ctx, itemID)
 	if err != nil {
@@ -410,11 +432,36 @@ func (s *WorkItemService) validateAssignee(ctx context.Context, workspaceID doma
 	return nil
 }
 
+func (s *WorkItemService) validateEraIfSet(ctx context.Context, projectID domain.ProjectID, set bool, eraID *domain.EraID) error {
+	if !set {
+		return nil
+	}
+	return s.validateEra(ctx, projectID, eraID)
+}
+
+func (s *WorkItemService) validateEra(ctx context.Context, projectID domain.ProjectID, eraID *domain.EraID) error {
+	if eraID == nil || s.eras == nil {
+		return nil
+	}
+	era, err := s.eras.Find(ctx, projectID, *eraID)
+	if errors.Is(err, domain.ErrEraNotFound) {
+		return domain.ErrInvalidEra
+	}
+	if err != nil {
+		return err
+	}
+	if era.State == domain.EraStateCompleted {
+		return domain.ErrInvalidEra
+	}
+	return nil
+}
+
 type parsedCreateWorkItem struct {
 	title          string
 	workItemTypeID domain.WorkItemTypeID
 	statusID       *domain.StatusID
 	parentID       *domain.WorkItemID
+	eraID          *domain.EraID
 	assigneeID     *domain.UserID
 	priority       domain.Priority
 	storyPoints    *float64
@@ -427,8 +474,9 @@ func parseCreateWorkItem(in CreateWorkItemInput) (parsedCreateWorkItem, error) {
 	priority, prioErr := domain.ParseOptionalPriority(in.Priority)
 	statusID, statusErr := parseOptionalStatusRef(in.StatusID)
 	parentID, parentErr := parseOptionalParentRef(in.ParentID)
+	eraID, eraErr := parseOptionalEraRef(in.EraID)
 	assigneeID, assigneeErr := parseOptionalAssigneeRef(in.AssigneeID)
-	if err := errors.Join(titleErr, wtErr, prioErr, statusErr, parentErr, assigneeErr); err != nil {
+	if err := errors.Join(titleErr, wtErr, prioErr, statusErr, parentErr, eraErr, assigneeErr); err != nil {
 		return parsedCreateWorkItem{}, err
 	}
 	return parsedCreateWorkItem{
@@ -436,6 +484,7 @@ func parseCreateWorkItem(in CreateWorkItemInput) (parsedCreateWorkItem, error) {
 		workItemTypeID: wtID,
 		statusID:       statusID,
 		parentID:       parentID,
+		eraID:          eraID,
 		assigneeID:     assigneeID,
 		priority:       priority,
 		storyPoints:    in.StoryPoints,
@@ -445,8 +494,8 @@ func parseCreateWorkItem(in CreateWorkItemInput) (parsedCreateWorkItem, error) {
 
 func parseListWorkItemsFilter(raw ListWorkItemsFilter) (WorkItemFilter, error) {
 	var (
-		filter                                 WorkItemFilter
-		statusErr, typeErr, prioErr, assignErr error
+		filter                                         WorkItemFilter
+		statusErr, typeErr, prioErr, assignErr, eraErr error
 	)
 	if strings.TrimSpace(raw.StatusID) != "" {
 		id, err := domain.ParseStatusRef(raw.StatusID)
@@ -468,7 +517,12 @@ func parseListWorkItemsFilter(raw ListWorkItemsFilter) (WorkItemFilter, error) {
 		assignErr = err
 		filter.AssigneeID = &id
 	}
-	return filter, errors.Join(statusErr, typeErr, prioErr, assignErr)
+	if strings.TrimSpace(raw.EraID) != "" {
+		id, err := domain.ParseEraRef(raw.EraID)
+		eraErr = err
+		filter.EraID = &id
+	}
+	return filter, errors.Join(statusErr, typeErr, prioErr, assignErr, eraErr)
 }
 
 func buildWorkItemUpdate(current domain.WorkItem, in UpdateWorkItemInput) (WorkItemUpdate, error) {
@@ -476,6 +530,7 @@ func buildWorkItemUpdate(current domain.WorkItem, in UpdateWorkItemInput) (WorkI
 		ID:             current.ID,
 		WorkItemTypeID: current.WorkItemTypeID,
 		ParentID:       current.ParentID,
+		EraID:          current.EraID,
 		AssigneeID:     current.AssigneeID,
 		Title:          current.Title,
 		Description:    current.Description,
@@ -497,6 +552,7 @@ func buildWorkItemUpdate(current domain.WorkItem, in UpdateWorkItemInput) (WorkI
 		applyPriorityPatch(&next, in.Priority),
 		applyTypePatch(&next, in.WorkItemTypeID),
 		applyParentPatch(&next, in.ParentID),
+		applyEraPatch(&next, in.EraID),
 		applyAssigneePatch(&next, in.AssigneeID),
 	)
 	return next, err
@@ -546,6 +602,17 @@ func applyParentPatch(next *WorkItemUpdate, raw Optional[string]) error {
 	return err
 }
 
+func applyEraPatch(next *WorkItemUpdate, raw Optional[string]) error {
+	if !raw.Set {
+		return nil
+	}
+	id, err := parseOptionalEraRef(raw.Value)
+	if err == nil {
+		next.EraID = id
+	}
+	return err
+}
+
 func applyAssigneePatch(next *WorkItemUpdate, raw Optional[string]) error {
 	if !raw.Set {
 		return nil
@@ -555,6 +622,17 @@ func applyAssigneePatch(next *WorkItemUpdate, raw Optional[string]) error {
 		next.AssigneeID = id
 	}
 	return err
+}
+
+func parseOptionalEraRef(raw *string) (*domain.EraID, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil, nil
+	}
+	id, err := domain.ParseEraRef(*raw)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
 }
 
 func parseOptionalStatusRef(raw *string) (*domain.StatusID, error) {
