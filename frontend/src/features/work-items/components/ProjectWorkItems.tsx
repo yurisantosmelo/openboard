@@ -6,8 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { errorMessage } from '../../../shared/api/httpClient';
-import type { Project, ProjectStatus, ProjectWorkItemType } from '../../projects';
-import { useProjectStatuses, useProjectWorkItemTypes } from '../../projects/hooks/useProjects';
+import type { Project, ProjectEra, ProjectStatus, ProjectWorkItemType } from '../../projects';
+import {
+  useProjectEras,
+  useProjectStatuses,
+  useProjectWorkItemTypes,
+} from '../../projects/hooks/useProjects';
 import type { Priority, WorkItem, WorkItemFilters } from '../api/workItemsApi';
 import { useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
 import { workItemPath } from '../paths';
@@ -188,10 +192,18 @@ interface FilterBarProps {
   filters: WorkItemFilters;
   types: ProjectWorkItemType[];
   statuses: ProjectStatus[];
+  eras: ProjectEra[];
   onChange: (patch: Partial<WorkItemFilters>) => void;
 }
 
-function WorkItemsFilterBar({ viewMode, filters, types, statuses, onChange }: FilterBarProps) {
+function WorkItemsFilterBar({
+  viewMode,
+  filters,
+  types,
+  statuses,
+  eras,
+  onChange,
+}: FilterBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b px-6 py-3">
       <select
@@ -237,6 +249,23 @@ function WorkItemsFilterBar({ viewMode, filters, types, statuses, onChange }: Fi
           {statuses.map((st) => (
             <option key={st.id} value={st.id}>
               {st.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {eras.length > 0 && (
+        <select
+          aria-label="Filter by Era"
+          className={`${selectClassName} h-8 w-auto min-w-36 text-xs`}
+          value={filters.eraId ?? ''}
+          onChange={(e) => {
+            onChange({ eraId: e.target.value || undefined });
+          }}
+        >
+          <option value="">All Eras</option>
+          {eras.map((era) => (
+            <option key={era.id} value={era.id}>
+              {era.name}
             </option>
           ))}
         </select>
@@ -438,6 +467,24 @@ interface ProjectWorkItemsProps {
   project: Project;
 }
 
+function useProjectWorkItemsData(projectId: string, filters: WorkItemFilters, page: number) {
+  const statuses = useProjectStatuses(projectId).data ?? [];
+  const types = useProjectWorkItemTypes(projectId).data ?? [];
+  const eras = useProjectEras(projectId).data ?? [];
+  const itemsQuery = useWorkItems(projectId, filters, page);
+  const transition = useTransitionWorkItem(projectId);
+  return {
+    statuses,
+    types,
+    eras,
+    items: itemsQuery.data?.items ?? [],
+    totalPages: itemsQuery.data?.totalPages ?? 1,
+    isPending: itemsQuery.isPending,
+    error: itemsQuery.error,
+    transition,
+  };
+}
+
 /** Displays a Project's Work Items in List or Board view with filters and inline creation. */
 export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -445,14 +492,9 @@ export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
   const [creating, setCreating] = useState(false);
   const [filters, setFilters] = useState<WorkItemFilters>({});
 
-  const statuses = useProjectStatuses(project.id).data ?? [];
-  const types = useProjectWorkItemTypes(project.id).data ?? [];
-  const itemsQuery = useWorkItems(project.id, filters, page);
-  const transition = useTransitionWorkItem(project.id);
-
+  const { statuses, types, eras, items, totalPages, isPending, error, transition } =
+    useProjectWorkItemsData(project.id, filters, page);
   const canWrite = project.currentUserRole !== 'viewer';
-  const items = itemsQuery.data?.items ?? [];
-  const totalPages = itemsQuery.data?.totalPages ?? 1;
 
   function updateFilter(patch: Partial<WorkItemFilters>) {
     setPage(1);
@@ -494,12 +536,13 @@ export function ProjectWorkItems({ project }: ProjectWorkItemsProps) {
           filters={filters}
           types={types}
           statuses={statuses}
+          eras={eras}
           onChange={updateFilter}
         />
         <TransitionAlert error={transition.error} />
         <WorkItemsBody
-          isPending={itemsQuery.isPending}
-          error={itemsQuery.error}
+          isPending={isPending}
+          error={error}
           items={items}
           viewMode={viewMode}
           statuses={statuses}

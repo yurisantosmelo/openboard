@@ -10,8 +10,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldLabel } from '@/components/ui/field';
 import { errorMessage } from '../../../shared/api/httpClient';
 import { useCurrentUser } from '../../auth';
-import { projectPath, type EstimateUnit, type ProjectStatus } from '../../projects';
-import { useProjectStatuses, useProjectWorkItemTypes } from '../../projects/hooks/useProjects';
+import {
+  projectPath,
+  type EstimateUnit,
+  type ProjectEra,
+  type ProjectStatus,
+} from '../../projects';
+import {
+  useProjectEras,
+  useProjectStatuses,
+  useProjectWorkItemTypes,
+} from '../../projects/hooks/useProjects';
 import type { Priority, UpdateWorkItemPayload, WorkItem } from '../api/workItemsApi';
 import {
   useDeleteWorkItem,
@@ -21,6 +30,7 @@ import {
   useWorkItems,
 } from '../hooks/useWorkItems';
 import { EstimateInput, ParentSelect } from './CreateWorkItemForm';
+import { WorkItemLinksCard } from './WorkItemLinksCard';
 import {
   eligibleParentsForType,
   parseEstimateInput,
@@ -96,6 +106,7 @@ interface DetailsCardProps {
   item: WorkItem;
   unit: EstimateUnit;
   eligibleParents: WorkItem[];
+  selectableEras: ProjectEra[];
   canWrite: boolean;
   busy: boolean;
   isSaving: boolean;
@@ -116,6 +127,8 @@ function buildUpdatePayload(fields: {
   description: string;
   priority: Priority;
   parentId: string;
+  eraId: string;
+  eraChanged: boolean;
   unit: EstimateUnit;
   estimate: string;
 }): UpdateWorkItemPayload {
@@ -126,6 +139,7 @@ function buildUpdatePayload(fields: {
     priority: fields.priority,
     parentId: fields.parentId || null,
   };
+  if (fields.eraChanged) payload.eraId = fields.eraId || null;
   if (fields.unit === 'story_points') payload.storyPoints = numeric;
   if (fields.unit === 'hours') payload.hours = numeric;
   return payload;
@@ -141,10 +155,46 @@ function ErrorBanner({ error, hidden }: { error: unknown; hidden?: boolean }) {
   );
 }
 
+function EraSelectField({
+  value,
+  eras,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  eras: ProjectEra[];
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  if (eras.length === 0) return null;
+  return (
+    <Field>
+      <FieldLabel htmlFor="edit-wi-era">Era</FieldLabel>
+      <select
+        id="edit-wi-era"
+        className={selectClassName}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+      >
+        <option value="">No Era</option>
+        {eras.map((era) => (
+          <option key={era.id} value={era.id}>
+            {era.name}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
 function WorkItemDetailsCard({
   item,
   unit,
   eligibleParents,
+  selectableEras,
   canWrite,
   busy,
   isSaving,
@@ -155,6 +205,7 @@ function WorkItemDetailsCard({
   const [description, setDescription] = useState(item.description);
   const [priority, setPriority] = useState<Priority>(item.priority);
   const [parentId, setParentId] = useState(item.parentId ?? '');
+  const [eraId, setEraId] = useState(item.eraId ?? '');
   const [estimate, setEstimate] = useState(() => initialEstimateText(item));
   const [saved, setSaved] = useState(false);
 
@@ -164,7 +215,16 @@ function WorkItemDetailsCard({
   function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaved(false);
-    const payload = buildUpdatePayload({ title, description, priority, parentId, unit, estimate });
+    const payload = buildUpdatePayload({
+      title,
+      description,
+      priority,
+      parentId,
+      eraId,
+      eraChanged: eraId !== (item.eraId ?? ''),
+      unit,
+      estimate,
+    });
     onSave(payload, () => {
       setSaved(true);
     });
@@ -191,7 +251,7 @@ function WorkItemDetailsCard({
               setSaved(false);
             }}
           />
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field>
               <FieldLabel htmlFor="edit-wi-priority">Priority</FieldLabel>
               <select
@@ -230,6 +290,15 @@ function WorkItemDetailsCard({
               error={errs.parent}
               onChange={(val) => {
                 setParentId(val);
+                setSaved(false);
+              }}
+            />
+            <EraSelectField
+              value={eraId}
+              eras={selectableEras}
+              disabled={locked}
+              onChange={(val) => {
+                setEraId(val);
                 setSaved(false);
               }}
             />
@@ -381,12 +450,16 @@ function useWorkItemContext(item: WorkItem) {
   const currentUser = useCurrentUser();
   const statuses = useProjectStatuses(item.projectId).data ?? [];
   const types = useProjectWorkItemTypes(item.projectId).data ?? [];
+  const eras = useProjectEras(item.projectId).data ?? [];
   const projectItems = useWorkItems(item.projectId, {}, 1).data?.items ?? [];
   const currentType = types.find((t) => t.id === item.workItemTypeId);
+  const selectableEras = eras.filter((e) => e.state !== 'completed' || e.id === item.eraId);
   return {
     currentUserId: currentUser.data?.id,
     statuses,
     currentType,
+    projectItems,
+    selectableEras,
     eligibleParents: eligibleParentsForType(projectItems, types, item.workItemTypeId, item.id),
   };
 }
@@ -418,6 +491,7 @@ function WorkItemEditor({ item }: { item: WorkItem }) {
         item={item}
         unit={ctx.currentType?.estimateUnit ?? 'none'}
         eligibleParents={ctx.eligibleParents}
+        selectableEras={ctx.selectableEras}
         canWrite={canWrite}
         busy={busy}
         isSaving={update.isPending}
@@ -426,6 +500,7 @@ function WorkItemEditor({ item }: { item: WorkItem }) {
           update.mutate(payload, { onSuccess });
         }}
       />
+      <WorkItemLinksCard workItemId={item.id} projectItems={ctx.projectItems} canWrite={canWrite} />
       <WorkItemAssigneeCard
         item={item}
         currentUserId={ctx.currentUserId}
