@@ -177,6 +177,7 @@ describe('ProjectPage', () => {
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: defaultWorkItemTypes }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
       'GET /api/v1/projects?workspace_id=w2&page=1&page_size=20': pageOf([]),
       'PATCH /api/v1/projects/p1': () => {
@@ -230,6 +231,7 @@ describe('ProjectPage', () => {
       ),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
     });
 
@@ -261,6 +263,7 @@ describe('ProjectPage', () => {
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: defaultWorkItemTypes }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': pageOf([]),
       'PATCH /api/v1/projects/p1': problem(500, 'internal-error', 'Rename failed'),
     });

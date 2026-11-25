@@ -70,6 +70,7 @@ describe('Project Eras and Work Item Links', () => {
       'GET /api/v1/projects/p1/statuses': Response.json({ items: statuses }),
       'GET /api/v1/projects/p1/work-item-types': Response.json({ items: types }),
       'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
       'GET /api/v1/projects/p1/eras': () => Response.json({ items: eras }),
       'GET /api/v1/projects/p1/work-items?page=1&page_size=20': Response.json({
         items: [],
