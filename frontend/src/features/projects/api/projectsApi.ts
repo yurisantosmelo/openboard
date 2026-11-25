@@ -41,6 +41,39 @@ export interface ProjectWorkItemType {
   createdAt: string;
 }
 
+export interface TransitionRule {
+  projectId: string;
+  fromStatusId: string;
+  toStatusId: string;
+  createdAt: string;
+}
+
+export interface CreateStatusPayload {
+  name: string;
+  statusGroup: StatusGroup;
+  position?: number;
+}
+
+export interface UpdateStatusPayload {
+  name?: string;
+  statusGroup?: StatusGroup;
+  position?: number;
+}
+
+export interface CreateWorkItemTypePayload {
+  name: string;
+  estimateUnit: EstimateUnit;
+  position?: number;
+  allowedChildTypeIds?: string[];
+}
+
+export interface UpdateWorkItemTypePayload {
+  name?: string;
+  estimateUnit?: EstimateUnit;
+  position?: number;
+  allowedChildTypeIds?: string[];
+}
+
 interface ProjectDto {
   id: string;
   organization_id: string;
@@ -80,6 +113,13 @@ interface ProjectWorkItemTypeDto {
   created_at: string;
 }
 
+interface TransitionRuleDto {
+  project_id: string;
+  from_status_id: string;
+  to_status_id: string;
+  created_at: string;
+}
+
 function toProject(dto: ProjectDto): Project {
   return {
     id: dto.id,
@@ -111,6 +151,15 @@ function toWorkItemType(dto: ProjectWorkItemTypeDto): ProjectWorkItemType {
     estimateUnit: dto.estimate_unit,
     position: dto.position,
     allowedChildTypeIds: dto.allowed_child_type_ids,
+    createdAt: dto.created_at,
+  };
+}
+
+function toTransitionRule(dto: TransitionRuleDto): TransitionRule {
+  return {
+    projectId: dto.project_id,
+    fromStatusId: dto.from_status_id,
+    toStatusId: dto.to_status_id,
     createdAt: dto.created_at,
   };
 }
@@ -167,4 +216,112 @@ export async function listProjectWorkItemTypes(
   const path = `/api/v1/projects/${encodeURIComponent(projectId)}/work-item-types`;
   const dto = await apiRequest<ListDto<ProjectWorkItemTypeDto>>(path, { signal });
   return dto.items.map(toWorkItemType);
+}
+
+export async function createProjectStatus(
+  projectId: string,
+  payload: CreateStatusPayload,
+): Promise<ProjectStatus> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/statuses`;
+  const body: Record<string, unknown> = {
+    name: payload.name,
+    status_group: payload.statusGroup,
+  };
+  if (payload.position !== undefined) body.position = payload.position;
+  return toStatus(await apiRequest<ProjectStatusDto>(path, { method: 'POST', body }));
+}
+
+export async function updateProjectStatus(
+  projectId: string,
+  statusId: string,
+  payload: UpdateStatusPayload,
+): Promise<ProjectStatus> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/statuses/${encodeURIComponent(statusId)}`;
+  const body: Record<string, unknown> = {};
+  if (payload.name !== undefined) body.name = payload.name;
+  if (payload.statusGroup !== undefined) body.status_group = payload.statusGroup;
+  if (payload.position !== undefined) body.position = payload.position;
+  return toStatus(await apiRequest<ProjectStatusDto>(path, { method: 'PATCH', body }));
+}
+
+export async function deleteProjectStatus(
+  projectId: string,
+  statusId: string,
+  replacementStatusId: string,
+): Promise<void> {
+  const query = new URLSearchParams({ replacement_status_id: replacementStatusId });
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/statuses/${encodeURIComponent(statusId)}?${query}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
+}
+
+export async function createProjectWorkItemType(
+  projectId: string,
+  payload: CreateWorkItemTypePayload,
+): Promise<ProjectWorkItemType> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/work-item-types`;
+  const body: Record<string, unknown> = {
+    name: payload.name,
+    estimate_unit: payload.estimateUnit,
+    allowed_child_type_ids: payload.allowedChildTypeIds ?? [],
+  };
+  if (payload.position !== undefined) body.position = payload.position;
+  return toWorkItemType(await apiRequest<ProjectWorkItemTypeDto>(path, { method: 'POST', body }));
+}
+
+export async function updateProjectWorkItemType(
+  projectId: string,
+  typeId: string,
+  payload: UpdateWorkItemTypePayload,
+): Promise<ProjectWorkItemType> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/work-item-types/${encodeURIComponent(typeId)}`;
+  const body: Record<string, unknown> = {};
+  if (payload.name !== undefined) body.name = payload.name;
+  if (payload.estimateUnit !== undefined) body.estimate_unit = payload.estimateUnit;
+  if (payload.position !== undefined) body.position = payload.position;
+  if (payload.allowedChildTypeIds !== undefined) {
+    body.allowed_child_type_ids = payload.allowedChildTypeIds;
+  }
+  return toWorkItemType(await apiRequest<ProjectWorkItemTypeDto>(path, { method: 'PATCH', body }));
+}
+
+export async function deleteProjectWorkItemType(
+  projectId: string,
+  typeId: string,
+  replacementTypeId: string,
+): Promise<void> {
+  const query = new URLSearchParams({ replacement_type_id: replacementTypeId });
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/work-item-types/${encodeURIComponent(typeId)}?${query}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
+}
+
+export async function listProjectTransitionRules(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<TransitionRule[]> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/transition-rules`;
+  const dto = await apiRequest<ListDto<TransitionRuleDto>>(path, { signal });
+  return dto.items.map(toTransitionRule);
+}
+
+export async function addProjectTransitionRule(
+  projectId: string,
+  fromStatusId: string,
+  toStatusId: string,
+): Promise<TransitionRule> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/transition-rules`;
+  return toTransitionRule(
+    await apiRequest<TransitionRuleDto>(path, {
+      method: 'POST',
+      body: { from_status_id: fromStatusId, to_status_id: toStatusId },
+    }),
+  );
+}
+
+export async function removeProjectTransitionRule(
+  projectId: string,
+  fromStatusId: string,
+  toStatusId: string,
+): Promise<void> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/transition-rules/${encodeURIComponent(fromStatusId)}/${encodeURIComponent(toStatusId)}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
 }
