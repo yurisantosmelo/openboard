@@ -16,7 +16,7 @@ export interface Project {
   currentUserRole: WorkspaceRole;
 }
 
-export interface ProjectPage {
+export interface ProjectsPage {
   items: Project[];
   page: number;
   totalPages: number;
@@ -119,7 +119,7 @@ export async function listProjects(
   workspaceId: string,
   page: number,
   signal?: AbortSignal,
-): Promise<ProjectPage> {
+): Promise<ProjectsPage> {
   const query = new URLSearchParams({
     workspace_id: workspaceId,
     page: String(page),

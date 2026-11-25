@@ -12,6 +12,7 @@ import {
   WORKSPACE_ROUTE,
   WorkspacePage,
 } from '../features/organizations';
+import { PROJECT_ROUTE, ProjectPage } from '../features/projects';
 import { USERS_PATH, UsersPage } from '../features/users';
 import { AppLayout } from './AppLayout';
 import { HomePage } from './HomePage';
@@ -29,6 +30,7 @@ export const routes: RouteObject[] = [
           { path: CHANGE_PASSWORD_PATH, element: <ChangePasswordPage /> },
           { path: ORGANIZATION_ROUTE, element: <OrganizationPage /> },
           { path: WORKSPACE_ROUTE, element: <WorkspacePage /> },
+          { path: PROJECT_ROUTE, element: <ProjectPage /> },
         ],
       },
     ],
