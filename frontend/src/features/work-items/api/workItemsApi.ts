@@ -163,20 +163,31 @@ export async function createWorkItem(
   return toWorkItem(await apiRequest<WorkItemDto>(path, { method: 'POST', body }));
 }
 
+function assignDefined(
+  target: Record<string, unknown>,
+  entries: [string, unknown, boolean][],
+): void {
+  for (const [key, value, include] of entries) {
+    if (include) target[key] = value;
+  }
+}
+
 export async function updateWorkItem(
   workItemId: string,
   payload: UpdateWorkItemPayload,
 ): Promise<WorkItem> {
   const path = `/api/v1/work-items/${encodeURIComponent(workItemId)}`;
   const body: Record<string, unknown> = {};
-  if (payload.title !== undefined) body.title = payload.title;
-  if (payload.description !== undefined) body.description = payload.description;
-  if (payload.priority !== undefined) body.priority = payload.priority;
-  if (payload.workItemTypeId !== undefined) body.work_item_type_id = payload.workItemTypeId;
-  if ('parentId' in payload) body.parent_id = payload.parentId ?? null;
-  if ('assigneeId' in payload) body.assignee_id = payload.assigneeId ?? null;
-  if ('storyPoints' in payload) body.story_points = payload.storyPoints ?? null;
-  if ('hours' in payload) body.hours = payload.hours ?? null;
+  assignDefined(body, [
+    ['title', payload.title, payload.title !== undefined],
+    ['description', payload.description, payload.description !== undefined],
+    ['priority', payload.priority, payload.priority !== undefined],
+    ['work_item_type_id', payload.workItemTypeId, payload.workItemTypeId !== undefined],
+    ['parent_id', payload.parentId ?? null, 'parentId' in payload],
+    ['assignee_id', payload.assigneeId ?? null, 'assigneeId' in payload],
+    ['story_points', payload.storyPoints ?? null, 'storyPoints' in payload],
+    ['hours', payload.hours ?? null, 'hours' in payload],
+  ]);
   return toWorkItem(await apiRequest<WorkItemDto>(path, { method: 'PATCH', body }));
 }
 
