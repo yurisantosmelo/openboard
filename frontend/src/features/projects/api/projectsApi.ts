@@ -48,6 +48,35 @@ export interface TransitionRule {
   createdAt: string;
 }
 
+export type EraState = 'planned' | 'active' | 'completed';
+
+export interface ProjectEra {
+  id: string;
+  projectId: string;
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  state: EraState;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateEraPayload {
+  name: string;
+  goal?: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface UpdateEraPayload {
+  name?: string;
+  goal?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export interface CreateStatusPayload {
   name: string;
   statusGroup: StatusGroup;
@@ -120,6 +149,19 @@ interface TransitionRuleDto {
   created_at: string;
 }
 
+interface ProjectEraDto {
+  id: string;
+  project_id: string;
+  name: string;
+  goal: string;
+  start_date: string;
+  end_date: string;
+  state: EraState;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 function toProject(dto: ProjectDto): Project {
   return {
     id: dto.id,
@@ -161,6 +203,21 @@ function toTransitionRule(dto: TransitionRuleDto): TransitionRule {
     fromStatusId: dto.from_status_id,
     toStatusId: dto.to_status_id,
     createdAt: dto.created_at,
+  };
+}
+
+function toProjectEra(dto: ProjectEraDto): ProjectEra {
+  return {
+    id: dto.id,
+    projectId: dto.project_id,
+    name: dto.name,
+    goal: dto.goal,
+    startDate: dto.start_date,
+    endDate: dto.end_date,
+    state: dto.state,
+    closedAt: dto.closed_at,
+    createdAt: dto.created_at,
+    updatedAt: dto.updated_at,
   };
 }
 
@@ -323,5 +380,70 @@ export async function removeProjectTransitionRule(
   toStatusId: string,
 ): Promise<void> {
   const path = `/api/v1/projects/${encodeURIComponent(projectId)}/transition-rules/${encodeURIComponent(fromStatusId)}/${encodeURIComponent(toStatusId)}`;
+  await apiRequest<undefined>(path, { method: 'DELETE' });
+}
+
+export async function listProjectEras(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<ProjectEra[]> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/eras`;
+  const dto = await apiRequest<ListDto<ProjectEraDto>>(path, { signal });
+  return dto.items.map(toProjectEra);
+}
+
+export async function createProjectEra(
+  projectId: string,
+  payload: CreateEraPayload,
+): Promise<ProjectEra> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/eras`;
+  return toProjectEra(
+    await apiRequest<ProjectEraDto>(path, {
+      method: 'POST',
+      body: {
+        name: payload.name,
+        goal: payload.goal ?? '',
+        start_date: payload.startDate,
+        end_date: payload.endDate,
+      },
+    }),
+  );
+}
+
+export async function updateProjectEra(
+  projectId: string,
+  eraId: string,
+  payload: UpdateEraPayload,
+): Promise<ProjectEra> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/eras/${encodeURIComponent(eraId)}`;
+  const body: Record<string, unknown> = {};
+  if (payload.name !== undefined) body.name = payload.name;
+  if (payload.goal !== undefined) body.goal = payload.goal;
+  if (payload.startDate !== undefined) body.start_date = payload.startDate;
+  if (payload.endDate !== undefined) body.end_date = payload.endDate;
+  return toProjectEra(await apiRequest<ProjectEraDto>(path, { method: 'PATCH', body }));
+}
+
+export async function startProjectEra(projectId: string, eraId: string): Promise<ProjectEra> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/eras/${encodeURIComponent(eraId)}/start`;
+  return toProjectEra(await apiRequest<ProjectEraDto>(path, { method: 'POST' }));
+}
+
+export async function closeProjectEra(
+  projectId: string,
+  eraId: string,
+  nextEraId: string | null,
+): Promise<ProjectEra> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/eras/${encodeURIComponent(eraId)}/close`;
+  return toProjectEra(
+    await apiRequest<ProjectEraDto>(path, {
+      method: 'POST',
+      body: { next_era_id: nextEraId },
+    }),
+  );
+}
+
+export async function deleteProjectEra(projectId: string, eraId: string): Promise<void> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/eras/${encodeURIComponent(eraId)}`;
   await apiRequest<undefined>(path, { method: 'DELETE' });
 }
