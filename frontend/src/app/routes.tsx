@@ -14,6 +14,7 @@ import {
 } from '../features/organizations';
 import { PROJECT_ROUTE, ProjectPage } from '../features/projects';
 import { USERS_PATH, UsersPage } from '../features/users';
+import { WORK_ITEM_ROUTE, WorkItemPage } from '../features/work-items';
 import { AppLayout } from './AppLayout';
 import { HomePage } from './HomePage';
 
@@ -31,6 +32,7 @@ export const routes: RouteObject[] = [
           { path: ORGANIZATION_ROUTE, element: <OrganizationPage /> },
           { path: WORKSPACE_ROUTE, element: <WorkspacePage /> },
           { path: PROJECT_ROUTE, element: <ProjectPage /> },
+          { path: WORK_ITEM_ROUTE, element: <WorkItemPage /> },
         ],
       },
     ],
