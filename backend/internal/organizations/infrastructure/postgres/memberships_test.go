@@ -176,3 +176,33 @@ func TestDeleteOrganizationMembershipProtectsLastOwnerAndCascadesWorkspaces(t *t
 		t.Errorf("invalid org err = %v, want storage error", err)
 	}
 }
+
+func TestIsSoleOwnerRespectsDeactivatedOwners(t *testing.T) {
+	marina := createUser(t, "marina")
+	julia := addUser(t, "julia")
+	acme := seed(t, marina, "Acme")["Acme"]
+	repo := NewMemberships(pool)
+	ctx := context.Background()
+
+	sole, err := repo.IsSoleOwner(ctx, marina)
+	if err != nil || !sole {
+		t.Fatalf("sole owner marina = %v, %v; want true", sole, err)
+	}
+	if _, err := repo.Create(ctx, application.NewOrganizationMembership{
+		OrganizationID: acme.ID, UserID: julia, Role: domain.RoleOwner,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if sole, err := repo.IsSoleOwner(ctx, marina); err != nil || sole {
+		t.Fatalf("with second active owner, marina sole = %v, %v; want false", sole, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET deactivated_at = NOW() WHERE id = $1`, string(julia)); err != nil {
+		t.Fatal(err)
+	}
+	if sole, err := repo.IsSoleOwner(ctx, marina); err != nil || !sole {
+		t.Fatalf("with deactivated co-owner, marina sole = %v, %v; want true", sole, err)
+	}
+	if _, err := repo.IsSoleOwner(ctx, "not-a-uuid"); err == nil {
+		t.Error("invalid user id must fail")
+	}
+}

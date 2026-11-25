@@ -60,6 +60,20 @@ func TestSignInRejectsWithoutRevealingWhy(t *testing.T) {
 	}
 }
 
+func TestSignInRejectsDeactivatedUser(t *testing.T) {
+	u := gabriel()
+	u.DeactivatedAt = &t0
+	h := newHarness(t, u)
+
+	_, err := h.svc.SignIn(context.Background(), "gabriel", "correct horse battery")
+	if !errors.Is(err, domain.ErrInvalidCredentials) {
+		t.Fatalf("err = %v, want ErrInvalidCredentials", err)
+	}
+	if len(h.sessions.byID) != 0 || len(h.hasher.verified) != 1 {
+		t.Errorf("sessions=%d verified=%d", len(h.sessions.byID), len(h.hasher.verified))
+	}
+}
+
 func TestSignInEqualizesTimingAndCountsFailures(t *testing.T) {
 	h := newHarness(t, gabriel())
 	_, _ = h.svc.SignIn(context.Background(), "helena", "whatever")

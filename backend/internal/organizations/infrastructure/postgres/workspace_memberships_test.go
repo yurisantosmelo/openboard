@@ -70,6 +70,14 @@ func TestCreateWorkspaceMembershipErrors(t *testing.T) {
 	if _, err := repo.Create(ctx, application.NewWorkspaceMembership{WorkspaceID: w.legal.ID, OrganizationID: w.acme.ID, Username: "julia", Role: "admin"}); err == nil {
 		t.Error("invalid role must fail")
 	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET deactivated_at = NOW() WHERE id = $1`, string(w.contributor)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Create(ctx, application.NewWorkspaceMembership{
+		WorkspaceID: w.legal.ID, OrganizationID: w.acme.ID, Username: "julia", Role: domain.WorkspaceRoleViewer,
+	}); !errors.Is(err, domain.ErrUserDeactivated) {
+		t.Errorf("deactivated user err = %v, want ErrUserDeactivated", err)
+	}
 }
 
 func TestUpdateWorkspaceMembershipRole(t *testing.T) {

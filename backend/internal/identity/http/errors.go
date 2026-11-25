@@ -9,19 +9,32 @@ import (
 	"github.com/elyosemite/openboard/backend/internal/platform/httpx"
 )
 
+var staticErrors = []struct {
+	target  error
+	problem *httpx.Error
+}{
+	{domain.ErrInvalidCredentials, &httpx.Error{Status: http.StatusUnauthorized, Slug: "invalid-credentials", Title: "Invalid username or password"}},
+	{domain.ErrTooManyAttempts, &httpx.Error{
+		Status: http.StatusTooManyRequests, Slug: "too-many-attempts",
+		Title: "Too many failed sign-in attempts", Detail: "Try again in a few minutes.",
+	}},
+	{domain.ErrUnauthenticated, &httpx.Error{Status: http.StatusUnauthorized, Slug: "unauthenticated", Title: "Not signed in"}},
+	{domain.ErrForbidden, &httpx.Error{Status: http.StatusForbidden, Slug: "forbidden", Title: "Not allowed"}},
+	{domain.ErrUserNotFound, httpx.ErrNotFound()},
+	{domain.ErrCannotDeactivateSelf, &httpx.Error{Status: http.StatusConflict, Slug: "cannot-deactivate-self", Title: "You cannot deactivate yourself"}},
+	{domain.ErrLastOrganizationOwner, &httpx.Error{Status: http.StatusConflict, Slug: "last-organization-owner", Title: "User is the last Organization Owner of an Organization"}},
+	{domain.ErrUserDeactivated, &httpx.Error{Status: http.StatusConflict, Slug: "user-deactivated", Title: "User is Deactivated"}},
+}
+
 // mapError turns identity domain errors into problem responses; anything else
 // passes through and becomes a 500.
 func mapError(err error) error {
-	switch {
-	case errors.Is(err, domain.ErrInvalidCredentials):
-		return &httpx.Error{Status: http.StatusUnauthorized, Slug: "invalid-credentials", Title: "Invalid username or password"}
-	case isTooManyAttempts(err):
-		return &httpx.Error{
-			Status: http.StatusTooManyRequests, Slug: "too-many-attempts",
-			Title: "Too many failed sign-in attempts", Detail: "Try again in a few minutes.",
+	for _, entry := range staticErrors {
+		if errors.Is(err, entry.target) {
+			return entry.problem
 		}
-	case errors.Is(err, domain.ErrUnauthenticated):
-		return &httpx.Error{Status: http.StatusUnauthorized, Slug: "unauthenticated", Title: "Not signed in"}
+	}
+	switch {
 	case errors.Is(err, domain.ErrWrongCurrentPassword):
 		return httpx.ErrValidation(httpx.FieldError{
 			Field: "current_password", Code: "incorrect", Message: "current password is incorrect",

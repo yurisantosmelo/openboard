@@ -179,6 +179,18 @@ func TestAddMembershipRejections(t *testing.T) {
 	}
 }
 
+func TestAddMembershipRejectsDeactivatedUser(t *testing.T) {
+	const orgID = "0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c"
+	repo := &fakeMembershipRepo{role: domain.RoleOwner}
+	users := &fakeProvisioner{user: ProvisionedUser{ID: "u-ana", Username: "ana", Name: "Ana", Deactivated: true}}
+	_, err := NewMembershipService(repo, users).AddMembership(context.Background(), marinaActor, AddOrganizationMembershipInput{
+		OrganizationID: orgID, Username: "ana", Name: "Ana",
+	})
+	if !errors.Is(err, domain.ErrUserDeactivated) || repo.createCalls != 0 {
+		t.Fatalf("err = %v, createCalls = %d; want ErrUserDeactivated and 0 calls", err, repo.createCalls)
+	}
+}
+
 func TestListMemberships(t *testing.T) {
 	const orgID = "0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c"
 	item := domain.OrganizationMembership{OrganizationID: orgID, UserID: "u1", Username: "ana", Name: "Ana", Role: domain.RoleOwner}

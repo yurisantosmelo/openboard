@@ -148,6 +148,8 @@ func mapWorkspaceMembershipError(err error) error {
 		return httpx.ErrNotFound()
 	case errors.Is(err, domain.ErrWorkspaceMembershipExists):
 		return &httpx.Error{Status: http.StatusConflict, Slug: "workspace-membership-exists", Title: "User already belongs to this Workspace"}
+	case errors.Is(err, domain.ErrUserDeactivated):
+		return errUserDeactivated()
 	}
 	return validationOr(err, workspaceMembershipFieldErrors)
 }

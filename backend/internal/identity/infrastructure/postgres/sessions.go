@@ -74,6 +74,15 @@ func (r *Sessions) DeleteOthers(ctx context.Context, userID domain.UserID, keep 
 	return nil
 }
 
+// DeleteAll removes every session of userID.
+func (r *Sessions) DeleteAll(ctx context.Context, userID domain.UserID) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, string(userID))
+	if err != nil {
+		return fmt.Errorf("delete all sessions: %w", err)
+	}
+	return nil
+}
+
 // exec runs a statement that must affect exactly the session it targets.
 func (r *Sessions) exec(ctx context.Context, sql string, args ...any) error {
 	tag, err := r.pool.Exec(ctx, sql, args...)

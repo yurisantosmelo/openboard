@@ -66,6 +66,17 @@ func TestAuthenticateWhenUserVanished(t *testing.T) {
 	}
 }
 
+func TestAuthenticateRejectsDeactivatedUser(t *testing.T) {
+	h, token := signedIn(t)
+	u := h.users.byID["u-gabriel"]
+	u.DeactivatedAt = &t0
+	h.users.byID["u-gabriel"] = u
+
+	if _, err := h.svc.Authenticate(context.Background(), token); !errors.Is(err, domain.ErrUnauthenticated) {
+		t.Fatalf("err = %v, want ErrUnauthenticated", err)
+	}
+}
+
 func TestAuthenticateInfrastructureFailures(t *testing.T) {
 	cases := map[string]struct {
 		breakIt func(h *harness)

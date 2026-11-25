@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,11 +18,14 @@ var (
 )
 
 type fakeUsers struct {
-	byID      map[domain.UserID]domain.User
-	countErr  error
-	createErr error
-	findErr   error
-	updateErr error
+	byID          map[domain.UserID]domain.User
+	countErr      error
+	createErr     error
+	findErr       error
+	listErr       error
+	updateErr     error
+	deactivateErr error
+	reactivateErr error
 }
 
 func newFakeUsers(users ...domain.User) *fakeUsers {
@@ -78,6 +83,62 @@ func (f *fakeUsers) UpdatePassword(_ context.Context, id domain.UserID, hash str
 	return nil
 }
 
+func (f *fakeUsers) List(_ context.Context, page PageRequest) ([]domain.User, int, error) {
+	if f.listErr != nil {
+		return nil, 0, f.listErr
+	}
+	all := make([]domain.User, 0, len(f.byID))
+	for _, u := range f.byID {
+		all = append(all, u)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if li, lj := strings.ToLower(all[i].Name), strings.ToLower(all[j].Name); li != lj {
+			return li < lj
+		}
+		if all[i].Username != all[j].Username {
+			return all[i].Username < all[j].Username
+		}
+		return all[i].ID < all[j].ID
+	})
+	if page.Offset >= len(all) {
+		return []domain.User{}, len(all), nil
+	}
+	end := page.Offset + page.Limit
+	if page.Limit <= 0 || end > len(all) {
+		end = len(all)
+	}
+	return all[page.Offset:end], len(all), nil
+}
+
+func (f *fakeUsers) Deactivate(_ context.Context, id domain.UserID, at time.Time) (domain.User, error) {
+	if f.deactivateErr != nil {
+		return domain.User{}, f.deactivateErr
+	}
+	u, ok := f.byID[id]
+	if !ok {
+		return domain.User{}, ErrNotFound
+	}
+	if u.DeactivatedAt == nil {
+		t := at
+		u.DeactivatedAt = &t
+	}
+	f.byID[id] = u
+	return u, nil
+}
+
+func (f *fakeUsers) Reactivate(_ context.Context, id domain.UserID) (domain.User, error) {
+	if f.reactivateErr != nil {
+		return domain.User{}, f.reactivateErr
+	}
+	u, ok := f.byID[id]
+	if !ok {
+		return domain.User{}, ErrNotFound
+	}
+	u.DeactivatedAt = nil
+	f.byID[id] = u
+	return u, nil
+}
+
 type fakeSessions struct {
 	byID         map[string]domain.Session
 	createErr    error
@@ -85,6 +146,7 @@ type fakeSessions struct {
 	touchErr     error
 	deleteErr    error
 	deleteOthErr error
+	deleteAllErr error
 	touched      int
 }
 
@@ -149,6 +211,30 @@ func (f *fakeSessions) DeleteOthers(_ context.Context, userID domain.UserID, kee
 	return nil
 }
 
+func (f *fakeSessions) DeleteAll(_ context.Context, userID domain.UserID) error {
+	if f.deleteAllErr != nil {
+		return f.deleteAllErr
+	}
+	for k, s := range f.byID {
+		if s.UserID == userID {
+			delete(f.byID, k)
+		}
+	}
+	return nil
+}
+
+type fakeOwnership struct {
+	soleOwners map[domain.UserID]bool
+	err        error
+}
+
+func (f *fakeOwnership) IsSoleOrganizationOwner(_ context.Context, userID domain.UserID) (bool, error) {
+	if f.err != nil {
+		return false, f.err
+	}
+	return f.soleOwners[userID], nil
+}
+
 // fakeHasher "hashes" by prefixing, so tests can read hashes directly.
 type fakeHasher struct {
 	hashErr   error
@@ -190,23 +276,25 @@ type failingReader struct{}
 func (failingReader) Read([]byte) (int, error) { return 0, errBoom }
 
 type harness struct {
-	svc      *Service
-	users    *fakeUsers
-	sessions *fakeSessions
-	hasher   *fakeHasher
-	throttle *fakeThrottle
-	now      time.Time
+	svc       *Service
+	users     *fakeUsers
+	sessions  *fakeSessions
+	hasher    *fakeHasher
+	throttle  *fakeThrottle
+	ownership *fakeOwnership
+	now       time.Time
 }
 
 func newHarness(t *testing.T, users ...domain.User) *harness {
 	t.Helper()
 	h := &harness{
 		users: newFakeUsers(users...), sessions: newFakeSessions(),
-		hasher: &fakeHasher{}, throttle: newFakeThrottle(), now: t0,
+		hasher: &fakeHasher{}, throttle: newFakeThrottle(),
+		ownership: &fakeOwnership{soleOwners: map[domain.UserID]bool{}}, now: t0,
 	}
 	svc, err := NewService(Deps{
 		Users: h.users, Sessions: h.sessions, Hasher: h.hasher, Throttle: h.throttle,
-		Now: func() time.Time { return h.now },
+		Ownership: h.ownership, Now: func() time.Time { return h.now },
 	})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)

@@ -14,6 +14,7 @@ type ProvisionedUser struct {
 	Username          string
 	Name              string
 	TemporaryPassword string
+	Deactivated       bool
 }
 
 // UserProvisioner links an existing User or creates a new one with a
@@ -125,6 +126,9 @@ func (s *MembershipService) AddMembership(ctx context.Context, actor domain.Acto
 	user, err := s.users.ProvisionUser(ctx, username, name)
 	if err != nil {
 		return AddedOrganizationMembership{}, err
+	}
+	if user.Deactivated {
+		return AddedOrganizationMembership{}, domain.ErrUserDeactivated
 	}
 	membership, err := s.memberships.Create(ctx, NewOrganizationMembership{
 		OrganizationID: orgID,

@@ -21,6 +21,10 @@ type Service interface {
 	SignOut(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, token string) (application.Principal, error)
 	ChangePassword(ctx context.Context, p application.Principal, currentPassword, newPassword string) error
+	ListUsers(ctx context.Context, actor application.Principal, page application.PageRequest) ([]domain.User, int, error)
+	DeactivateUser(ctx context.Context, actor application.Principal, rawUserID string) (domain.User, error)
+	ReactivateUser(ctx context.Context, actor application.Principal, rawUserID string) (domain.User, error)
+	IssueTemporaryPassword(ctx context.Context, actor application.Principal, rawUserID string) (application.IssuedTemporaryPassword, error)
 }
 
 // Handler serves the identity endpoints.
@@ -42,6 +46,10 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	httpx.Route(mux, h.logger, http.MethodDelete, "/api/v1/sessions/current", h.signOut)
 	httpx.Route(mux, h.logger, http.MethodGet, "/api/v1/users/me", h.withSession(h.currentUser))
 	httpx.Route(mux, h.logger, http.MethodPut, "/api/v1/users/me/password", h.withSession(h.changePassword))
+	httpx.Route(mux, h.logger, http.MethodGet, "/api/v1/users", h.Authenticated(h.listUsers))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/users/{user_id}/deactivate", h.Authenticated(h.deactivateUser))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/users/{user_id}/reactivate", h.Authenticated(h.reactivateUser))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/users/{user_id}/temporary-password", h.Authenticated(h.issueTemporaryPassword))
 }
 
 type signInRequest struct {
@@ -104,6 +112,8 @@ type userResponse struct {
 	Name               string          `json:"name"`
 	IsAdministrator    bool            `json:"is_administrator"`
 	MustChangePassword bool            `json:"must_change_password"`
+	DeactivatedAt      *time.Time      `json:"deactivated_at"`
+	CreatedAt          time.Time       `json:"created_at"`
 }
 
 func toUserResponse(u domain.User) userResponse {
@@ -113,5 +123,7 @@ func toUserResponse(u domain.User) userResponse {
 		Name:               u.Name,
 		IsAdministrator:    u.IsAdministrator,
 		MustChangePassword: u.MustChangePassword,
+		DeactivatedAt:      u.DeactivatedAt,
+		CreatedAt:          u.CreatedAt,
 	}
 }

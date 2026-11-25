@@ -1,4 +1,4 @@
-import { KeyRound, LayoutGrid } from 'lucide-react';
+import { KeyRound, LayoutGrid, Users } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import { Link } from 'react-router';
 import { NavMain, type NavMainItem } from '@/components/nav-main';
@@ -14,15 +14,23 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { useCurrentUser, useSignOut } from '@/features/auth';
+import { USERS_PATH } from '@/features/users';
 
 const navMain: NavMainItem[] = [
   { title: 'Home', url: '/', icon: LayoutGrid },
   { title: 'Change password', url: '/change-password', icon: KeyRound },
 ];
 
+const adminNavMain: NavMainItem[] = [
+  { title: 'Home', url: '/', icon: LayoutGrid },
+  { title: 'Users', url: USERS_PATH, icon: Users },
+  { title: 'Change password', url: '/change-password', icon: KeyRound },
+];
+
 export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
   const { data: user } = useCurrentUser();
   const signOut = useSignOut();
+  const items = user?.isAdministrator ? adminNavMain : navMain;
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -44,7 +52,7 @@ export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMain} />
+        <NavMain items={items} />
       </SidebarContent>
       {user && (
         <SidebarFooter>

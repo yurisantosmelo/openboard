@@ -27,13 +27,22 @@ type NewUser struct {
 	IsAdministrator    bool
 }
 
+// PageRequest selects one page from a collection.
+type PageRequest struct {
+	Limit  int
+	Offset int
+}
+
 // UserRepository stores Users.
 type UserRepository interface {
 	Count(ctx context.Context) (int, error)
 	Create(ctx context.Context, user NewUser) (domain.User, error)
 	FindByID(ctx context.Context, id domain.UserID) (domain.User, error)
 	FindByUsername(ctx context.Context, username domain.Username) (domain.User, error)
+	List(ctx context.Context, page PageRequest) ([]domain.User, int, error)
 	UpdatePassword(ctx context.Context, id domain.UserID, passwordHash string, mustChange bool) error
+	Deactivate(ctx context.Context, id domain.UserID, at time.Time) (domain.User, error)
+	Reactivate(ctx context.Context, id domain.UserID) (domain.User, error)
 }
 
 // SessionRepository stores sessions by the SHA-256 digest of their token.
@@ -43,6 +52,13 @@ type SessionRepository interface {
 	Touch(ctx context.Context, id []byte, at time.Time) error
 	Delete(ctx context.Context, id []byte) error
 	DeleteOthers(ctx context.Context, userID domain.UserID, keep []byte) error
+	DeleteAll(ctx context.Context, userID domain.UserID) error
+}
+
+// OwnershipChecker reports whether a User is the sole active Organization Owner
+// of any Organization, preventing deactivation while they are.
+type OwnershipChecker interface {
+	IsSoleOrganizationOwner(ctx context.Context, userID domain.UserID) (bool, error)
 }
 
 // PasswordHasher hashes passwords and checks them against stored hashes.

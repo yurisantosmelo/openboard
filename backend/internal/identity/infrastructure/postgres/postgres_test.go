@@ -136,6 +136,42 @@ func TestUsersUpdatePassword(t *testing.T) {
 	}
 }
 
+func TestUsersList(t *testing.T) {
+	reset(t)
+	ctx := context.Background()
+	users := NewUsers(pool)
+	createUser(t, "gabriel")
+	createUser(t, "admin")
+
+	page, total, err := users.List(ctx, application.PageRequest{Limit: 1, Offset: 0})
+	if err != nil || total != 2 || len(page) != 1 || page[0].Username != "admin" {
+		t.Fatalf("List = %+v, total=%d, err=%v", page, total, err)
+	}
+}
+
+func TestUsersDeactivateAndReactivate(t *testing.T) {
+	reset(t)
+	ctx := context.Background()
+	users := NewUsers(pool)
+	admin := createUser(t, "admin")
+
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	deactivated, err := users.Deactivate(ctx, admin.ID, at)
+	if err != nil || !deactivated.IsDeactivated() || !deactivated.DeactivatedAt.Equal(at) {
+		t.Fatalf("Deactivate = %+v, %v", deactivated, err)
+	}
+	reactivated, err := users.Reactivate(ctx, admin.ID)
+	if err != nil || reactivated.IsDeactivated() {
+		t.Fatalf("Reactivate = %+v, %v", reactivated, err)
+	}
+	if _, err := users.Deactivate(ctx, "00000000-0000-0000-0000-000000000000", at); !errors.Is(err, application.ErrNotFound) {
+		t.Errorf("Deactivate unknown: err = %v", err)
+	}
+	if _, err := users.Reactivate(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, application.ErrNotFound) {
+		t.Errorf("Reactivate unknown: err = %v", err)
+	}
+}
+
 func storedSession(t *testing.T) (domain.Session, time.Time) {
 	t.Helper()
 	reset(t)
@@ -213,6 +249,16 @@ func TestSessionsDeleteOthersKeepsCurrentAndOtherUsers(t *testing.T) {
 			t.Errorf("session %s exists=%v, want %v", token, exists, want)
 		}
 	}
+
+	if err := sessions.DeleteAll(ctx, gabriel.ID); err != nil {
+		t.Fatalf("DeleteAll: %v", err)
+	}
+	for token, want := range map[string]bool{"g1": false, "h1": true} {
+		_, err := sessions.Find(ctx, digest(token))
+		if exists := err == nil; exists != want {
+			t.Errorf("session %s after DeleteAll exists=%v, want %v", token, exists, want)
+		}
+	}
 }
 
 func TestSessionsDatabaseErrors(t *testing.T) {
@@ -243,9 +289,11 @@ func TestClosedPoolErrors(t *testing.T) {
 
 	errs := map[string]error{
 		"count":        func() error { _, err := users.Count(ctx); return err }(),
+		"list":         func() error { _, _, err := users.List(ctx, application.PageRequest{Limit: 10}); return err }(),
 		"find user":    func() error { _, err := users.FindByID(ctx, "x"); return err }(),
 		"find session": func() error { _, err := sessions.Find(ctx, digest("x")); return err }(),
 		"delete":       sessions.Delete(ctx, digest("x")),
+		"delete all":   sessions.DeleteAll(ctx, "x"),
 	}
 	for name, err := range errs {
 		if err == nil || errors.Is(err, application.ErrNotFound) {

@@ -19,4 +19,14 @@ var (
 	ErrUnauthenticated = errors.New("not signed in")
 	// ErrTooManyAttempts reports a Username temporarily blocked after repeated failures.
 	ErrTooManyAttempts = errors.New("too many failed sign-in attempts")
+	// ErrForbidden reports an Actor not allowed to perform an Instance administration action.
+	ErrForbidden = errors.New("not allowed")
+	// ErrUserNotFound reports a User that does not exist.
+	ErrUserNotFound = errors.New("user not found")
+	// ErrCannotDeactivateSelf reports an Administrator trying to deactivate their own User.
+	ErrCannotDeactivateSelf = errors.New("you cannot deactivate yourself")
+	// ErrLastOrganizationOwner reports a User who cannot be Deactivated because they are the last Organization Owner of an Organization.
+	ErrLastOrganizationOwner = errors.New("user is the last organization owner of an organization")
+	// ErrUserDeactivated reports an operation rejected because the target User is Deactivated.
+	ErrUserDeactivated = errors.New("user is deactivated")
 )

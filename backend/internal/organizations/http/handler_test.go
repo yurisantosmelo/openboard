@@ -128,9 +128,10 @@ func TestCreateOrganizationErrors(t *testing.T) {
 		slug   string
 		fields []string
 	}{
-		"forbidden":     {domain.ErrForbidden, http.StatusForbidden, "forbidden", nil},
-		"invalid name":  {domain.ErrInvalidName, http.StatusUnprocessableEntity, "validation-error", []string{"name:invalid"}},
-		"unknown owner": {domain.ErrOwnerNotFound, http.StatusUnprocessableEntity, "validation-error", []string{"owner_user_id:not_found"}},
+		"forbidden":         {domain.ErrForbidden, http.StatusForbidden, "forbidden", nil},
+		"invalid name":      {domain.ErrInvalidName, http.StatusUnprocessableEntity, "validation-error", []string{"name:invalid"}},
+		"unknown owner":     {domain.ErrOwnerNotFound, http.StatusUnprocessableEntity, "validation-error", []string{"owner_user_id:not_found"}},
+		"deactivated owner": {domain.ErrUserDeactivated, http.StatusConflict, "user-deactivated", nil},
 		"both invalid": {errors.Join(domain.ErrInvalidName, domain.ErrInvalidUserID), http.StatusUnprocessableEntity,
 			"validation-error", []string{"name:invalid", "owner_user_id:invalid"}},
 		"internal": {errors.New("store down"), http.StatusInternalServerError, "internal-error", nil},

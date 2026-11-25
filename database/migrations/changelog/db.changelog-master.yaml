@@ -31,6 +31,9 @@ databaseChangeLog:
   - include:
       file: ../tables/20261118110001_create_workspace_memberships_table.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261124220501_add_users_deactivated_at.sql
+      relativeToChangelogFile: true
 
   # 3. constraints
   - include:

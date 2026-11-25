@@ -9,10 +9,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/elyosemite/openboard/backend/internal/identity/application"
+	identitydomain "github.com/elyosemite/openboard/backend/internal/identity/domain"
 	identityhttp "github.com/elyosemite/openboard/backend/internal/identity/http"
 	"github.com/elyosemite/openboard/backend/internal/identity/infrastructure/passwordhash"
 	"github.com/elyosemite/openboard/backend/internal/identity/infrastructure/postgres"
 	"github.com/elyosemite/openboard/backend/internal/identity/infrastructure/throttle"
+	orgdomain "github.com/elyosemite/openboard/backend/internal/organizations/domain"
+	orgpostgres "github.com/elyosemite/openboard/backend/internal/organizations/infrastructure/postgres"
 	"github.com/elyosemite/openboard/backend/internal/platform/config"
 )
 
@@ -27,10 +30,11 @@ const (
 // when the Instance has no Users yet and returns its HTTP handler and service.
 func setupIdentity(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool, cfg config.Config) (*identityhttp.Handler, *application.Service, error) {
 	svc, err := application.NewService(application.Deps{
-		Users:    postgres.NewUsers(pool),
-		Sessions: postgres.NewSessions(pool),
-		Hasher:   passwordhash.New(passwordhash.OWASPParams),
-		Throttle: throttle.NewMemory(signInMaxFailures, signInLockout, time.Now),
+		Users:     postgres.NewUsers(pool),
+		Sessions:  postgres.NewSessions(pool),
+		Hasher:    passwordhash.New(passwordhash.OWASPParams),
+		Throttle:  throttle.NewMemory(signInMaxFailures, signInLockout, time.Now),
+		Ownership: ownershipAdapter{memberships: orgpostgres.NewMemberships(pool)},
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("build identity service: %w", err)
@@ -53,4 +57,12 @@ func logFirstAdministrator(ctx context.Context, logger *slog.Logger, seed applic
 		return
 	}
 	logger.InfoContext(ctx, "first Administrator created", "username", seed.Username)
+}
+
+type ownershipAdapter struct {
+	memberships *orgpostgres.Memberships
+}
+
+func (a ownershipAdapter) IsSoleOrganizationOwner(ctx context.Context, userID identitydomain.UserID) (bool, error) {
+	return a.memberships.IsSoleOwner(ctx, orgdomain.UserID(userID))
 }

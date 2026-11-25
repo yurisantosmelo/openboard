@@ -18,6 +18,8 @@ var (
 	ErrMembershipNotFound = errors.New("organization membership not found")
 	// ErrLastOrganizationOwner reports an attempt to demote or remove an Organization's last Organization Owner.
 	ErrLastOrganizationOwner = errors.New("an organization must keep at least one organization owner")
+	// ErrUserDeactivated reports an attempt to grant a Membership to a Deactivated User.
+	ErrUserDeactivated = errors.New("a deactivated user cannot receive new memberships")
 )
 
 var usernamePattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)

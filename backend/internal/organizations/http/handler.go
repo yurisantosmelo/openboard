@@ -128,7 +128,18 @@ func mapError(err error) error {
 	if errors.Is(err, domain.ErrNotFound) {
 		return httpx.ErrNotFound()
 	}
+	if errors.Is(err, domain.ErrUserDeactivated) {
+		return errUserDeactivated()
+	}
 	return validationOr(err, fieldErrors)
+}
+
+func errUserDeactivated() *httpx.Error {
+	return &httpx.Error{
+		Status: http.StatusConflict,
+		Slug:   "user-deactivated",
+		Title:  "A Deactivated User cannot receive new Memberships",
+	}
 }
 
 // validationOr reports the fields err concerns as a validation problem, or
