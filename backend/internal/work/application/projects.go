@@ -19,15 +19,29 @@ type UpdateProjectInput struct {
 	Name *string
 }
 
+// ProjectMover moves a Project to another Workspace in the same Organization,
+// removing its Project Teams while preserving all Project content (CONTEXT.md).
+type ProjectMover interface {
+	Move(ctx context.Context, id domain.ProjectID, targetWorkspaceID domain.WorkspaceID) (domain.Project, error)
+}
+
 // Service runs the Work Management use cases.
 type Service struct {
 	projects   ProjectRepository
+	mover      ProjectMover
 	workspaces WorkspaceAccessChecker
 }
 
 // NewService builds a Service from its dependencies.
 func NewService(projects ProjectRepository, workspaces WorkspaceAccessChecker) *Service {
-	return &Service{projects: projects, workspaces: workspaces}
+	mover, _ := projects.(ProjectMover)
+	return &Service{projects: projects, mover: mover, workspaces: workspaces}
+}
+
+// WithProjectMover configures a ProjectMover when separate from ProjectRepository.
+func (s *Service) WithProjectMover(m ProjectMover) *Service {
+	s.mover = m
+	return s
 }
 
 // CreateProject creates a Project inside a Workspace the Actor manages, seeded
@@ -114,6 +128,41 @@ func (s *Service) UpdateProject(ctx context.Context, actor domain.Actor, in Upda
 	}
 	updated.ViewerRole = current.ViewerRole
 	return updated, nil
+}
+
+// MoveProject moves a Project to another Workspace of the same Organization,
+// taking all its content and losing its Project Teams (CONTEXT.md).
+func (s *Service) MoveProject(ctx context.Context, actor domain.Actor, rawProjectID, rawTargetWorkspaceID string) (domain.Project, error) {
+	targetWSID, err := domain.ParseWorkspaceRef(rawTargetWorkspaceID)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	current, err := s.projectWithAccess(ctx, actor, rawProjectID)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	if !current.ViewerRole.CanManageProject() {
+		return domain.Project{}, domain.ErrForbidden
+	}
+	targetAccess, err := s.workspaces.Access(ctx, actor, targetWSID)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	if targetAccess.OrganizationID != current.OrganizationID {
+		return domain.Project{}, domain.ErrCrossOrganizationMove
+	}
+	if !targetAccess.Role.CanManageProject() {
+		return domain.Project{}, domain.ErrForbidden
+	}
+	if targetAccess.WorkspaceID == current.WorkspaceID {
+		return current, nil
+	}
+	moved, err := s.mover.Move(ctx, current.ID, targetAccess.WorkspaceID)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	moved.ViewerRole = targetAccess.Role
+	return moved, nil
 }
 
 // ListStatuses returns the Statuses of a Project the Actor can see.
