@@ -5,6 +5,7 @@ import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ApiError, errorMessage } from '../../../shared/api/httpClient';
+import type { Organization } from '../api/organizationsApi';
 import { useCreateOrganization } from '../hooks/useOrganizations';
 import { organizationPath } from '../paths';
 
@@ -18,10 +19,16 @@ function nameErrorOf(error: unknown): string | undefined {
 
 interface CreateOrganizationFormProps {
   onClose: () => void;
+  onCreated?: (organization: Organization) => void;
+  compact?: boolean;
 }
 
 /** Creates an Organization and opens it; the creator becomes its first Organization Owner. */
-export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps) {
+export function CreateOrganizationForm({
+  onClose,
+  onCreated,
+  compact = false,
+}: CreateOrganizationFormProps) {
   const create = useCreateOrganization();
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -32,13 +39,22 @@ export function CreateOrganizationForm({ onClose }: CreateOrganizationFormProps)
     event.preventDefault();
     create.mutate(name, {
       onSuccess: (organization) => {
+        if (onCreated) {
+          onCreated(organization);
+          return;
+        }
+        onClose();
         void navigate(organizationPath(organization.id));
       },
     });
   }
 
   return (
-    <form className="grid gap-4 border-b p-6" aria-label="New Organization" onSubmit={handleSubmit}>
+    <form
+      className={compact ? 'grid gap-4' : 'grid gap-4 border-b p-6'}
+      aria-label="New Organization"
+      onSubmit={handleSubmit}
+    >
       {create.isError && !nameError && (
         <Alert variant="destructive">
           <AlertCircle aria-hidden="true" />
