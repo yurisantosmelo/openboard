@@ -8,4 +8,5 @@ export type {
   ProjectStatus,
   ProjectWorkItemType,
   StatusGroup,
+  TransitionRule,
 } from './api/projectsApi';

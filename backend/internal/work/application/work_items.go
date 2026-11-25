@@ -50,6 +50,7 @@ type WorkItemService struct {
 	items      WorkItemRepository
 	workspaces WorkspaceAccessChecker
 	assignees  AssigneeChecker
+	rules      TransitionRuleReader
 }
 
 // NewWorkItemService builds a WorkItemService from its dependencies.
@@ -65,6 +66,13 @@ func NewWorkItemService(
 		workspaces: workspaces,
 		assignees:  assignees,
 	}
+}
+
+// WithTransitionRules enables enforcement of optional Project Transition Rules
+// when moving a Work Item between Statuses (CONTEXT.md, ADR 0010).
+func (s *WorkItemService) WithTransitionRules(rules TransitionRuleReader) *WorkItemService {
+	s.rules = rules
+	return s
 }
 
 // CreateWorkItem validates and creates a new Work Item inside a Project.
@@ -208,12 +216,29 @@ func (s *WorkItemService) TransitionWorkItem(ctx context.Context, actor domain.A
 	if !hasStatus(statuses, statusID) {
 		return domain.WorkItem{}, domain.ErrInvalidStatus
 	}
+	if err := s.checkTransitionAllowed(ctx, project.ID, current.StatusID, statusID); err != nil {
+		return domain.WorkItem{}, err
+	}
 	updated, err := s.items.UpdateStatus(ctx, current.ID, statusID)
 	if err != nil {
 		return domain.WorkItem{}, err
 	}
 	updated.ViewerRole = project.ViewerRole
 	return updated, nil
+}
+
+func (s *WorkItemService) checkTransitionAllowed(ctx context.Context, projectID domain.ProjectID, from, to domain.StatusID) error {
+	if s.rules == nil {
+		return nil
+	}
+	rules, err := s.rules.ListTransitionRules(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	if !domain.IsTransitionAllowed(rules, from, to) {
+		return domain.ErrTransitionNotAllowed
+	}
+	return nil
 }
 
 // DeleteWorkItem immediately deletes a Work Item. Any Children keep existing

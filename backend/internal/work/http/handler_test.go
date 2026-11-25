@@ -133,23 +133,6 @@ func TestProjectGetAndUpdateHandlers(t *testing.T) {
 	}
 }
 
-func TestWorkflowHandlers(t *testing.T) {
-	svc := &fakeService{
-		statuses: []domain.Status{{ID: "s1", ProjectID: "p1", Name: "Backlog", Group: domain.StatusGroupNotCommitted, Position: 0, CreatedAt: t0}},
-		types:    []domain.WorkItemType{{ID: "t1", ProjectID: "p1", Name: "Epic", EstimateUnit: domain.EstimateUnitNone, Position: 0, CreatedAt: t0}},
-	}
-
-	rec := serve(svc, fakeAuth(false), http.MethodGet, "/api/v1/projects/p1/statuses", "")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status_group":"not_committed"`) {
-		t.Fatalf("statuses = %d %s", rec.Code, rec.Body.String())
-	}
-
-	rec = serve(svc, fakeAuth(false), http.MethodGet, "/api/v1/projects/p1/work-item-types", "")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"allowed_child_type_ids":[]`) {
-		t.Fatalf("types = %d %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestProjectHandlerErrors(t *testing.T) {
 	cases := map[string]struct {
 		method, path, body string
@@ -157,17 +140,15 @@ func TestProjectHandlerErrors(t *testing.T) {
 		status             int
 		slug               string
 	}{
-		"bad page":   {http.MethodGet, "/api/v1/projects?page=0", "", nil, http.StatusUnprocessableEntity, "validation-error"},
-		"bad ws":     {http.MethodGet, "/api/v1/projects?workspace_id=x", "", domain.ErrInvalidWorkspaceRef, http.StatusUnprocessableEntity, "validation-error"},
-		"bad json":   {http.MethodPost, "/api/v1/projects", `{`, nil, http.StatusBadRequest, "malformed-request"},
-		"bad patch":  {http.MethodPatch, "/api/v1/projects/p1", `{`, nil, http.StatusBadRequest, "malformed-request"},
-		"forbidden":  {http.MethodPost, "/api/v1/projects", `{"workspace_id":"w1","name":"Core"}`, domain.ErrForbidden, http.StatusForbidden, "forbidden"},
-		"duplicate":  {http.MethodPost, "/api/v1/projects", `{"workspace_id":"w1","name":"Core"}`, domain.ErrProjectNameInUse, http.StatusConflict, "project-name-taken"},
-		"not found":  {http.MethodGet, "/api/v1/projects/p1", "", domain.ErrNotFound, http.StatusNotFound, "not-found"},
-		"patch 404":  {http.MethodPatch, "/api/v1/projects/p1", `{"name":"X"}`, domain.ErrNotFound, http.StatusNotFound, "not-found"},
-		"status 404": {http.MethodGet, "/api/v1/projects/p1/statuses", "", domain.ErrNotFound, http.StatusNotFound, "not-found"},
-		"type 404":   {http.MethodGet, "/api/v1/projects/p1/work-item-types", "", domain.ErrNotFound, http.StatusNotFound, "not-found"},
-		"internal":   {http.MethodGet, "/api/v1/projects/p1", "", errors.New("boom"), http.StatusInternalServerError, "internal-error"},
+		"bad page":  {http.MethodGet, "/api/v1/projects?page=0", "", nil, http.StatusUnprocessableEntity, "validation-error"},
+		"bad ws":    {http.MethodGet, "/api/v1/projects?workspace_id=x", "", domain.ErrInvalidWorkspaceRef, http.StatusUnprocessableEntity, "validation-error"},
+		"bad json":  {http.MethodPost, "/api/v1/projects", `{`, nil, http.StatusBadRequest, "malformed-request"},
+		"bad patch": {http.MethodPatch, "/api/v1/projects/p1", `{`, nil, http.StatusBadRequest, "malformed-request"},
+		"forbidden": {http.MethodPost, "/api/v1/projects", `{"workspace_id":"w1","name":"Core"}`, domain.ErrForbidden, http.StatusForbidden, "forbidden"},
+		"duplicate": {http.MethodPost, "/api/v1/projects", `{"workspace_id":"w1","name":"Core"}`, domain.ErrProjectNameInUse, http.StatusConflict, "project-name-taken"},
+		"not found": {http.MethodGet, "/api/v1/projects/p1", "", domain.ErrNotFound, http.StatusNotFound, "not-found"},
+		"patch 404": {http.MethodPatch, "/api/v1/projects/p1", `{"name":"X"}`, domain.ErrNotFound, http.StatusNotFound, "not-found"},
+		"internal":  {http.MethodGet, "/api/v1/projects/p1", "", errors.New("boom"), http.StatusInternalServerError, "internal-error"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

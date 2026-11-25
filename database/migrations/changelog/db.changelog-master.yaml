@@ -49,6 +49,9 @@ databaseChangeLog:
   - include:
       file: ../tables/20261125073001_create_work_items_table.sql
       relativeToChangelogFile: true
+  - include:
+      file: ../tables/20261125085001_create_project_transition_rules_table.sql
+      relativeToChangelogFile: true
 
   # 3. constraints
   - include:
@@ -83,6 +86,9 @@ databaseChangeLog:
       relativeToChangelogFile: true
   - include:
       file: ../constraints/20261125073002_add_work_items_constraints.sql
+      relativeToChangelogFile: true
+  - include:
+      file: ../constraints/20261125085002_add_project_transition_rules_constraints.sql
       relativeToChangelogFile: true
 
   # 4. indexes
