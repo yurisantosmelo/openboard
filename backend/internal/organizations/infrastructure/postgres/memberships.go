@@ -141,12 +141,39 @@ func updateMembershipRole(ctx context.Context, tx pgx.Tx, id domain.Organization
 	return m, nil
 }
 
+// IsSoleOwner reports whether userID is the sole active Organization Owner of
+// any Organization.
+func (r *Memberships) IsSoleOwner(ctx context.Context, userID domain.UserID) (bool, error) {
+	var sole bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM organization_memberships m
+			WHERE m.user_id = $1 AND m.role = 'owner'
+			  AND NOT EXISTS (
+				  SELECT 1
+				  FROM organization_memberships other
+				  JOIN users u ON u.id = other.user_id
+				  WHERE other.organization_id = m.organization_id
+				    AND other.role = 'owner'
+				    AND other.user_id <> m.user_id
+				    AND u.deactivated_at IS NULL
+			  )
+		)`, string(userID)).Scan(&sole)
+	if err != nil {
+		return false, fmt.Errorf("check sole organization owner: %w", err)
+	}
+	return sole, nil
+}
+
 func ensureNotLastOwner(ctx context.Context, tx pgx.Tx, id domain.OrganizationID, userID domain.UserID) error {
 	rows, err := tx.Query(ctx, `
-		SELECT user_id::text FROM organization_memberships
-		WHERE organization_id = $1 AND role = 'owner'
-		ORDER BY user_id
-		FOR UPDATE`, string(id))
+		SELECT m.user_id::text
+		FROM organization_memberships m
+		JOIN users u ON u.id = m.user_id
+		WHERE m.organization_id = $1 AND m.role = 'owner' AND u.deactivated_at IS NULL
+		ORDER BY m.user_id
+		FOR UPDATE OF m`, string(id))
 	if err != nil {
 		return fmt.Errorf("lock organization owners: %w", err)
 	}

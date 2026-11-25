@@ -39,18 +39,24 @@ func (r *WorkspaceMemberships) FindWorkspace(ctx context.Context, id domain.Work
 func (r *WorkspaceMemberships) Create(ctx context.Context, n application.NewWorkspaceMembership) (domain.WorkspaceMembership, error) {
 	var created domain.WorkspaceMembership
 	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
-		var userID string
+		var (
+			userID      string
+			deactivated bool
+		)
 		err := tx.QueryRow(ctx, `
-			SELECT m.user_id::text
+			SELECT m.user_id::text, u.deactivated_at IS NOT NULL
 			FROM organization_memberships m
 			JOIN users u ON u.id = m.user_id
 			WHERE m.organization_id = $1 AND u.username = $2`,
-			string(n.OrganizationID), n.Username).Scan(&userID)
+			string(n.OrganizationID), n.Username).Scan(&userID, &deactivated)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.ErrOrganizationMemberNotFound
 		}
 		if err != nil {
 			return fmt.Errorf("find organization member: %w", err)
+		}
+		if deactivated {
+			return domain.ErrUserDeactivated
 		}
 		created, err = insertWorkspaceMembership(ctx, tx, n, userID)
 		return err

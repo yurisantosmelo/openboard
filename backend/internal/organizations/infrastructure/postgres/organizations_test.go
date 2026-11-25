@@ -94,6 +94,21 @@ func TestCreateWithUnknownOwnerStoresNothing(t *testing.T) {
 	}
 }
 
+func TestCreateWithDeactivatedOwnerIsRejected(t *testing.T) {
+	ctx := context.Background()
+	owner := createUser(t, "marina")
+	if _, err := pool.Exec(ctx, `UPDATE users SET deactivated_at = NOW() WHERE id = $1`, string(owner)); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := NewOrganizations(pool).Create(ctx, application.NewOrganization{
+		Name: "Acme", OwnerID: owner, DefaultWorkspaceName: "Default",
+	})
+	if !errors.Is(err, domain.ErrUserDeactivated) {
+		t.Fatalf("err = %v, want ErrUserDeactivated", err)
+	}
+}
+
 func TestCreateReportsOtherFailures(t *testing.T) {
 	createUser(t, "marina")
 	_, err := NewOrganizations(pool).Create(context.Background(), application.NewOrganization{Name: " ", OwnerID: "x"})

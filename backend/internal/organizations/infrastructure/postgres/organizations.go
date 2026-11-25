@@ -40,11 +40,23 @@ func (r *Organizations) Create(ctx context.Context, n application.NewOrganizatio
 }
 
 func insertOrganization(ctx context.Context, tx pgx.Tx, n application.NewOrganization) (domain.Organization, error) {
+	var deactivated bool
+	err := tx.QueryRow(ctx, `SELECT deactivated_at IS NOT NULL FROM users WHERE id = $1`, string(n.OwnerID)).Scan(&deactivated)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Organization{}, domain.ErrOwnerNotFound
+	}
+	if err != nil {
+		return domain.Organization{}, fmt.Errorf("check owner user: %w", err)
+	}
+	if deactivated {
+		return domain.Organization{}, domain.ErrUserDeactivated
+	}
+
 	var (
 		org domain.Organization
 		id  string
 	)
-	err := tx.QueryRow(ctx, `INSERT INTO organizations (name) VALUES ($1) RETURNING id::text, name, created_at`, n.Name).
+	err = tx.QueryRow(ctx, `INSERT INTO organizations (name) VALUES ($1) RETURNING id::text, name, created_at`, n.Name).
 		Scan(&id, &org.Name, &org.CreatedAt)
 	if err != nil {
 		return domain.Organization{}, fmt.Errorf("insert organization: %w", err)
