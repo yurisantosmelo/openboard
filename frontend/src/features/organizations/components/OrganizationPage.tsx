@@ -1,11 +1,13 @@
 import { AlertCircle, Archive, ArrowLeft, Loader2, RotateCcw, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
+import { saveNavigationContext } from '@/app/navigationContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCurrentUser } from '@/features/auth';
 import { errorMessage } from '../../../shared/api/httpClient';
 import type { Organization, Workspace } from '../api/organizationsApi';
 import {
@@ -211,7 +213,17 @@ function DeleteOrganizationCard({ organization }: { organization: Organization }
 
 export function OrganizationPage() {
   const { organizationId = '' } = useParams();
+  const { data: currentUser } = useCurrentUser();
   const organization = useOrganization(organizationId);
+
+  useEffect(() => {
+    if (!organization.data) return;
+    saveNavigationContext({
+      userId: currentUser?.id,
+      organizationId: organization.data.id,
+      organizationName: organization.data.name,
+    });
+  }, [currentUser?.id, organization.data]);
 
   if (organization.isPending) {
     return (
@@ -249,7 +261,10 @@ export function OrganizationPage() {
         </>
       )}
       <div>
-        <Link className={buttonVariants({ variant: 'link', className: 'px-0' })} to="/">
+        <Link
+          className={buttonVariants({ variant: 'link', className: 'px-0' })}
+          to="/organizations"
+        >
           <ArrowLeft className="size-4" aria-hidden="true" />
           All Organizations
         </Link>

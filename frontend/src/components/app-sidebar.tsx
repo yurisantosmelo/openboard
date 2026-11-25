@@ -1,7 +1,8 @@
 import {
-  ArrowLeft,
   BookmarkPlus,
+  Building2,
   Calendar,
+  FolderKanban,
   GanttChart,
   Globe,
   Kanban,
@@ -10,14 +11,24 @@ import {
   LayoutGrid,
   List,
   Lock,
+  Plus,
   Settings,
   Table2,
   Users,
 } from 'lucide-react';
-import type { ComponentProps } from 'react';
-import { Link } from 'react-router';
+import { useState, type ComponentProps } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { clearNavigationContext, saveNavigationContext } from '@/app/navigationContext';
+import { useProjectShell, type ProjectShellState } from '@/app/project-shell-context';
 import { NavMain, type NavMainItem } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Sidebar,
   SidebarContent,
@@ -31,18 +42,22 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { useCurrentUser, useSignOut } from '@/features/auth';
-import { workspacePath } from '@/features/organizations/paths';
+import { organizationPath, workspacePath } from '@/features/organizations/paths';
 import type { ViewLayout } from '@/features/projects';
+import { CreateProjectForm } from '@/features/projects/components/CreateProjectForm';
+import { useProjects } from '@/features/projects/hooks/useProjects';
+import { projectPath } from '@/features/projects/paths';
 import { USERS_PATH } from '@/features/users';
-import { useProjectShell, type ProjectShellState } from '@/app/project-shell-context';
 
 const navMain: NavMainItem[] = [
   { title: 'Home', url: '/', icon: LayoutGrid },
+  { title: 'Organizations', url: '/organizations', icon: Building2 },
   { title: 'Change password', url: '/change-password', icon: KeyRound },
 ];
 
 const adminNavMain: NavMainItem[] = [
   { title: 'Home', url: '/', icon: LayoutGrid },
+  { title: 'Organizations', url: '/organizations', icon: Building2 },
   { title: 'Users', url: USERS_PATH, icon: Users },
   { title: 'Change password', url: '/change-password', icon: KeyRound },
 ];
@@ -64,7 +79,78 @@ function projectInitials(name: string): string {
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
 }
 
-function ProjectSidebarContent({ shell }: { shell: ProjectShellState }) {
+function WorkspaceProjectsGroup({ shell, userId }: { shell: ProjectShellState; userId?: string }) {
+  const navigate = useNavigate();
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const { project } = shell;
+  const projectsQuery = useProjects(project.workspaceId, 1, false);
+  const projects = projectsQuery.data?.items ?? [];
+  const canCreateProject = project.currentUserRole === 'owner' && !project.workspaceArchived;
+
+  return (
+    <>
+      <SidebarGroup>
+        <SidebarGroupLabel>Projects</SidebarGroupLabel>
+        <SidebarMenu>
+          {projects.map((item) => (
+            <SidebarMenuItem key={item.id}>
+              <SidebarMenuButton asChild isActive={item.id === project.id} tooltip={item.name}>
+                <Link to={projectPath(item.id)}>
+                  <FolderKanban aria-hidden="true" />
+                  <span>{item.name}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+          {canCreateProject && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                type="button"
+                tooltip="New Project"
+                onClick={() => {
+                  setNewProjectOpen(true);
+                }}
+              >
+                <Plus aria-hidden="true" />
+                <span>New Project</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+        </SidebarMenu>
+      </SidebarGroup>
+
+      <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Project</DialogTitle>
+            <DialogDescription>
+              Create a Project in this Workspace with a ready-to-use Board and workflow.
+            </DialogDescription>
+          </DialogHeader>
+          <CreateProjectForm
+            compact
+            workspaceId={project.workspaceId}
+            onClose={() => {
+              setNewProjectOpen(false);
+            }}
+            onCreated={(created) => {
+              saveNavigationContext({
+                userId,
+                organizationId: created.organizationId,
+                workspaceId: created.workspaceId,
+                projectId: created.id,
+                projectName: created.name,
+              });
+              void navigate(projectPath(created.id));
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function ProjectSidebarContent({ shell, userId }: { shell: ProjectShellState; userId?: string }) {
   const { project } = shell;
   return (
     <>
@@ -72,7 +158,7 @@ function ProjectSidebarContent({ shell }: { shell: ProjectShellState }) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip={project.name}>
-              <Link to={workspacePath(project.workspaceId)}>
+              <Link to={projectPath(project.id)}>
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground shadow-xs shadow-primary/24">
                   {projectInitials(project.name)}
                 </div>
@@ -165,13 +251,28 @@ function ProjectSidebarContent({ shell }: { shell: ProjectShellState }) {
           </SidebarMenu>
         </SidebarGroup>
 
+        <WorkspaceProjectsGroup shell={shell} userId={userId} />
+
         <SidebarGroup>
-          <SidebarGroupLabel>Project</SidebarGroupLabel>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 type="button"
-                isActive={shell.configOpen}
+                isActive={shell.configOpen && shell.configTab === 'teams'}
+                tooltip="Project Teams"
+                onClick={() => {
+                  shell.onOpenConfigTab('teams');
+                }}
+              >
+                <Users aria-hidden="true" />
+                <span>Teams</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                type="button"
+                isActive={shell.configOpen && shell.configTab !== 'teams'}
                 tooltip="Project settings"
                 onClick={() => {
                   shell.onOpenConfigTab(
@@ -184,10 +285,18 @@ function ProjectSidebarContent({ shell }: { shell: ProjectShellState }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Back to Workspace">
+              <SidebarMenuButton asChild tooltip="Workspace & Teams">
                 <Link to={workspacePath(project.workspaceId)}>
-                  <ArrowLeft aria-hidden="true" />
-                  <span>Back to Workspace</span>
+                  <FolderKanban aria-hidden="true" />
+                  <span>Workspace & Teams</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Organization">
+                <Link to={organizationPath(project.organizationId)}>
+                  <Building2 aria-hidden="true" />
+                  <span>Organization</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -207,7 +316,7 @@ export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       {shell ? (
-        <ProjectSidebarContent shell={shell} />
+        <ProjectSidebarContent shell={shell} userId={user?.id} />
       ) : (
         <SidebarContent className="pt-2">
           <NavMain items={items} />
@@ -218,6 +327,7 @@ export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
           <NavUser
             user={{ name: user.name, username: user.username }}
             onSignOut={() => {
+              clearNavigationContext();
               signOut.mutate();
             }}
           />
