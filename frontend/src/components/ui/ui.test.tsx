@@ -4,6 +4,9 @@ import { AlertCircle } from 'lucide-react';
 import { MemoryRouter } from 'react-router';
 import { FormField } from '../form-field';
 import { NavUser } from '../nav-user';
+import { ThemeToggle } from '../theme-toggle';
+import { cn } from '@/lib/utils';
+import { setThemePreference } from '@/hooks/use-theme';
 import { Alert, AlertDescription } from './alert';
 import { Badge } from './badge';
 import {
@@ -185,5 +188,29 @@ describe('shadcn/ui components', () => {
       return null;
     }
     expect(() => render(<Orphan />)).toThrow('useSidebar must be used within a SidebarProvider.');
+  });
+
+  it('merges compact typography classes with text colors in cn()', () => {
+    expect(cn('text-2xs text-muted-foreground')).toBe('text-2xs text-muted-foreground');
+    expect(cn('text-sm text-3xs')).toBe('text-3xs');
+  });
+
+  it('cycles theme preferences via ThemeToggle and syncs dark class', async () => {
+    const user = userEvent.setup();
+    window.localStorage.removeItem('openboard:theme');
+    setThemePreference('system');
+
+    render(<ThemeToggle />);
+    const button = screen.getByRole('button', { name: /Theme: System/i });
+    await user.click(button);
+    expect(window.localStorage.getItem('openboard:theme')).toBe('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: /Theme: Light/i }));
+    expect(window.localStorage.getItem('openboard:theme')).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: /Theme: Dark/i }));
+    expect(window.localStorage.getItem('openboard:theme')).toBe('system');
   });
 });
