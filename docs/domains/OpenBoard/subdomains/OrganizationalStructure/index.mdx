@@ -1,8 +1,8 @@
 ---
 id: OrganizationalStructure
 name: Organizational Structure
-version: 0.0.1
-summary: Supporting subdomain that defines the tenant boundary and how an Organization divides its work.
+version: 0.2.0
+summary: Supporting subdomain that defines the tenant boundary, Workspaces, Memberships and Organization/Workspace Lifecycle.
 owners:
   - maintainers
 services:
@@ -11,6 +11,7 @@ entities:
   - id: Organization
   - id: Workspace
   - id: OrganizationMembership
+  - id: WorkspaceMembership
 badges:
   - content: Supporting subdomain
     backgroundColor: yellow
@@ -19,9 +20,9 @@ badges:
 
 ## Overview
 
-The [[entity|Organization]] is the tenant: its data never crosses into another Organization (ADR 0003). A [[entity|Workspace]] divides one Organization and can restrict visibility inside it.
+The [[entity|Organization]] is the tenant: its data never crosses into another Organization (ADR 0003). A [[entity|Workspace]] divides one Organization and can restrict visibility inside it. Access is granted through [[entity|OrganizationMembership]] and [[entity|WorkspaceMembership]].
 
-These rules are specific to OpenBoard, but they exist to support the core domain, Work Management. Teams and Projects belong here and have no code yet.
+Workspaces can be Archived (hidden from default lists and read-only, making all of their Projects read-only) and restored intact. Both Organizations and Workspaces support Pending Deletion with a configurable grace period before permanent deletion.
 
 <NodeGraph />
 

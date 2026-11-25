@@ -1,8 +1,8 @@
 ---
 id: IdentityModule
 name: Identity Module
-version: 0.0.1
-summary: Backend module that signs Users in and out, keeps their server-side sessions and manages their passwords.
+version: 0.2.0
+summary: Backend module that signs Users in and out, manages server-side sessions, passwords, User deactivation and Temporary Passwords.
 owners:
   - maintainers
 receives:
@@ -39,5 +39,7 @@ The Identity Module is part of the single backend deployable of [[system|OpenBoa
 - Passwords are stored as Argon2id hashes.
 - A session ends after 7 days without use or 30 days after it started (ADR 0006).
 - While a Temporary Password is pending, the User can only read their own data, change the password or sign out.
+- Only an Administrator can list all Users, deactivate or reactivate a User, or issue a new Temporary Password for an existing User.
+- A User who is the last Organization Owner in any Organization cannot be Deactivated.
 
 The HTTP contract is in the [OpenAPI document](https://github.com/elyosemite/openboard/blob/main/docs/api/openapi.yaml).
