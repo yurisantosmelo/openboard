@@ -52,6 +52,7 @@ func run(ctx context.Context, getenv func(string) string, out io.Writer) error {
 	memberships := setupOrganizationMemberships(logger, pool, identity, identitySvc)
 	workspaces := setupWorkspaces(logger, pool, identity)
 	workspaceMemberships := setupWorkspaceMemberships(logger, pool, identity)
+	work := setupWork(logger, pool, identity)
 
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", cfg.HTTPAddr)
@@ -60,7 +61,7 @@ func run(ctx context.Context, getenv func(string) string, out io.Writer) error {
 	}
 
 	srv := &http.Server{
-		Handler:           newRouter(logger, []module{identity, organizations, memberships, workspaces, workspaceMemberships}, database.Checker{Pool: pool}),
+		Handler:           newRouter(logger, []module{identity, organizations, memberships, workspaces, workspaceMemberships, work}, database.Checker{Pool: pool}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

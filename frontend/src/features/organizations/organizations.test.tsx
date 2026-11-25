@@ -9,6 +9,8 @@ const membershipsUrl = (page = '1') =>
   `GET /api/v1/organizations/${ACME}/memberships?page=${page}&page_size=20`;
 const workspaceMembershipsUrl = (workspaceId = 'w2', page = '1') =>
   `GET /api/v1/workspaces/${workspaceId}/memberships?page=${page}&page_size=20`;
+const projectsUrl = (workspaceId = 'w2', page = '1') =>
+  `GET /api/v1/projects?workspace_id=${workspaceId}&page=${page}&page_size=20`;
 
 const signedIn = { 'GET /api/v1/users/me': Response.json(userDto()) };
 
@@ -388,6 +390,7 @@ describe('Workspace page', () => {
       'GET /api/v1/workspaces/w2': Response.json(
         workspaceDto({ id: 'w2', name: 'Legal', visibility: 'restricted' }),
       ),
+      [projectsUrl()]: pageOf([]),
     });
     renderRoute('/workspaces/w2');
 
@@ -424,6 +427,7 @@ describe('Workspace settings', () => {
     const fetchMock = stubApi({
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(legalDto()),
+      [projectsUrl()]: pageOf([]),
       [workspaceMembershipsUrl()]: pageOf([]),
       ...routes,
     });
@@ -436,6 +440,7 @@ describe('Workspace settings', () => {
     stubApi({
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(legalDto({ current_user_role: role })),
+      [projectsUrl()]: pageOf([]),
     });
     renderRoute('/workspaces/w2');
 
@@ -829,6 +834,7 @@ describe('Workspace Memberships', () => {
   const routes = (role = 'owner', memberships = [workspaceMembershipDto()]) => ({
     ...signedIn,
     'GET /api/v1/workspaces/w2': Response.json(legal(role)),
+    [projectsUrl()]: pageOf([]),
     ...(role === 'owner' && { [workspaceMembershipsUrl()]: pageOf(memberships) }),
   });
 

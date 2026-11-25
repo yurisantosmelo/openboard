@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { errorMessage } from '../../../shared/api/httpClient';
+import { ProjectList } from '../../projects';
 import { useWorkspace } from '../hooks/useOrganizations';
 import { organizationPath } from '../paths';
 import { visibilityLabels } from './visibility';
@@ -62,6 +63,7 @@ export function WorkspacePage() {
           </CardContent>
         </Card>
       </section>
+      <ProjectList workspaceId={workspace.data.id} canCreate={currentUserRole === 'owner'} />
       {currentUserRole === 'owner' && (
         <>
           <WorkspaceMemberships workspaceId={workspace.data.id} />
