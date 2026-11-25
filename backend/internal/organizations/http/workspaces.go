@@ -32,6 +32,15 @@ func NewWorkspaceHandler(svc WorkspaceService, auth Auth, logger *slog.Logger) *
 	return &WorkspaceHandler{svc: svc, auth: auth, logger: logger}
 }
 
+type workspaceLifecycleService interface {
+	ListWorkspacesFiltered(ctx context.Context, actor domain.Actor, rawOrganizationID string, includeArchived bool, page application.PageRequest) ([]domain.Workspace, int, error)
+	ListPendingDeletionWorkspaces(ctx context.Context, actor domain.Actor, rawOrganizationID string, page application.PageRequest) ([]domain.Workspace, int, error)
+	ArchiveWorkspace(ctx context.Context, actor domain.Actor, rawID string) (domain.Workspace, error)
+	UnarchiveWorkspace(ctx context.Context, actor domain.Actor, rawID string) (domain.Workspace, error)
+	DeleteWorkspace(ctx context.Context, actor domain.Actor, rawID string) error
+	RestoreWorkspace(ctx context.Context, actor domain.Actor, rawID string) (domain.Workspace, error)
+}
+
 // Register adds the Workspace routes to mux.
 func (h *WorkspaceHandler) Register(mux *http.ServeMux) {
 	httpx.RouteMethods(mux, h.logger, "/api/v1/workspaces", map[string]httpx.HandlerFunc{
@@ -39,9 +48,13 @@ func (h *WorkspaceHandler) Register(mux *http.ServeMux) {
 		http.MethodPost: h.auth.Authenticated(h.create),
 	})
 	httpx.RouteMethods(mux, h.logger, "/api/v1/workspaces/{workspace_id}", map[string]httpx.HandlerFunc{
-		http.MethodGet:   h.auth.Authenticated(h.get),
-		http.MethodPatch: h.auth.Authenticated(h.update),
+		http.MethodGet:    h.auth.Authenticated(h.get),
+		http.MethodPatch:  h.auth.Authenticated(h.update),
+		http.MethodDelete: h.auth.Authenticated(h.delete),
 	})
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/workspaces/{workspace_id}/archive", h.auth.Authenticated(h.archive))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/workspaces/{workspace_id}/unarchive", h.auth.Authenticated(h.unarchive))
+	httpx.Route(mux, h.logger, http.MethodPost, "/api/v1/workspaces/{workspace_id}/restore", h.auth.Authenticated(h.restore))
 }
 
 func (h *WorkspaceHandler) list(w http.ResponseWriter, r *http.Request) error {
@@ -49,8 +62,10 @@ func (h *WorkspaceHandler) list(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	workspaces, total, err := h.svc.ListWorkspaces(r.Context(), h.auth.Actor(r.Context()), r.URL.Query().Get("organization_id"),
-		application.PageRequest{Limit: q.PageSize, Offset: q.Offset()})
+	page := application.PageRequest{Limit: q.PageSize, Offset: q.Offset()}
+	orgID := r.URL.Query().Get("organization_id")
+	actor := h.auth.Actor(r.Context())
+	workspaces, total, err := h.queryWorkspaces(r, actor, orgID, page)
 	if err != nil {
 		return mapWorkspaceError(err)
 	}
@@ -59,6 +74,70 @@ func (h *WorkspaceHandler) list(w http.ResponseWriter, r *http.Request) error {
 		items = append(items, toWorkspaceResponse(ws))
 	}
 	return httpx.WriteJSON(w, http.StatusOK, httpx.NewPageResponse(items, q, total))
+}
+
+func (h *WorkspaceHandler) queryWorkspaces(r *http.Request, actor domain.Actor, orgID string, page application.PageRequest) ([]domain.Workspace, int, error) {
+	if r.URL.Query().Get("pending_deletion") == "true" {
+		lc, ok := h.svc.(workspaceLifecycleService)
+		if !ok {
+			return nil, 0, domain.ErrWorkspaceNotFound
+		}
+		return lc.ListPendingDeletionWorkspaces(r.Context(), actor, orgID, page)
+	}
+	if r.URL.Query().Get("include_archived") == "true" {
+		if lc, ok := h.svc.(workspaceLifecycleService); ok {
+			return lc.ListWorkspacesFiltered(r.Context(), actor, orgID, true, page)
+		}
+	}
+	return h.svc.ListWorkspaces(r.Context(), actor, orgID, page)
+}
+
+func (h *WorkspaceHandler) archive(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(workspaceLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	ws, err := lc.ArchiveWorkspace(r.Context(), h.auth.Actor(r.Context()), r.PathValue("workspace_id"))
+	if err != nil {
+		return mapWorkspaceError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toWorkspaceResponse(ws))
+}
+
+func (h *WorkspaceHandler) unarchive(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(workspaceLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	ws, err := lc.UnarchiveWorkspace(r.Context(), h.auth.Actor(r.Context()), r.PathValue("workspace_id"))
+	if err != nil {
+		return mapWorkspaceError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toWorkspaceResponse(ws))
+}
+
+func (h *WorkspaceHandler) delete(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(workspaceLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	if err := lc.DeleteWorkspace(r.Context(), h.auth.Actor(r.Context()), r.PathValue("workspace_id")); err != nil {
+		return mapWorkspaceError(err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (h *WorkspaceHandler) restore(w http.ResponseWriter, r *http.Request) error {
+	lc, ok := h.svc.(workspaceLifecycleService)
+	if !ok {
+		return httpx.ErrNotFound()
+	}
+	ws, err := lc.RestoreWorkspace(r.Context(), h.auth.Actor(r.Context()), r.PathValue("workspace_id"))
+	if err != nil {
+		return mapWorkspaceError(err)
+	}
+	return httpx.WriteJSON(w, http.StatusOK, toWorkspaceResponse(ws))
 }
 
 func (h *WorkspaceHandler) get(w http.ResponseWriter, r *http.Request) error {
@@ -117,6 +196,9 @@ type workspaceResponse struct {
 	Visibility      domain.Visibility     `json:"visibility"`
 	CreatedAt       time.Time             `json:"created_at"`
 	UpdatedAt       time.Time             `json:"updated_at"`
+	ArchivedAt      *time.Time            `json:"archived_at,omitempty"`
+	DeletedAt       *time.Time            `json:"deleted_at,omitempty"`
+	PurgeAfter      *time.Time            `json:"purge_after,omitempty"`
 	CurrentUserRole domain.Role           `json:"current_user_role"`
 }
 
@@ -128,6 +210,9 @@ func toWorkspaceResponse(ws domain.Workspace) workspaceResponse {
 		Visibility:      ws.Visibility,
 		CreatedAt:       ws.CreatedAt,
 		UpdatedAt:       ws.UpdatedAt,
+		ArchivedAt:      ws.ArchivedAt,
+		DeletedAt:       ws.DeletedAt,
+		PurgeAfter:      ws.PurgeAfter,
 		CurrentUserRole: ws.ViewerRole,
 	}
 }
@@ -150,6 +235,10 @@ func mapWorkspaceError(err error) error {
 		return httpx.ErrNotFound()
 	case errors.Is(err, domain.ErrWorkspaceNameTaken):
 		return &httpx.Error{Status: http.StatusConflict, Slug: "workspace-name-taken", Title: "Workspace name already in use"}
+	case errors.Is(err, domain.ErrWorkspaceArchived):
+		return &httpx.Error{Status: http.StatusConflict, Slug: "workspace-archived", Title: "Workspace is archived and read-only"}
+	case errors.Is(err, domain.ErrLastActiveWorkspace):
+		return &httpx.Error{Status: http.StatusConflict, Slug: "last-active-workspace", Title: "An Organization must keep at least one active Workspace"}
 	}
 	return validationOr(err, workspaceFieldErrors)
 }
