@@ -1,7 +1,7 @@
 ---
 id: openboard-db
 name: OpenBoard Database
-version: 0.0.1
+version: 0.2.0
 summary: PostgreSQL system of record shared by the backend modules, with every table migrated by Liquibase.
 owners:
   - maintainers
@@ -23,6 +23,19 @@ classification: confidential
 | `organizations` | [[service\|OrganizationsModule]] |
 | `workspaces` | [[service\|OrganizationsModule]] |
 | `organization_memberships` | [[service\|OrganizationsModule]] |
+| `workspace_memberships` | [[service\|OrganizationsModule]] |
+| `projects` | [[service\|WorkModule]] |
+| `project_statuses` | [[service\|WorkModule]] |
+| `project_work_item_types` | [[service\|WorkModule]] |
+| `project_work_item_type_hierarchy` | [[service\|WorkModule]] |
+| `project_transition_rules` | [[service\|WorkModule]] |
+| `work_items` | [[service\|WorkModule]] |
+| `work_item_links` | [[service\|WorkModule]] |
+| `project_eras` | [[service\|WorkModule]] |
+| `project_views` | [[service\|WorkModule]] |
+| `teams` | [[service\|WorkModule]] |
+| `team_assignments` | [[service\|WorkModule]] |
+| `project_teams` | [[service\|WorkModule]] |
 
 ## Access rules
 
