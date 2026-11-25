@@ -20,8 +20,6 @@ type Service interface {
 	ListProjects(ctx context.Context, actor domain.Actor, rawWorkspaceID string, page application.PageRequest) ([]domain.Project, int, error)
 	GetProject(ctx context.Context, actor domain.Actor, rawProjectID string) (domain.Project, error)
 	UpdateProject(ctx context.Context, actor domain.Actor, in application.UpdateProjectInput) (domain.Project, error)
-	ListStatuses(ctx context.Context, actor domain.Actor, rawProjectID string) ([]domain.Status, error)
-	ListWorkItemTypes(ctx context.Context, actor domain.Actor, rawProjectID string) ([]domain.WorkItemType, error)
 }
 
 // Auth authenticates requests and resolves the Actor behind them.
@@ -52,8 +50,6 @@ func (h *Handler) Register(mux *http.ServeMux) {
 		http.MethodGet:   h.auth.Authenticated(h.get),
 		http.MethodPatch: h.auth.Authenticated(h.update),
 	})
-	httpx.Route(mux, h.logger, http.MethodGet, "/api/v1/projects/{project_id}/statuses", h.auth.Authenticated(h.listStatuses))
-	httpx.Route(mux, h.logger, http.MethodGet, "/api/v1/projects/{project_id}/work-item-types", h.auth.Authenticated(h.listWorkItemTypes))
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {

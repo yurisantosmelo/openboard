@@ -62,6 +62,25 @@ func NewWorkflowService(
 	return &WorkflowService{projects: projects, workflow: workflow, workspaces: workspaces}
 }
 
+// ListStatuses returns the Statuses of a Project the Actor can see.
+func (s *WorkflowService) ListStatuses(ctx context.Context, actor domain.Actor, rawProjectID string) ([]domain.Status, error) {
+	project, err := s.projectForViewer(ctx, actor, rawProjectID)
+	if err != nil {
+		return nil, err
+	}
+	return s.projects.ListStatuses(ctx, project.ID)
+}
+
+// ListWorkItemTypes returns the Work Item Types (with hierarchy) of a Project
+// the Actor can see.
+func (s *WorkflowService) ListWorkItemTypes(ctx context.Context, actor domain.Actor, rawProjectID string) ([]domain.WorkItemType, error) {
+	project, err := s.projectForViewer(ctx, actor, rawProjectID)
+	if err != nil {
+		return nil, err
+	}
+	return s.projects.ListWorkItemTypes(ctx, project.ID)
+}
+
 // CreateStatus adds a new Status to a Project managed by actor.
 func (s *WorkflowService) CreateStatus(ctx context.Context, actor domain.Actor, in CreateStatusInput) (domain.Status, error) {
 	project, err := s.projectForOwner(ctx, actor, in.ProjectID)
