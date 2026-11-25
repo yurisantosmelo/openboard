@@ -13,7 +13,7 @@ ALTER TABLE work_items
     ADD CONSTRAINT fk_work_items_project FOREIGN KEY (project_id, organization_id) REFERENCES projects (id, organization_id) ON DELETE CASCADE,
     ADD CONSTRAINT fk_work_items_type FOREIGN KEY (work_item_type_id, project_id) REFERENCES project_work_item_types (id, project_id),
     ADD CONSTRAINT fk_work_items_status FOREIGN KEY (status_id, project_id) REFERENCES project_statuses (id, project_id),
-    ADD CONSTRAINT fk_work_items_parent FOREIGN KEY (parent_id, project_id) REFERENCES work_items (id, project_id) ON DELETE SET NULL,
+    ADD CONSTRAINT fk_work_items_parent FOREIGN KEY (parent_id, project_id) REFERENCES work_items (id, project_id) ON DELETE SET NULL (parent_id),
     ADD CONSTRAINT fk_work_items_assignee FOREIGN KEY (assignee_id) REFERENCES users (id) ON DELETE SET NULL,
     ADD CONSTRAINT fk_work_items_created_by FOREIGN KEY (created_by) REFERENCES users (id),
     ADD CONSTRAINT ck_work_items_title_not_blank CHECK (btrim(title) <> ''),
