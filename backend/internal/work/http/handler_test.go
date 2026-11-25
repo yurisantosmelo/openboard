@@ -60,6 +60,11 @@ func (f *fakeService) UpdateProject(_ context.Context, _ domain.Actor, in applic
 	return f.project, f.err
 }
 
+func (f *fakeService) MoveProject(_ context.Context, _ domain.Actor, id, wsID string) (domain.Project, error) {
+	f.lastID, f.lastWS = id, wsID
+	return f.project, f.err
+}
+
 func (f *fakeService) ListStatuses(_ context.Context, _ domain.Actor, id string) ([]domain.Status, error) {
 	f.lastID = id
 	return f.statuses, f.err
