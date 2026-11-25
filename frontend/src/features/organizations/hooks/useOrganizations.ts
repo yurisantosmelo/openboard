@@ -1,23 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addOrganizationMembership,
+  addWorkspaceMembership,
   createOrganization,
   createWorkspace,
   getOrganization,
   getWorkspace,
   listOrganizationMemberships,
   listOrganizations,
+  listWorkspaceMemberships,
   listWorkspaces,
   removeOrganizationMembership,
+  removeWorkspaceMembership,
   updateOrganizationMembership,
   updateWorkspace,
+  updateWorkspaceMembership,
   type OrganizationRole,
   type WorkspaceChange,
+  type WorkspaceRole,
 } from '../api/organizationsApi';
 
 const workspacesKey = (organizationId: string) => ['workspaces', organizationId] as const;
 const membershipsKey = (organizationId: string) =>
   ['organization-memberships', organizationId] as const;
+const workspaceMembershipsKey = (workspaceId: string) =>
+  ['workspace-memberships', workspaceId] as const;
 
 export function useOrganizations(page: number) {
   return useQuery({
@@ -112,6 +119,49 @@ export function useRemoveOrganizationMembership(organizationId: string) {
         queryClient.invalidateQueries({ queryKey: membershipsKey(organizationId) }),
         queryClient.invalidateQueries({ queryKey: ['organization', organizationId] }),
         queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+      ]),
+  });
+}
+
+export function useWorkspaceMemberships(workspaceId: string, page: number) {
+  return useQuery({
+    queryKey: [...workspaceMembershipsKey(workspaceId), page],
+    queryFn: ({ signal }) => listWorkspaceMemberships(workspaceId, page, signal),
+  });
+}
+
+export function useAddWorkspaceMembership(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: addWorkspaceMembership,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: workspaceMembershipsKey(workspaceId) }),
+  });
+}
+
+export function useUpdateWorkspaceMembership(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: WorkspaceRole }) =>
+      updateWorkspaceMembership(workspaceId, userId, role),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: workspaceMembershipsKey(workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] }),
+        queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
+      ]),
+  });
+}
+
+export function useRemoveWorkspaceMembership(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => removeWorkspaceMembership(workspaceId, userId),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: workspaceMembershipsKey(workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] }),
+        queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
       ]),
   });
 }

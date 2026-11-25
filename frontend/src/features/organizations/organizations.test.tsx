@@ -7,6 +7,8 @@ const organizationsUrl = (page = '1') => `GET /api/v1/organizations?page=${page}
 const workspacesUrl = () => `GET /api/v1/workspaces?organization_id=${ACME}&page=1&page_size=20`;
 const membershipsUrl = (page = '1') =>
   `GET /api/v1/organizations/${ACME}/memberships?page=${page}&page_size=20`;
+const workspaceMembershipsUrl = (workspaceId = 'w2', page = '1') =>
+  `GET /api/v1/workspaces/${workspaceId}/memberships?page=${page}&page_size=20`;
 
 const signedIn = { 'GET /api/v1/users/me': Response.json(userDto()) };
 
@@ -44,6 +46,17 @@ const membershipDto = (overrides: object = {}) => ({
   username: 'admin',
   name: 'Administrator',
   role: 'owner',
+  created_at: '2026-11-17T12:00:00Z',
+  ...overrides,
+});
+
+const workspaceMembershipDto = (overrides: object = {}) => ({
+  workspace_id: 'w2',
+  organization_id: ACME,
+  user_id: 'u2',
+  username: 'ana',
+  name: 'Ana Silva',
+  role: 'viewer',
   created_at: '2026-11-17T12:00:00Z',
   ...overrides,
 });
@@ -411,6 +424,7 @@ describe('Workspace settings', () => {
     const fetchMock = stubApi({
       ...signedIn,
       'GET /api/v1/workspaces/w2': Response.json(legalDto()),
+      [workspaceMembershipsUrl()]: pageOf([]),
       ...routes,
     });
     const rendered = renderRoute('/workspaces/w2');
@@ -794,5 +808,221 @@ describe('Organization Memberships', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'An Organization must keep at least one Organization Owner.',
     );
+  });
+});
+
+describe('Workspace Memberships', () => {
+  const legal = (role = 'owner') =>
+    workspaceDto({
+      id: 'w2',
+      name: 'Legal',
+      visibility: 'restricted',
+      current_user_role: role,
+    });
+
+  const routes = (role = 'owner', memberships = [workspaceMembershipDto()]) => ({
+    ...signedIn,
+    'GET /api/v1/workspaces/w2': Response.json(legal(role)),
+    ...(role === 'owner' && { [workspaceMembershipsUrl()]: pageOf(memberships) }),
+  });
+
+  async function openForm(overrides: Parameters<typeof stubApi>[0] = {}) {
+    const fetchMock = stubApi({ ...routes(), ...overrides });
+    const rendered = renderRoute('/workspaces/w2');
+    await rendered.user.click(await screen.findByRole('button', { name: 'Add person' }));
+    return { fetchMock, ...rendered };
+  }
+
+  it.each(['contributor', 'viewer'])('is not shown to a Workspace %s', async (role) => {
+    stubApi(routes(role));
+    renderRoute('/workspaces/w2');
+
+    await screen.findByRole('heading', { name: 'Legal', level: 1 });
+    expect(
+      screen.queryByRole('heading', { name: 'Workspace Memberships' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('lists Workspace Memberships and moves between pages', async () => {
+    stubApi({
+      ...routes(),
+      [workspaceMembershipsUrl()]: pageOf([workspaceMembershipDto()], 1, 2),
+      [workspaceMembershipsUrl('w2', '2')]: pageOf(
+        [
+          workspaceMembershipDto({
+            user_id: 'u3',
+            username: 'bruno',
+            name: 'Bruno',
+            role: 'contributor',
+          }),
+        ],
+        2,
+        2,
+      ),
+    });
+    const { user } = renderRoute('/workspaces/w2');
+
+    const section = (await screen.findByRole('heading', { name: 'Workspace Memberships' })).closest(
+      'section',
+    ) as HTMLElement;
+    expect(await within(section).findByText('Ana Silva')).toBeInTheDocument();
+    expect(within(section).getByText('@ana')).toBeInTheDocument();
+    expect(
+      within(section).getByRole('button', { name: 'Set Ana Silva as Workspace Viewer' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(within(section).getByRole('button', { name: 'Next' }));
+    expect(await within(section).findByText('Bruno')).toBeInTheDocument();
+  });
+
+  it('adds a User from the Organization and refreshes the list', async () => {
+    const bruno = workspaceMembershipDto({
+      user_id: 'u3',
+      username: 'bruno',
+      name: 'Bruno',
+      role: 'owner',
+    });
+    let added = false;
+    const { fetchMock, user } = await openForm({
+      [workspaceMembershipsUrl()]: () =>
+        pageOf(added ? [workspaceMembershipDto(), bruno] : [workspaceMembershipDto()]),
+      'POST /api/v1/workspaces/w2/memberships': () => {
+        added = true;
+        return Response.json(bruno, { status: 201 });
+      },
+    });
+    const form = screen.getByRole('form', { name: 'Add Workspace Membership' });
+
+    expect(within(form).getByRole('button', { name: 'Workspace Contributor' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.type(within(form).getByLabelText('Username'), 'bruno');
+    await user.click(within(form).getByRole('button', { name: 'Workspace Owner' }));
+    await user.click(within(form).getByRole('button', { name: 'Add person' }));
+
+    expect(await screen.findByText('Bruno')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/w2/memberships',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ username: 'bruno', role: 'owner' }),
+      }),
+    );
+  });
+
+  it.each([
+    [
+      'a User already in the Workspace',
+      problem(409, 'workspace-membership-exists', 'Already belongs'),
+      'This User already belongs to this Workspace.',
+    ],
+    [
+      'a User outside the Organization',
+      problem(422, 'validation-error', 'Validation failed', {
+        errors: [
+          {
+            field: 'username',
+            code: 'not_found',
+            message: 'user does not belong to this organization',
+          },
+        ],
+      }),
+      'user does not belong to this organization',
+    ],
+  ])('shows %s on the Username field', async (_case, reply, message) => {
+    const { user } = await openForm({ 'POST /api/v1/workspaces/w2/memberships': reply });
+    const form = screen.getByRole('form', { name: 'Add Workspace Membership' });
+
+    await user.type(within(form).getByLabelText('Username'), 'carla');
+    await user.click(within(form).getByRole('button', { name: 'Add person' }));
+
+    await waitFor(() => {
+      expect(within(form).getByLabelText('Username')).toHaveAccessibleDescription(message);
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a refused request', problem(403, 'forbidden', 'Not allowed')],
+    ['an unreachable server', undefined],
+  ])('reports %s above the form', async (_case, reply) => {
+    const { user } = await openForm(
+      reply ? { 'POST /api/v1/workspaces/w2/memberships': reply } : {},
+    );
+    const form = screen.getByRole('form', { name: 'Add Workspace Membership' });
+
+    await user.type(within(form).getByLabelText('Username'), 'bruno');
+    await user.click(within(form).getByRole('button', { name: 'Add person' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('closes the form on cancel', async () => {
+    const { user } = await openForm();
+    const form = screen.getByRole('form', { name: 'Add Workspace Membership' });
+
+    await user.click(within(form).getByRole('button', { name: 'Cancel' }));
+
+    expect(
+      screen.queryByRole('form', { name: 'Add Workspace Membership' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('changes a Workspace Membership role and removes a Membership', async () => {
+    let role: 'viewer' | 'owner' = 'viewer';
+    let removed = false;
+    const fetchMock = stubApi({
+      ...routes(),
+      [workspaceMembershipsUrl()]: () => pageOf(removed ? [] : [workspaceMembershipDto({ role })]),
+      'PATCH /api/v1/workspaces/w2/memberships/u2': () => {
+        role = 'owner';
+        return Response.json(workspaceMembershipDto({ role: 'owner' }));
+      },
+      'DELETE /api/v1/workspaces/w2/memberships/u2': () => {
+        removed = true;
+        return new Response(null, { status: 204 });
+      },
+    });
+    const { user } = renderRoute('/workspaces/w2');
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Set Ana Silva as Workspace Owner' }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Set Ana Silva as Workspace Owner' }),
+      ).toHaveAttribute('aria-pressed', 'true');
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/w2/memberships/u2',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ role: 'owner' }) }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Ana Silva')).not.toBeInTheDocument();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/w2/memberships/u2',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('reports role update and remove failures above the list', async () => {
+    stubApi({
+      ...routes(),
+      'PATCH /api/v1/workspaces/w2/memberships/u2': problem(403, 'forbidden', 'Not allowed'),
+      'DELETE /api/v1/workspaces/w2/memberships/u2': problem(404, 'not-found', 'Gone'),
+    });
+    const { user } = renderRoute('/workspaces/w2');
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Set Ana Silva as Workspace Owner' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed.');
+
+    await user.click(screen.getByRole('button', { name: 'Remove Ana Silva' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Gone.');
   });
 });
