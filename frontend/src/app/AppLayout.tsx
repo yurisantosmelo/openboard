@@ -1,51 +1,32 @@
-import { LayoutGrid, Plus, Search, Settings2 } from 'lucide-react';
-import { Link, Outlet, useLocation } from 'react-router';
+import { Building2, LayoutGrid, Plus, Search, Settings2 } from 'lucide-react';
+import { Link, Outlet } from 'react-router';
 import { AppSidebar } from '@/components/app-sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { CurrentUserMenu, useCurrentUser } from '@/features/auth';
-import { USERS_PATH } from '@/features/users';
-import { cn } from '@/lib/utils';
+import { CurrentUserMenu } from '@/features/auth';
 import { ContextSwitchers } from './ContextSwitchers';
 import { useProjectShell } from './project-shell-context';
 import { ProjectShellProvider } from './ProjectShellProvider';
-
-function TopHeaderNav() {
-  const { data: user } = useCurrentUser();
-  const { pathname } = useLocation();
-  const { shell } = useProjectShell();
-
-  if (!shell || !user?.isAdministrator) return null;
-
-  return (
-    <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
-      <Link
-        to={USERS_PATH}
-        className={cn(
-          'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-          pathname === USERS_PATH
-            ? 'bg-primary/10 text-primary'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-        )}
-      >
-        Users
-      </Link>
-    </nav>
-  );
-}
+import { usePortalAccess } from './usePortalAccess';
 
 function AppTopHeader() {
   const { shell } = useProjectShell();
+  const { canAccessPortal } = usePortalAccess();
 
   return (
     <header className="surface-glass sticky top-0 z-30 flex h-[var(--workspace-topbar-height)] w-full shrink-0 items-center justify-between gap-3 border-b border-border px-3 md:px-4">
       <div className="flex min-w-0 items-center gap-1.5">
-        <SidebarTrigger className="-ml-0.5" />
-        <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
+        {shell && (
+          <>
+            <SidebarTrigger className="-ml-0.5" />
+            <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
+          </>
+        )}
         <Link
           to="/"
           className="flex shrink-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm font-semibold tracking-tight hover:bg-accent/60"
@@ -57,7 +38,6 @@ function AppTopHeader() {
         </Link>
         <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
         <ContextSwitchers />
-        <TopHeaderNav />
         {shell?.canCreateWorkItem && (
           <Button
             type="button"
@@ -90,6 +70,17 @@ function AppTopHeader() {
             />
           </div>
         )}
+        {canAccessPortal && (
+          <Link
+            to="/organizations"
+            aria-label="Management Portal"
+            title="Manage Organizations, Workspaces and Projects"
+            className={buttonVariants({ variant: 'ghost', size: 'compact' })}
+          >
+            <Building2 className="size-3.5" aria-hidden="true" />
+            <span className="hidden md:inline">Portal</span>
+          </Link>
+        )}
         <ThemeToggle />
         {shell && (
           <Button
@@ -118,7 +109,9 @@ function AppLayoutFrame() {
     <SidebarProvider className="flex-col">
       <AppTopHeader />
       <div className="flex min-h-0 flex-1">
-        <AppSidebar className="inset-y-auto top-[var(--workspace-topbar-height)] bottom-0 h-[calc(100svh-var(--workspace-topbar-height))]" />
+        {isProjectShell && (
+          <AppSidebar className="inset-y-auto top-[var(--workspace-topbar-height)] bottom-0 h-[calc(100svh-var(--workspace-topbar-height))]" />
+        )}
         <SidebarInset className="min-h-0 min-w-0 flex-1">
           <main
             className={

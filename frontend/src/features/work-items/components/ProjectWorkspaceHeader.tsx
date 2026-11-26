@@ -16,7 +16,6 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router';
 import type { ProjectConfigTab } from '@/app/project-shell-context';
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +28,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { workspacePath } from '@/features/organizations/paths';
 import type {
   Project,
   ProjectEra,
@@ -677,12 +675,7 @@ export function ProjectWorkspaceHeader(props: ProjectWorkspaceHeaderProps) {
           aria-label="Project breadcrumb"
           className="flex items-center gap-1.5 text-xs text-muted-foreground"
         >
-          <Link
-            to={workspacePath(project.workspaceId)}
-            className="hover:text-foreground hover:underline"
-          >
-            Projects
-          </Link>
+          <span>Projects</span>
           <span aria-hidden="true">/</span>
           <span className="truncate font-medium text-foreground">{project.name}</span>
         </nav>
