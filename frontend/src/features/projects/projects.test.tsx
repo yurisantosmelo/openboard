@@ -204,10 +204,8 @@ describe('ProjectPage', () => {
     renderRoute('/projects/p1');
     const breadcrumb = await screen.findByRole('navigation', { name: 'Project breadcrumb' });
     expect(within(breadcrumb).getByText('Core Platform')).toBeInTheDocument();
-    expect(within(breadcrumb).getByRole('link', { name: 'Projects' })).toHaveAttribute(
-      'href',
-      '/workspaces/w2',
-    );
+    expect(within(breadcrumb).getByText('Projects')).toBeInTheDocument();
+    expect(within(breadcrumb).queryByRole('link', { name: 'Projects' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Board', level: 1 })).toBeInTheDocument();
 
     // Open Right Configuration Sidebar -> Workflow tab is active by default
