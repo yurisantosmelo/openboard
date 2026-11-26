@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CreateProjectRequest",
+  "type": "object",
+  "required": ["workspace_id", "name"],
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The active Workspace that will own the Project."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "Trimmed Project name, unique in the Workspace ignoring case."
+    }
+  }
+}

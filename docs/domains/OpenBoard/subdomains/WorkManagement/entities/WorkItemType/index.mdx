@@ -1,0 +1,48 @@
+---
+id: WorkItemType
+name: Work Item Type
+version: 0.1.0
+summary: A customizable kind of Work Item defined by one Project, including its estimate unit and allowed Child types.
+owners:
+  - maintainers
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+    description: Unique identifier of the Work Item Type.
+  - name: project_id
+    type: UUID
+    required: true
+    description: The Project that defines this Work Item Type.
+    references: Project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: name
+    type: string
+    required: true
+    description: Display name, unique within the Project ignoring case.
+  - name: estimate_unit
+    type: string
+    required: true
+    description: Estimate unit accepted by Work Items of this type.
+    enum: ['story_points', 'hours', 'none']
+  - name: position
+    type: integer
+    required: true
+    description: Display ordering of the type in the Project.
+  - name: allowed_child_type_ids
+    type: array
+    required: true
+    description: Work Item Type IDs that may be direct Children of this type.
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the Work Item Type was created.
+---
+
+## Overview
+
+A new Project starts with `Epic`, `Feature`, `User Story`, `Task`, `Bug` and `Subtask`. Removing a Work Item Type requires a replacement Work Item Type in the same Project; incompatible Parent pairs are cleared and incompatible estimate units are discarded.
+
+<EntityPropertiesTable />

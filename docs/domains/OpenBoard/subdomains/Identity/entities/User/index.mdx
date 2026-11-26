@@ -1,7 +1,7 @@
 ---
 id: User
 name: User
-version: 0.0.1
+version: 0.2.0
 summary: A person's identity and credentials, global to the Instance.
 owners:
   - maintainers
@@ -32,6 +32,10 @@ properties:
     type: boolean
     required: true
     description: Whether the User is an Administrator.
+  - name: deactivated_at
+    type: timestamp
+    required: false
+    description: When the User was Deactivated, or null while active.
   - name: created_at
     type: timestamp
     required: true
@@ -44,6 +48,6 @@ properties:
 
 ## Overview
 
-A User exists once per Instance and can hold Organization Memberships in many Organizations.
+A User exists once per Instance and can hold Organization Memberships in many Organizations. A Deactivated User keeps their Memberships and authorship, cannot sign in and cannot receive new Memberships until reactivated by an Administrator.
 
 <EntityPropertiesTable />

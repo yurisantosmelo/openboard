@@ -1,8 +1,8 @@
 ---
 id: subdomain-map
 name: Subdomain Map
-version: 0.0.1
-summary: Classification of the OpenBoard subdomains into core, supporting and generic, showing which ones already have code.
+version: 0.2.0
+summary: Classification of the OpenBoard subdomains into core, supporting and generic, showing which ones have code.
 owners:
   - maintainers
 ---
@@ -10,19 +10,19 @@ owners:
 ```mermaid
 flowchart TB
   subgraph core["Core domain"]
-    WM["Work Management (planned)<br/>Work Items, Links, Eras, Modules, Workflow Engine"]
+    WM["Work Management (implemented in part)<br/>Projects, Work Items, Links, Eras, Views, Teams, Workflow Engine (Modules planned)"]
   end
 
   subgraph supporting["Supporting subdomains"]
-    OS["Organizational Structure (implemented in part)<br/>Organizations, Workspaces, Teams, Projects"]
-    AC["Access (planned)<br/>Memberships, roles, RBAC"]
-    WI["Work Insights (planned)<br/>Views, Analytics"]
+    OS["Organizational Structure (implemented)<br/>Organizations, Workspaces, Memberships, Lifecycle"]
+    AC["Access (implemented in part)<br/>Memberships, Workspace roles (RBAC planned)"]
+    WI["Work Insights (implemented in part)<br/>Saved Views and Layouts (Analytics planned)"]
     KN["Knowledge (planned)<br/>Pages"]
     AU["Automations (planned)"]
   end
 
   subgraph generic["Generic subdomains"]
-    ID["Identity (implemented in part)<br/>Users, passwords, sessions"]
+    ID["Identity (implemented)<br/>Users, passwords, sessions, deactivation"]
     NO["Notifications (planned)"]
     AL["Audit Logs (planned)"]
     IN["Integrations (planned)"]

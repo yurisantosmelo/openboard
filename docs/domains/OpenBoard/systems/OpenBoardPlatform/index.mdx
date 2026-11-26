@@ -1,7 +1,7 @@
 ---
 id: OpenBoardPlatform
 name: OpenBoard Platform
-version: 0.0.1
+version: 0.2.0
 summary: The Modular Monolith that runs OpenBoard, made of one backend deployable, the web application and one PostgreSQL database.
 scope: internal
 owners:
@@ -9,17 +9,18 @@ owners:
 services:
   - id: IdentityModule
   - id: OrganizationsModule
+  - id: WorkModule
   - id: WebApp
 containers:
   - id: openboard-db
 actors:
   - id: user
     name: User
-    label: signs in and works in Organizations
+    label: signs in and works in Organizations and Projects
     direction: inbound
   - id: administrator
     name: Administrator
-    label: manages the Instance and creates Organizations
+    label: manages the Instance, Users and Organizations
     direction: inbound
 repository:
   language: Go
@@ -28,7 +29,7 @@ repository:
 
 ## Overview
 
-OpenBoard Platform ships the backend as a single deployable. [[service|IdentityModule]] and [[service|OrganizationsModule]] are modules of that deployable: they keep separate boundaries and call each other in process, never over the network.
+OpenBoard Platform ships the backend as a single deployable. [[service|IdentityModule]], [[service|OrganizationsModule]] and [[service|WorkModule]] are modules of that deployable: they keep separate boundaries and call each other in process through injected ports, never importing another module's internals.
 
 ## Context
 
@@ -40,7 +41,8 @@ OpenBoard Platform ships the backend as a single deployable. [[service|IdentityM
 
 | Component | Type | Responsibility |
 |-----------|------|----------------|
-| [[service\|IdentityModule]] | Backend module | Users, passwords and sessions |
-| [[service\|OrganizationsModule]] | Backend module | Organizations, their Default Workspace and Organization Memberships |
-| [[service\|WebApp]] | Web application | The React interface |
-| [[container\|openboard-db]] | Data store | The system of record |
+| [[service\|IdentityModule]] | Backend module | Users, passwords, sessions, deactivation and Temporary Passwords |
+| [[service\|OrganizationsModule]] | Backend module | Organizations, Workspaces, Organization and Workspace Memberships and Lifecycle |
+| [[service\|WorkModule]] | Backend module | Projects, Workflow Engine, Work Items, Links, Eras, Saved Views, Teams and Project Lifecycle |
+| [[service\|WebApp]] | Web application | The React and TypeScript interface |
+| [[container\|openboard-db]] | Data store | The PostgreSQL system of record |

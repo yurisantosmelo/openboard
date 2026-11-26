@@ -1,8 +1,8 @@
 ---
 id: OrganizationsModule
 name: Organizations Module
-version: 0.0.1
-summary: Backend module that creates Organizations with their Default Workspace and first Organization Owner, and lists those a User can see.
+version: 0.2.0
+summary: Backend module that manages Organizations, Workspaces, Organization and Workspace Memberships and their Lifecycle.
 owners:
   - maintainers
 receives:
@@ -17,6 +17,7 @@ entities:
   - id: Organization
   - id: Workspace
   - id: OrganizationMembership
+  - id: WorkspaceMembership
 badges:
   - content: Module
     backgroundColor: blue
@@ -28,7 +29,7 @@ repository:
 
 ## Overview
 
-The Organizations Module is part of the single backend deployable of [[system|OpenBoardPlatform]]. It owns the `organizations`, `workspaces` and `organization_memberships` tables in [[container|openboard-db]].
+The Organizations Module is part of the single backend deployable of [[system|OpenBoardPlatform]]. It owns the `organizations`, `workspaces`, `organization_memberships` and `workspace_memberships` tables in [[container|openboard-db]].
 
 Authentication comes from [[service|IdentityModule]], injected when the application starts, so neither module imports the other.
 
@@ -38,8 +39,11 @@ Authentication comes from [[service|IdentityModule]], injected when the applicat
 
 ## Rules
 
-- Only Administrators create Organizations.
+- Only Administrators create Organizations and restore Organizations from Pending Deletion.
 - Administrators see every Organization (ADR 0009); other Users see only those they hold an Organization Membership in.
-- An Organization the User cannot see answers as if it did not exist (ADR 0003).
+- An Organization the User cannot see (or that is in Pending Deletion) answers as if it did not exist (ADR 0003).
+- An Organization always keeps at least one Organization Owner and at least one non-Archived, non-Deleted Workspace.
+- Archiving a Workspace hides it from default lists (`include_archived=true` opts in) and makes the Workspace and all of its Projects read-only until unarchived.
+- Deleting an Organization or Workspace places it into Pending Deletion for `OPENBOARD_DELETION_GRACE_PERIOD` (default 30 days) before background purge.
 
 The HTTP contract is in the [OpenAPI document](https://github.com/elyosemite/openboard/blob/main/docs/api/openapi.yaml).

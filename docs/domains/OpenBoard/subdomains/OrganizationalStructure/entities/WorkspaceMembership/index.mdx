@@ -1,0 +1,47 @@
+---
+id: WorkspaceMembership
+name: Workspace Membership
+version: 0.2.0
+summary: The link that places a User in one Workspace, granting entry when restricted and a role inside it.
+owners:
+  - maintainers
+properties:
+  - name: workspace_id
+    type: UUID
+    required: true
+    description: The Workspace the Membership applies to.
+    references: Workspace
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: organization_id
+    type: UUID
+    required: true
+    description: The Organization that owns the Workspace.
+    references: Organization
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: user_id
+    type: UUID
+    required: true
+    description: The User who holds the Workspace Membership.
+    references: User
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: role
+    type: string
+    required: true
+    description: Workspace Owner, Workspace Contributor or Workspace Viewer.
+    enum: ['owner', 'contributor', 'viewer']
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the Workspace Membership was granted.
+---
+
+## Overview
+
+A Workspace Membership exists only while the same User holds an Organization Membership in that Workspace's Organization; removing the Organization Membership automatically removes every Workspace Membership in that Organization.
+
+Organization Owners and Administrators act as Workspace Owner in every Workspace without needing a Workspace Membership.
+
+<EntityPropertiesTable />

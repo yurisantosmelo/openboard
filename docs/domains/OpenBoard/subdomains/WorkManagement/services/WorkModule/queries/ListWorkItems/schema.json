@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ListWorkItemsQuery",
+  "type": "object",
+  "properties": {
+    "status_id": { "type": "string", "format": "uuid" },
+    "work_item_type_id": { "type": "string", "format": "uuid" },
+    "priority": { "type": "string", "enum": ["urgent", "high", "medium", "low", "none"] },
+    "assignee_id": { "type": "string", "format": "uuid" },
+    "era_id": { "type": "string", "format": "uuid" },
+    "page": { "type": "integer", "minimum": 1, "default": 1 },
+    "page_size": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+  }
+}

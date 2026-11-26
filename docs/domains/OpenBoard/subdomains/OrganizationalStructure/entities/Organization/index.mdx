@@ -1,7 +1,7 @@
 ---
 id: Organization
 name: Organization
-version: 0.0.1
+version: 0.2.0
 summary: The tenant, the outermost boundary of data, administration and access.
 owners:
   - maintainers
@@ -16,6 +16,14 @@ properties:
     type: string
     required: true
     description: Display name with 1 to 255 characters, never blank.
+  - name: deleted_at
+    type: timestamp
+    required: false
+    description: When the Organization entered Pending Deletion, or null while active.
+  - name: purge_after
+    type: timestamp
+    required: false
+    description: When a Pending Deletion Organization becomes eligible for permanent deletion.
   - name: created_at
     type: timestamp
     required: true
@@ -28,6 +36,6 @@ properties:
 
 ## Overview
 
-Every Organization is created with its Default Workspace and a first Organization Owner, in one transaction.
+Every Organization is created with its Default Workspace and a first Organization Owner, in one transaction. Deleting an Organization places it in Pending Deletion (invisible and inaccessible until an Administrator restores it before `purge_after` or it is permanently purged).
 
 <EntityPropertiesTable />

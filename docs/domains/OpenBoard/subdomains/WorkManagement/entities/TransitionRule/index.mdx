@@ -1,0 +1,40 @@
+---
+id: TransitionRule
+name: Transition Rule
+version: 0.1.0
+summary: An optional Project rule allowing a transition from one Status to another when rules are configured for the source Status.
+owners:
+  - maintainers
+properties:
+  - name: project_id
+    type: UUID
+    required: true
+    description: The Project that owns the rule.
+    references: Project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: from_status_id
+    type: UUID
+    required: true
+    description: Source Status of the transition.
+    references: Status
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: to_status_id
+    type: UUID
+    required: true
+    description: Allowed destination Status.
+    references: Status
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the rule was added.
+---
+
+## Overview
+
+Work Items move freely between any two Statuses of their Project unless Transition Rules exist for the source Status, in which case only the explicitly configured target Statuses are permitted.
+
+<EntityPropertiesTable />

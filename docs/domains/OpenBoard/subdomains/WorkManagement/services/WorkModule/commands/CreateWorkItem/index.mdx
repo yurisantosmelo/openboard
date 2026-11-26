@@ -1,0 +1,23 @@
+---
+id: CreateWorkItem
+name: Create Work Item
+version: 0.1.0
+summary: Creates a Work Item inside a Project, validating its type, Status, Parent hierarchy, Era, Assignee and estimate unit.
+owners:
+  - maintainers
+schemaPath: schema.json
+operation:
+  method: POST
+  path: /api/v1/projects/{project_id}/work-items
+  statusCodes: ['201', '400', '401', '403', '404', '405', '409', '415', '422']
+---
+
+## Overview
+
+Workspace Owners and Workspace Contributors can create a [[entity|WorkItem]] inside an active [[entity|Project]]. Blocked with `409 Conflict` when the Project or its Workspace is Archived.
+
+<NodeGraph />
+
+## Schema
+
+<SchemaViewer file="schema.json" />

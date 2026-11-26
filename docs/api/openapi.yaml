@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpenBoard API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Authoritative contract of the OpenBoard HTTP API (see api.md).
     Domain resources live under /api/v1. Operational probes live at the root
@@ -27,11 +27,25 @@ tags:
   - name: sessions
     description: Signing in and out.
   - name: users
-    description: The signed-in User.
+    description: The signed-in User and Instance-level User administration.
   - name: organizations
     description: Organizations, the tenants of the Instance (ADR 0003).
   - name: workspaces
     description: Workspaces, the divisions inside one Organization.
+  - name: projects
+    description: Projects, their Lifecycle and moving between Workspaces.
+  - name: workflow
+    description: Per-Project Statuses, Work Item Types, hierarchy and Transition Rules.
+  - name: work-items
+    description: Work Items and Status transitions inside a Project.
+  - name: links
+    description: Non-hierarchical Links between Work Items of the same Project.
+  - name: eras
+    description: Non-overlapping time-boxed Eras of a Project.
+  - name: views
+    description: Personal and Shared Saved Views of a Project.
+  - name: teams
+    description: Workspace Teams, Team Assignments and Project Teams (ADR 0005).
 paths:
   /healthz:
     get:
@@ -229,6 +243,113 @@ paths:
                   - field: new_password
                     code: weak
                     message: use at least 12 characters
+  /api/v1/users:
+    get:
+      tags: [users]
+      operationId: listUsers
+      summary: List Users in the Instance
+      description: Lists all Users ordered by name and Username. Administrators only.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: One page of Users.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "422":
+          $ref: "#/components/responses/InvalidPage"
+  /api/v1/users/{user_id}/deactivate:
+    post:
+      tags: [users]
+      operationId: deactivateUser
+      summary: Deactivate a User
+      description: |
+        Deactivates a User and ends all of their sessions. Administrators only.
+        Fails with 409 if the User is the last Organization Owner of any Organization.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: The Deactivated User.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/users/{user_id}/reactivate:
+    post:
+      tags: [users]
+      operationId: reactivateUser
+      summary: Reactivate a Deactivated User
+      description: Restores sign-in access for a Deactivated User. Administrators only.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: The reactivated User.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/users/{user_id}/temporary-password:
+    post:
+      tags: [users]
+      operationId: issueTemporaryPassword
+      summary: Issue a Temporary Password for an existing User
+      description: |
+        Generates a new Temporary Password, marks the User as requiring a password
+        change on next sign-in and ends their active sessions. Administrators only.
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: The User and the generated Temporary Password (shown once).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedTemporaryPassword"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/v1/organizations:
     get:
       tags: [organizations]
@@ -237,10 +358,13 @@ paths:
       description: |
         Lists the Organizations the signed-in User can see, ordered by name
         ignoring case: every Organization for an Administrator (ADR 0009),
-        otherwise those the User holds an Organization Membership in.
+        otherwise those the User holds an Organization Membership in. Pass
+        `pending_deletion=true` (Administrators only) to list Organizations in
+        Pending Deletion.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/PendingDeletion"
       responses:
         "200":
           description: One page of Organizations.
@@ -370,6 +494,59 @@ paths:
                 title: Resource not found
                 status: 404
                 instance: /api/v1/organizations/0b5e3c1a-9f2d-4e6b-8a7c-1d2e3f4a5b6c
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    delete:
+      tags: [organizations]
+      operationId: deleteOrganization
+      summary: Place an Organization into Pending Deletion
+      description: |
+        Places the Organization into Pending Deletion for the Instance grace period.
+        Only Organization Owners and Administrators can delete an Organization.
+      parameters:
+        - name: organization_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Organization placed in Pending Deletion.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/organizations/{organization_id}/restore:
+    post:
+      tags: [organizations]
+      operationId: restoreOrganization
+      summary: Restore an Organization from Pending Deletion
+      description: Restores a Pending Deletion Organization within its grace period. Administrators only.
+      parameters:
+        - name: organization_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The restored Organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
   /api/v1/organizations/{organization_id}/memberships:
@@ -641,10 +818,10 @@ paths:
       operationId: listWorkspaces
       summary: List the Workspaces of an Organization
       description: |
-        Lists the Workspaces the signed-in User can enter in one Organization,
-        ordered by name ignoring case. Administrators and Organization Owners
-        see all of them. Other Users see Open Workspaces and those they hold a
-        Workspace Membership in.
+        Lists the active Workspaces the signed-in User can enter in one Organization,
+        ordered by name ignoring case. Pass `include_archived=true` to include Archived
+        Workspaces, or `pending_deletion=true` (Organization Owners and Administrators)
+        to list Workspaces in Pending Deletion.
       parameters:
         - name: organization_id
           in: query
@@ -652,6 +829,8 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/IncludeArchived"
+        - $ref: "#/components/parameters/PendingDeletion"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -856,6 +1035,101 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+    delete:
+      tags: [workspaces]
+      operationId: deleteWorkspace
+      summary: Place a Workspace into Pending Deletion
+      description: |
+        Places a Workspace into Pending Deletion for the Instance grace period.
+        Fails with 409 (`last-active-workspace`) if it is the Organization's last active Workspace.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "204":
+          description: Workspace placed in Pending Deletion.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspaces/{workspace_id}/archive:
+    post:
+      tags: [workspaces]
+      operationId: archiveWorkspace
+      summary: Archive a Workspace
+      description: |
+        Marks the Workspace Archived (hidden from default lists and read-only, along with all of its Projects).
+        Fails with 409 (`last-active-workspace`) if it is the Organization's last active Workspace.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: The Archived Workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspaces/{workspace_id}/unarchive:
+    post:
+      tags: [workspaces]
+      operationId: unarchiveWorkspace
+      summary: Restore an Archived Workspace
+      description: Restores an Archived Workspace and its Projects intact.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: The active Workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/workspaces/{workspace_id}/restore:
+    post:
+      tags: [workspaces]
+      operationId: restoreWorkspace
+      summary: Restore a Workspace from Pending Deletion
+      description: Restores a Pending Deletion Workspace within its grace period. Organization Owners and Administrators only.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: The restored Workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/v1/workspaces/{workspace_id}/memberships:
     get:
       tags: [workspaces]
@@ -1095,6 +1369,1542 @@ paths:
                 $ref: "#/components/schemas/Problem"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/projects:
+    get:
+      tags: [projects]
+      operationId: listProjects
+      summary: List Projects of a Workspace
+      description: |
+        Lists active Projects inside a Workspace ordered by name. Pass `include_archived=true`
+        to include Archived Projects, or `pending_deletion=true` (Organization Owners and
+        Administrators) to list Projects in Pending Deletion.
+      parameters:
+        - name: workspace_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IncludeArchived"
+        - $ref: "#/components/parameters/PendingDeletion"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: One page of Projects.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Project"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      tags: [projects]
+      operationId: createProject
+      summary: Create a Project
+      description: |
+        Creates a Project in a Workspace and seeds its default Statuses, Work Item Types and
+        hierarchy. Only Workspace Owners (including Organization Owners and Administrators) can create Projects.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Project created.
+          headers:
+            Location:
+              description: The created Project.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}:
+    get:
+      tags: [projects]
+      operationId: getProject
+      summary: Get a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: The Project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    patch:
+      tags: [projects]
+      operationId: updateProject
+      summary: Rename a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Updated Project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [projects]
+      operationId: deleteProject
+      summary: Place a Project into Pending Deletion
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "204":
+          description: Project placed in Pending Deletion.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/projects/{project_id}/move:
+    post:
+      tags: [projects]
+      operationId: moveProject
+      summary: Move a Project to another Workspace in the same Organization
+      description: Moves the Project and its content to another active Workspace of the same Organization, dropping its Project Teams.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveProjectRequest"
+      responses:
+        "200":
+          description: Moved Project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/archive:
+    post:
+      tags: [projects]
+      operationId: archiveProject
+      summary: Archive a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Archived Project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/projects/{project_id}/unarchive:
+    post:
+      tags: [projects]
+      operationId: unarchiveProject
+      summary: Restore an Archived Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Active Project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/projects/{project_id}/restore:
+    post:
+      tags: [projects]
+      operationId: restoreProject
+      summary: Restore a Project from Pending Deletion
+      description: Restores a Pending Deletion Project within its grace period. Organization Owners and Administrators only.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Restored Project.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/projects/{project_id}/statuses:
+    get:
+      tags: [workflow]
+      operationId: listProjectStatuses
+      summary: List Statuses of a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Ordered list of Statuses.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Status"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [workflow]
+      operationId: createProjectStatus
+      summary: Create a Status in a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStatusRequest"
+      responses:
+        "201":
+          description: Created Status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/statuses/{status_id}:
+    patch:
+      tags: [workflow]
+      operationId: updateProjectStatus
+      summary: Update a Project Status
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/StatusId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStatusRequest"
+      responses:
+        "200":
+          description: Updated Status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [workflow]
+      operationId: deleteProjectStatus
+      summary: Delete a Project Status and reassign its Work Items
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/StatusId"
+        - name: replacement_status_id
+          in: query
+          required: true
+          description: Replacement Status in the same Project that receives existing Work Items.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Status deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/work-item-types:
+    get:
+      tags: [workflow]
+      operationId: listProjectWorkItemTypes
+      summary: List Work Item Types of a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Ordered list of Work Item Types with allowed Child types.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkItemType"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [workflow]
+      operationId: createProjectWorkItemType
+      summary: Create a Work Item Type in a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkItemTypeRequest"
+      responses:
+        "201":
+          description: Created Work Item Type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkItemType"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/work-item-types/{type_id}:
+    patch:
+      tags: [workflow]
+      operationId: updateProjectWorkItemType
+      summary: Update a Project Work Item Type
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/WorkItemTypeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkItemTypeRequest"
+      responses:
+        "200":
+          description: Updated Work Item Type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkItemType"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [workflow]
+      operationId: deleteProjectWorkItemType
+      summary: Delete a Work Item Type and reassign its Work Items
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/WorkItemTypeId"
+        - name: replacement_type_id
+          in: query
+          required: true
+          description: Replacement Work Item Type in the same Project.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Work Item Type deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/transition-rules:
+    get:
+      tags: [workflow]
+      operationId: listProjectTransitionRules
+      summary: List Transition Rules of a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Configured Transition Rules.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TransitionRule"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [workflow]
+      operationId: addProjectTransitionRule
+      summary: Add a Transition Rule to a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTransitionRuleRequest"
+      responses:
+        "201":
+          description: Transition Rule added.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransitionRule"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/transition-rules/{from_status_id}/{to_status_id}:
+    delete:
+      tags: [workflow]
+      operationId: removeProjectTransitionRule
+      summary: Remove a Transition Rule from a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: from_status_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: to_status_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Transition Rule removed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/projects/{project_id}/work-items:
+    get:
+      tags: [work-items]
+      operationId: listWorkItems
+      summary: List Work Items of a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: status_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: work_item_type_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: priority
+          in: query
+          schema:
+            $ref: "#/components/schemas/Priority"
+        - name: assignee_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: era_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: One page of Work Items.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/WorkItem"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      tags: [work-items]
+      operationId: createWorkItem
+      summary: Create a Work Item in a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkItemRequest"
+      responses:
+        "201":
+          description: Created Work Item.
+          headers:
+            Location:
+              description: The created Work Item.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkItem"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/work-items/{work_item_id}:
+    get:
+      tags: [work-items]
+      operationId: getWorkItem
+      summary: Get a Work Item
+      parameters:
+        - $ref: "#/components/parameters/WorkItemId"
+      responses:
+        "200":
+          description: The Work Item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkItem"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    patch:
+      tags: [work-items]
+      operationId: updateWorkItem
+      summary: Update a Work Item
+      parameters:
+        - $ref: "#/components/parameters/WorkItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkItemRequest"
+      responses:
+        "200":
+          description: Updated Work Item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkItem"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [work-items]
+      operationId: deleteWorkItem
+      summary: Permanently delete a Work Item
+      description: Deleting a Work Item is immediate and final; Children lose their Parent and Links are removed.
+      parameters:
+        - $ref: "#/components/parameters/WorkItemId"
+      responses:
+        "204":
+          description: Work Item deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/work-items/{work_item_id}/transitions:
+    post:
+      tags: [work-items]
+      operationId: transitionWorkItem
+      summary: Transition a Work Item to another Status
+      parameters:
+        - $ref: "#/components/parameters/WorkItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransitionWorkItemRequest"
+      responses:
+        "200":
+          description: Work Item in its new Status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkItem"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/work-items/{work_item_id}/links:
+    get:
+      tags: [links]
+      operationId: listWorkItemLinks
+      summary: List Links of a Work Item
+      parameters:
+        - $ref: "#/components/parameters/WorkItemId"
+      responses:
+        "200":
+          description: Links involving the Work Item.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkItemLink"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [links]
+      operationId: createWorkItemLink
+      summary: Create a Link between two Work Items
+      parameters:
+        - $ref: "#/components/parameters/WorkItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkItemLinkRequest"
+      responses:
+        "201":
+          description: Created Link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkItemLink"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/work-items/{work_item_id}/links/{link_id}:
+    delete:
+      tags: [links]
+      operationId: deleteWorkItemLink
+      summary: Delete a Work Item Link
+      parameters:
+        - $ref: "#/components/parameters/WorkItemId"
+        - name: link_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Link deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/projects/{project_id}/eras:
+    get:
+      tags: [eras]
+      operationId: listProjectEras
+      summary: List Eras of a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Eras ordered by start date.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Era"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [eras]
+      operationId: createProjectEra
+      summary: Create a Planned Era in a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEraRequest"
+      responses:
+        "201":
+          description: Created Era.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Era"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/eras/{era_id}:
+    patch:
+      tags: [eras]
+      operationId: updateProjectEra
+      summary: Update a Project Era
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/EraId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEraRequest"
+      responses:
+        "200":
+          description: Updated Era.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Era"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [eras]
+      operationId: deleteProjectEra
+      summary: Delete a Project Era
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/EraId"
+      responses:
+        "204":
+          description: Era deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/projects/{project_id}/eras/{era_id}/start:
+    post:
+      tags: [eras]
+      operationId: startProjectEra
+      summary: Start a Planned Era
+      description: Marks a Planned Era as the Project's single Active Era.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/EraId"
+      responses:
+        "200":
+          description: Started Era.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Era"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/projects/{project_id}/eras/{era_id}/close:
+    post:
+      tags: [eras]
+      operationId: closeProjectEra
+      summary: Close an Active Era
+      description: Explicitly closes the Active Era, optionally rolling unfinished Work Items into a Planned `next_era_id`.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/EraId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseEraRequest"
+      responses:
+        "200":
+          description: Completed Era.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Era"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/views:
+    get:
+      tags: [views]
+      operationId: listProjectViews
+      summary: List Saved Views of a Project
+      description: Returns Shared Views of the Project plus Personal Views created by the signed-in User.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Visible Views of the Project.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/View"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [views]
+      operationId: createProjectView
+      summary: Create a Personal View in a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateViewRequest"
+      responses:
+        "201":
+          description: Created View.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/views/{view_id}:
+    get:
+      tags: [views]
+      operationId: getProjectView
+      summary: Get a Saved View
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ViewId"
+      responses:
+        "200":
+          description: The Saved View.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    patch:
+      tags: [views]
+      operationId: updateProjectView
+      summary: Update a Saved View
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ViewId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateViewRequest"
+      responses:
+        "200":
+          description: Updated View.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [views]
+      operationId: deleteProjectView
+      summary: Delete a Saved View
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ViewId"
+      responses:
+        "204":
+          description: View deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspaces/{workspace_id}/teams:
+    get:
+      tags: [teams]
+      operationId: listWorkspaceTeams
+      summary: List Teams of a Workspace
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Teams of the Workspace.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Team"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [teams]
+      operationId: createWorkspaceTeam
+      summary: Create a Team in a Workspace
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamNameRequest"
+      responses:
+        "201":
+          description: Created Team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/workspaces/{workspace_id}/teams/{team_id}:
+    patch:
+      tags: [teams]
+      operationId: renameWorkspaceTeam
+      summary: Rename a Workspace Team
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/TeamId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamNameRequest"
+      responses:
+        "200":
+          description: Renamed Team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [teams]
+      operationId: deleteWorkspaceTeam
+      summary: Delete a Workspace Team
+      description: Removes the Team, its Team Assignments and its Project Team associations without deleting Projects.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "204":
+          description: Team deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspaces/{workspace_id}/teams/{team_id}/assignments:
+    get:
+      tags: [teams]
+      operationId: listTeamAssignments
+      summary: List Team Assignments
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Users assigned to the Team.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TeamAssignment"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [teams]
+      operationId: addTeamAssignment
+      summary: Assign a User to a Team
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/TeamId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTeamAssignmentRequest"
+      responses:
+        "201":
+          description: Team Assignment created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamAssignment"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/workspaces/{workspace_id}/teams/{team_id}/assignments/{user_id}:
+    delete:
+      tags: [teams]
+      operationId: removeTeamAssignment
+      summary: Remove a User from a Team
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/TeamId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Team Assignment removed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/projects/{project_id}/teams:
+    get:
+      tags: [teams]
+      operationId: listProjectTeams
+      summary: List Teams associated with a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Teams associated with the Project.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Team"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    post:
+      tags: [teams]
+      operationId: addProjectTeam
+      summary: Associate a Workspace Team with a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddProjectTeamRequest"
+      responses:
+        "201":
+          description: Project Team associated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /api/v1/projects/{project_id}/teams/{team_id}:
+    delete:
+      tags: [teams]
+      operationId: removeProjectTeam
+      summary: Dissociate a Team from a Project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "204":
+          description: Project Team removed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenOrPasswordChange"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          $ref: "#/components/responses/Conflict"
 components:
   parameters:
     Page:
@@ -1114,6 +2924,83 @@ components:
         minimum: 1
         maximum: 100
         default: 20
+    IncludeArchived:
+      name: include_archived
+      in: query
+      description: Include Archived records when `true`.
+      schema:
+        type: boolean
+        default: false
+    PendingDeletion:
+      name: pending_deletion
+      in: query
+      description: List Pending Deletion records instead of active ones when `true`.
+      schema:
+        type: boolean
+        default: false
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StatusId:
+      name: status_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    WorkItemTypeId:
+      name: type_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    WorkItemId:
+      name: work_item_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EraId:
+      name: era_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ViewId:
+      name: view_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TeamId:
+      name: team_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   securitySchemes:
     sessionCookie:
       type: apiKey
@@ -1147,6 +3034,12 @@ components:
           example: Acme
         created_at:
           type: string
+          format: date-time
+        deleted_at:
+          type: [string, "null"]
+          format: date-time
+        purge_after:
+          type: [string, "null"]
           format: date-time
         current_user_role:
           type: string
@@ -1260,6 +3153,15 @@ components:
         updated_at:
           type: string
           format: date-time
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        deleted_at:
+          type: [string, "null"]
+          format: date-time
+        purge_after:
+          type: [string, "null"]
+          format: date-time
         current_user_role:
           type: string
           enum: [owner, contributor, viewer]
@@ -1336,7 +3238,7 @@ components:
           maxLength: 128
     User:
       type: object
-      required: [id, username, name, is_administrator, must_change_password]
+      required: [id, username, name, is_administrator, must_change_password, deactivated_at, created_at]
       properties:
         id:
           type: string
@@ -1354,6 +3256,580 @@ components:
         must_change_password:
           type: boolean
           description: Whether a Temporary Password is pending.
+        deactivated_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    IssuedTemporaryPassword:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [temporary_password]
+          properties:
+            temporary_password:
+              type: string
+              description: Generated Temporary Password shown once.
+    CreateProjectRequest:
+      type: object
+      required: [workspace_id, name]
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+    MoveProjectRequest:
+      type: object
+      required: [workspace_id]
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+    Project:
+      type: object
+      required: [id, organization_id, workspace_id, name, created_at, updated_at, archived_at, workspace_archived, is_read_only, current_user_role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        workspace_archived:
+          type: boolean
+        is_read_only:
+          type: boolean
+        deleted_at:
+          type: [string, "null"]
+          format: date-time
+        purge_after:
+          type: [string, "null"]
+          format: date-time
+        current_user_role:
+          type: string
+          enum: [owner, contributor, viewer]
+    StatusGroup:
+      type: string
+      enum: [not_committed, planned, started, completed]
+    EstimateUnit:
+      type: string
+      enum: [story_points, hours, none]
+    Priority:
+      type: string
+      enum: [urgent, high, medium, low, none]
+    Status:
+      type: object
+      required: [id, project_id, name, status_group, position, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status_group:
+          $ref: "#/components/schemas/StatusGroup"
+        position:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    CreateStatusRequest:
+      type: object
+      required: [name, status_group]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        status_group:
+          $ref: "#/components/schemas/StatusGroup"
+        position:
+          type: integer
+          minimum: 0
+    UpdateStatusRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        status_group:
+          $ref: "#/components/schemas/StatusGroup"
+        position:
+          type: integer
+          minimum: 0
+    WorkItemType:
+      type: object
+      required: [id, project_id, name, estimate_unit, position, allowed_child_type_ids, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        estimate_unit:
+          $ref: "#/components/schemas/EstimateUnit"
+        position:
+          type: integer
+        allowed_child_type_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        created_at:
+          type: string
+          format: date-time
+    CreateWorkItemTypeRequest:
+      type: object
+      required: [name, estimate_unit]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        estimate_unit:
+          $ref: "#/components/schemas/EstimateUnit"
+        position:
+          type: integer
+          minimum: 0
+        allowed_child_type_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    UpdateWorkItemTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        estimate_unit:
+          $ref: "#/components/schemas/EstimateUnit"
+        position:
+          type: integer
+          minimum: 0
+        allowed_child_type_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    TransitionRule:
+      type: object
+      required: [project_id, from_status_id, to_status_id, created_at]
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        from_status_id:
+          type: string
+          format: uuid
+        to_status_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+    AddTransitionRuleRequest:
+      type: object
+      required: [from_status_id, to_status_id]
+      properties:
+        from_status_id:
+          type: string
+          format: uuid
+        to_status_id:
+          type: string
+          format: uuid
+    CreateWorkItemRequest:
+      type: object
+      required: [work_item_type_id, title]
+      properties:
+        work_item_type_id:
+          type: string
+          format: uuid
+        status_id:
+          type: [string, "null"]
+          format: uuid
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        era_id:
+          type: [string, "null"]
+          format: uuid
+        assignee_id:
+          type: [string, "null"]
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        priority:
+          $ref: "#/components/schemas/Priority"
+        story_points:
+          type: [number, "null"]
+          minimum: 0
+        hours:
+          type: [number, "null"]
+          minimum: 0
+    UpdateWorkItemRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        priority:
+          $ref: "#/components/schemas/Priority"
+        work_item_type_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        era_id:
+          type: [string, "null"]
+          format: uuid
+        assignee_id:
+          type: [string, "null"]
+          format: uuid
+        story_points:
+          type: [number, "null"]
+          minimum: 0
+        hours:
+          type: [number, "null"]
+          minimum: 0
+    TransitionWorkItemRequest:
+      type: object
+      required: [status_id]
+      properties:
+        status_id:
+          type: string
+          format: uuid
+    WorkItem:
+      type: object
+      required: [id, organization_id, project_id, work_item_type_id, status_id, parent_id, era_id, assignee_id, title, description, priority, story_points, hours, created_by, created_at, updated_at, current_user_role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        work_item_type_id:
+          type: string
+          format: uuid
+        status_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        era_id:
+          type: [string, "null"]
+          format: uuid
+        assignee_id:
+          type: [string, "null"]
+          format: uuid
+        assignee_username:
+          type: string
+        assignee_name:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        priority:
+          $ref: "#/components/schemas/Priority"
+        story_points:
+          type: [number, "null"]
+        hours:
+          type: [number, "null"]
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        current_user_role:
+          type: string
+          enum: [owner, contributor, viewer]
+    CreateWorkItemLinkRequest:
+      type: object
+      required: [target_work_item_id, kind]
+      properties:
+        target_work_item_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [blocks, duplicates, relates_to]
+    WorkItemLink:
+      type: object
+      required: [id, project_id, source_work_item_id, source_title, target_work_item_id, target_title, kind, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        source_work_item_id:
+          type: string
+          format: uuid
+        source_title:
+          type: string
+        target_work_item_id:
+          type: string
+          format: uuid
+        target_title:
+          type: string
+        kind:
+          type: string
+          enum: [blocks, duplicates, relates_to]
+        created_at:
+          type: string
+          format: date-time
+    CreateEraRequest:
+      type: object
+      required: [name, start_date, end_date]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        goal:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+    UpdateEraRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        goal:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+    CloseEraRequest:
+      type: object
+      properties:
+        next_era_id:
+          type: [string, "null"]
+          format: uuid
+    Era:
+      type: object
+      required: [id, project_id, name, goal, start_date, end_date, state, closed_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        goal:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        state:
+          type: string
+          enum: [planned, active, completed]
+        closed_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ViewFilters:
+      type: object
+      properties:
+        status_id:
+          type: string
+          format: uuid
+        work_item_type_id:
+          type: string
+          format: uuid
+        priority:
+          $ref: "#/components/schemas/Priority"
+        assignee_id:
+          type: string
+          format: uuid
+        era_id:
+          type: string
+          format: uuid
+    CreateViewRequest:
+      type: object
+      required: [name, layout]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        layout:
+          type: string
+          enum: [board, list, table, timeline, calendar]
+        filters:
+          $ref: "#/components/schemas/ViewFilters"
+    UpdateViewRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        layout:
+          type: string
+          enum: [board, list, table, timeline, calendar]
+        visibility:
+          type: string
+          enum: [personal, shared]
+        filters:
+          $ref: "#/components/schemas/ViewFilters"
+    View:
+      type: object
+      required: [id, project_id, name, layout, visibility, filters, created_by, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        layout:
+          type: string
+          enum: [board, list, table, timeline, calendar]
+        visibility:
+          type: string
+          enum: [personal, shared]
+        filters:
+          $ref: "#/components/schemas/ViewFilters"
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TeamNameRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+    Team:
+      type: object
+      required: [id, workspace_id, name, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AddTeamAssignmentRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+    TeamAssignment:
+      type: object
+      required: [team_id, user_id, username, name, created_at]
+      properties:
+        team_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AddProjectTeamRequest:
+      type: object
+      required: [team_id]
+      properties:
+        team_id:
+          type: string
+          format: uuid
     Page:
       type: object
       description: Pagination fields of every collection response; `items` holds the records.
@@ -1478,6 +3954,30 @@ components:
           schema:
             type: string
           example: GET, HEAD
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ForbiddenOrPasswordChange:
+      description: Not allowed (`forbidden`), pending Temporary Password (`password-change-required`), or cross-origin request (`cross-origin-request`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource does not exist, is in Pending Deletion, or cannot be seen by the signed-in User.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Domain conflict (duplicate name, read-only Archived resource, forbidden Status transition, overlapping Era, or last active Workspace invariant).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ValidationError:
+      description: Request parameters or body failed validation.
       content:
         application/problem+json:
           schema:

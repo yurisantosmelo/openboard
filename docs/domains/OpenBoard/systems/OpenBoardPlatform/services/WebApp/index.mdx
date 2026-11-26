@@ -1,8 +1,8 @@
 ---
 id: WebApp
 name: Web App
-version: 0.0.1
-summary: React and TypeScript interface of OpenBoard, which today covers signing in, signing out, changing the password, creating Organizations and browsing, creating and editing Workspaces.
+version: 0.2.0
+summary: React and TypeScript interface covering authentication, User administration, Organizations, Workspaces, Teams, Projects, Workflows, Work Items, Links, Eras, Views and Lifecycle.
 owners:
   - maintainers
 sends:
@@ -10,6 +10,14 @@ sends:
   - id: SignOut
   - id: ChangePassword
   - id: GetCurrentUser
+  - id: CreateOrganization
+  - id: ListOrganizations
+  - id: GetOrganization
+  - id: CreateProject
+  - id: ListProjects
+  - id: CreateWorkItem
+  - id: ListWorkItems
+  - id: TransitionWorkItem
 repository:
   language: TypeScript
   url: https://github.com/elyosemite/openboard/tree/main/frontend
@@ -17,7 +25,9 @@ repository:
 
 ## Overview
 
-The Web App talks to the backend over the HTTP API. Its authentication feature calls [[service|IdentityModule]], and its Organizations feature calls [[service|OrganizationsModule]].
+The Web App talks to the backend over the HTTP API. It lands signed-in Users directly on their active Project Board with header switchers for Organizations and Workspaces, drag-and-drop Status transitions, a two-column Work Item creation modal, customizable workflow configuration, Eras, Links, Saved Views, Teams and Lifecycle management.
+
+Its features communicate with [[service|IdentityModule]], [[service|OrganizationsModule]] and [[service|WorkModule]].
 
 <NodeGraph />
 

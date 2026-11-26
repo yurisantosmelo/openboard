@@ -1,13 +1,14 @@
 ---
 id: OpenBoard
 name: OpenBoard
-version: 0.0.1
+version: 0.2.0
 summary: Open source, self-hosted project management platform where Organizations plan, execute and track their work.
 owners:
   - maintainers
 domains:
-  - id: Identity
+  - id: WorkManagement
   - id: OrganizationalStructure
+  - id: Identity
 systems:
   - id: OpenBoardPlatform
 diagrams:
@@ -19,15 +20,15 @@ repository:
 
 ## Overview
 
-OpenBoard is organized by Domain-Driven Design subdomains. This catalog documents the subdomains that already have code, and [[diagram|subdomain-map]] shows the complete classification, including what is still planned.
+OpenBoard is organized by Domain-Driven Design subdomains. This catalog documents the subdomains that have code, and [[diagram|subdomain-map]] shows the complete classification, including what is still planned.
 
 | Subdomain | Type | Status |
 |-----------|------|--------|
-| Work Management | Core | Planned |
-| [[domain\|OrganizationalStructure]] | Supporting | Implemented in part |
-| [[domain\|Identity]] | Generic | Implemented in part |
+| [[domain\|WorkManagement]] | Core | Implemented in part |
+| [[domain\|OrganizationalStructure]] | Supporting | Implemented |
+| [[domain\|Identity]] | Generic | Implemented |
 
-Work Management is the core domain: it is the reason the product exists, and it has no code yet.
+[[domain|WorkManagement]] is the core domain (ADR 0010): Projects, customizable Statuses and Work Item Types, Transition Rules, Work Items, Links, Eras, Saved Views, Teams and Lifecycle (`Archived` and `Pending Deletion`). Modules remain planned.
 
 ## Architecture
 

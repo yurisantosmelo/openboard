@@ -1,0 +1,38 @@
+---
+id: WorkManagement
+name: Work Management
+version: 0.1.0
+summary: Core domain where Workspaces organize Projects, customizable workflows, Work Items, Links, Eras, Saved Views and Teams.
+owners:
+  - maintainers
+services:
+  - id: WorkModule
+entities:
+  - id: Project
+  - id: WorkItem
+  - id: Status
+  - id: WorkItemType
+  - id: TransitionRule
+  - id: WorkItemLink
+  - id: Era
+  - id: View
+  - id: Team
+  - id: TeamAssignment
+  - id: ProjectTeam
+badges:
+  - content: Core domain
+    backgroundColor: green
+    textColor: green
+---
+
+## Overview
+
+Work Management is the core domain of OpenBoard (ADR 0010). Every [[entity|Project]] belongs to one [[entity|Workspace]] and defines its own [[entity|Status]] list, [[entity|WorkItemType]] hierarchy and optional [[entity|TransitionRule]] constraints while remaining comparable across Projects through the four fixed Status Groups (`not_committed`, `planned`, `started`, `completed`).
+
+Teams organize responsibility inside a Workspace without controlling access (ADR 0005), and can be associated with Projects as [[entity|ProjectTeam]] records. Moving a Project to another Workspace of the same Organization preserves its Work Items and workflow while dropping its Project Teams.
+
+<NodeGraph />
+
+## Entities
+
+<EntityMap />

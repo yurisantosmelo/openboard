@@ -1,0 +1,58 @@
+---
+id: WorkModule
+name: Work Module
+version: 0.1.0
+summary: Backend core module managing Projects, customizable workflows, Work Items, Links, Eras, Saved Views, Teams and Project Lifecycle.
+owners:
+  - maintainers
+receives:
+  - id: CreateProject
+  - id: ListProjects
+  - id: CreateWorkItem
+  - id: ListWorkItems
+  - id: TransitionWorkItem
+readsFrom:
+  - id: openboard-db
+writesTo:
+  - id: openboard-db
+entities:
+  - id: Project
+  - id: WorkItem
+  - id: Status
+  - id: WorkItemType
+  - id: TransitionRule
+  - id: WorkItemLink
+  - id: Era
+  - id: View
+  - id: Team
+  - id: TeamAssignment
+  - id: ProjectTeam
+badges:
+  - content: Module
+    backgroundColor: blue
+    textColor: blue
+repository:
+  language: Go
+  url: https://github.com/elyosemite/openboard/tree/main/backend/internal/work
+---
+
+## Overview
+
+The Work Module is the core domain module inside [[system|OpenBoardPlatform]] (`backend/internal/work`). It owns `projects`, `project_statuses`, `project_work_item_types`, `project_work_item_type_hierarchy`, `project_transition_rules`, `work_items`, `work_item_links`, `project_eras`, `project_views`, `teams`, `team_assignments` and `project_teams` in [[container|openboard-db]].
+
+Authentication comes from [[service|IdentityModule]] and Workspace access resolution comes from [[service|OrganizationsModule]], both injected via narrow ports in `cmd/api`.
+
+<NodeGraph />
+
+<MessageTable format="all" />
+
+## Rules
+
+- Only Workspace Owners (including Organization Owners and Administrators) create, rename, move, archive, delete or customize Projects and manage Workspace Teams.
+- Archived Projects and Projects inside an Archived Workspace are strictly read-only (`409 Conflict` / `project-read-only`).
+- Deleting a Project places it in Pending Deletion (restorable by an Organization Owner or Administrator until `purge_after`); deleting a Work Item is immediate and final.
+- Work Items move freely between Statuses unless Transition Rules are configured for the source Status.
+- Removing a Status or Work Item Type requires naming a replacement in the same Project; a Project always keeps at least one `not_committed` Status and one `completed` Status.
+- Eras never overlap in time, at most one Era is Active per Project, and closing an Era is always explicit.
+
+The full HTTP contract is in the [OpenAPI document](https://github.com/elyosemite/openboard/blob/main/docs/api/openapi.yaml).

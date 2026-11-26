@@ -1,0 +1,23 @@
+---
+id: ListWorkItems
+name: List Work Items
+version: 0.1.0
+summary: Lists paginated Work Items of a Project with optional filters by Status, Work Item Type, Priority, Assignee and Era.
+owners:
+  - maintainers
+schemaPath: schema.json
+operation:
+  method: GET
+  path: /api/v1/projects/{project_id}/work-items
+  statusCodes: ['200', '401', '403', '404', '405', '422']
+---
+
+## Overview
+
+Returns a page of [[entity|WorkItem]] records belonging to one [[entity|Project]].
+
+<NodeGraph />
+
+## Schema
+
+<SchemaViewer file="schema.json" />

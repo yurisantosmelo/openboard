@@ -1,0 +1,60 @@
+---
+id: Era
+name: Era
+version: 0.1.0
+summary: A non-overlapping time-boxed cycle of one Project with a start date, end date and goals.
+owners:
+  - maintainers
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+    description: Unique identifier of the Era.
+  - name: project_id
+    type: UUID
+    required: true
+    description: The Project the Era belongs to.
+    references: Project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: name
+    type: string
+    required: true
+    description: Display name of the Era.
+  - name: goal
+    type: string
+    required: true
+    description: Objective for the cycle (may be empty).
+  - name: start_date
+    type: string
+    required: true
+    description: ISO date (`YYYY-MM-DD`) when the Era begins.
+  - name: end_date
+    type: string
+    required: true
+    description: ISO date (`YYYY-MM-DD`) when the Era ends (`end_date >= start_date`).
+  - name: state
+    type: string
+    required: true
+    description: Lifecycle state of the Era.
+    enum: ['planned', 'active', 'completed']
+  - name: closed_at
+    type: timestamp
+    required: false
+    description: When the Era was manually closed, or null until completed.
+  - name: created_at
+    type: timestamp
+    required: true
+    description: When the Era was created.
+  - name: updated_at
+    type: timestamp
+    required: true
+    description: When the Era last changed.
+---
+
+## Overview
+
+Eras of one Project never overlap in time, and a Project has at most one Active Era at once. Closing an Active Era is explicit (never automatic by date) and moves unfinished Work Items either to a chosen next Planned Era or out of Eras altogether without altering their Status.
+
+<EntityPropertiesTable />
