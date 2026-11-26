@@ -1,4 +1,5 @@
 import { LogOut } from 'lucide-react';
+import { clearNavigationContext } from '@/app/navigationContext';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser, useSignOut } from '../hooks/useAuth';
 
@@ -19,6 +20,7 @@ export function CurrentUserMenu() {
         disabled={signOut.isPending}
         aria-busy={signOut.isPending || undefined}
         onClick={() => {
+          clearNavigationContext();
           signOut.mutate();
         }}
       >
