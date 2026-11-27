@@ -159,7 +159,7 @@ function usePaletteQueries(projectId: string, workspaceId: string) {
 }
 
 function usePaletteData() {
-  const { shell } = useProjectShell();
+  const { shell, openWorkItem } = useProjectShell();
   const { data: user } = useCurrentUser();
   const projectId = shell ? shell.project.id : '';
   const workspaceId = shell ? shell.project.workspaceId : '';
@@ -168,6 +168,7 @@ function usePaletteData() {
 
   return {
     shell,
+    openWorkItem,
     user,
     items: queries.items,
     statuses: queries.statuses,
@@ -612,6 +613,10 @@ function CommandPaletteDialogBody({
 
   function handleOpenWorkItem(item: WorkItem) {
     onClose();
+    if (data.openWorkItem) {
+      data.openWorkItem(item.id);
+      return;
+    }
     void navigate(workItemPath(item.id));
   }
 
@@ -684,7 +689,7 @@ function CommandPaletteDialogBody({
           onCreateWorkItem: handleCreateWorkItem,
         });
       }}
-      className="fixed top-[52px] left-1/2 z-50 flex max-h-[min(560px,calc(100svh-68px))] w-[calc(100%-2rem)] max-w-[760px] -translate-x-1/2 flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-card outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+      className="fixed top-[52px] left-1/2 z-[51] flex max-h-[min(560px,calc(100svh-68px))] w-[calc(100%-2rem)] max-w-[760px] -translate-x-1/2 flex-col overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-card outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
     >
       <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
       <DialogPrimitive.Description className="sr-only">

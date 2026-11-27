@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
-import { useState, type KeyboardEvent, type SubmitEvent } from 'react';
+import { useState, type KeyboardEvent, type MouseEvent, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,35 @@ export interface LayoutViewProps {
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
   onQuickCreate?: (statusId: string, title: string) => Promise<void>;
+  onOpenWorkItem?: (workItemId: string) => void;
+}
+
+function isPlainLeftClick(event: MouseEvent): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+function WorkItemTitleLink({
+  item,
+  className,
+  onOpenWorkItem,
+}: {
+  item: WorkItem;
+  className: string;
+  onOpenWorkItem?: (workItemId: string) => void;
+}) {
+  return (
+    <Link
+      to={workItemPath(item.id)}
+      onClick={(event) => {
+        if (!onOpenWorkItem || !isPlainLeftClick(event)) return;
+        event.preventDefault();
+        onOpenWorkItem(item.id);
+      }}
+      className={className}
+    >
+      {item.title}
+    </Link>
+  );
 }
 
 const quietRowSelectClass =
@@ -136,6 +165,7 @@ interface ListRowProps {
   busy: boolean;
   onToggleSelect: (id: string) => void;
   onTransition: (workItemId: string, statusId: string) => void;
+  onOpenWorkItem?: (workItemId: string) => void;
 }
 
 function ListRow({
@@ -150,6 +180,7 @@ function ListRow({
   busy,
   onToggleSelect,
   onTransition,
+  onOpenWorkItem,
 }: ListRowProps) {
   const estimate = formatEstimate(item);
   return (
@@ -177,12 +208,11 @@ function ListRow({
           className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
           aria-hidden="true"
         />
-        <Link
-          to={workItemPath(item.id)}
+        <WorkItemTitleLink
+          item={item}
+          onOpenWorkItem={onOpenWorkItem}
           className="truncate text-sm font-medium text-foreground hover:underline focus-visible:underline"
-        >
-          {item.title}
-        </Link>
+        />
         {eraName && <Tag tone="info">{eraName}</Tag>}
       </div>
 
@@ -341,6 +371,7 @@ interface ListGroupProps {
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
   onQuickCreate?: (statusId: string, title: string) => Promise<void>;
+  onOpenWorkItem?: (workItemId: string) => void;
 }
 
 interface ListStatusGroupHeaderProps {
@@ -418,6 +449,7 @@ function ListStatusGroup({
   onTransition,
   onStartCreate,
   onQuickCreate,
+  onOpenWorkItem,
 }: ListGroupProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -477,6 +509,7 @@ function ListStatusGroup({
               busy={busy}
               onToggleSelect={onToggleSelect}
               onTransition={onTransition}
+              onOpenWorkItem={onOpenWorkItem}
             />
           ))}
         </ul>
@@ -498,6 +531,7 @@ export function WorkItemsListView({
   onTransition,
   onStartCreate,
   onQuickCreate,
+  onOpenWorkItem,
 }: LayoutViewProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const eraNames = new Map(eras.map((e) => [e.id, e.name]));
@@ -569,6 +603,7 @@ export function WorkItemsListView({
             onTransition={onTransition}
             onStartCreate={onStartCreate}
             onQuickCreate={status.id === '__all__' ? undefined : onQuickCreate}
+            onOpenWorkItem={onOpenWorkItem}
           />
         );
       })}
@@ -591,6 +626,7 @@ export function WorkItemsTableView({
   busy,
   onTransition,
   onStartCreate,
+  onOpenWorkItem,
 }: LayoutViewProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const eraNames = new Map(eras.map((e) => [e.id, e.name]));
@@ -669,12 +705,11 @@ export function WorkItemsTableView({
                         className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
                         aria-hidden="true"
                       />
-                      <Link
-                        to={workItemPath(item.id)}
+                      <WorkItemTitleLink
+                        item={item}
+                        onOpenWorkItem={onOpenWorkItem}
                         className="truncate hover:underline focus-visible:underline"
-                      >
-                        {item.title}
-                      </Link>
+                      />
                     </span>
                   </td>
                   <td className="px-3 py-2">
@@ -820,6 +855,7 @@ function TimelineLane({
   statusNames,
   typeNames,
   scale,
+  onOpenWorkItem,
 }: {
   title: string;
   subtitle?: string;
@@ -829,6 +865,7 @@ function TimelineLane({
   statusNames: Map<string, string>;
   typeNames: Map<string, string>;
   scale: TimelineScale;
+  onOpenWorkItem?: (workItemId: string) => void;
 }) {
   return (
     <section aria-label={title} className="border-b border-border last:border-b-0">
@@ -865,12 +902,11 @@ function TimelineLane({
                       className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
                       aria-hidden="true"
                     />
-                    <Link
-                      to={workItemPath(item.id)}
+                    <WorkItemTitleLink
+                      item={item}
+                      onOpenWorkItem={onOpenWorkItem}
                       className="truncate text-xs font-medium text-foreground hover:underline"
-                    >
-                      {item.title}
-                    </Link>
+                    />
                   </span>
                   <span className="shrink-0 text-3xs text-muted-foreground">
                     {statusNames.get(item.statusId) ?? 'Status'}
@@ -924,7 +960,11 @@ export function WorkItemsTimelineView({
   eras,
   typeNames,
   statusNames,
-}: Pick<LayoutViewProps, 'items' | 'statuses' | 'eras' | 'typeNames' | 'statusNames'>) {
+  onOpenWorkItem,
+}: Pick<
+  LayoutViewProps,
+  'items' | 'statuses' | 'eras' | 'typeNames' | 'statusNames' | 'onOpenWorkItem'
+>) {
   const [scale, setScale] = useState<TimelineScale>('weeks');
   const statusById = new Map(statuses.map((s) => [s.id, s]));
   const unscheduled = items.filter((i) => !i.eraId);
@@ -945,6 +985,7 @@ export function WorkItemsTimelineView({
             statusNames={statusNames}
             typeNames={typeNames}
             scale={scale}
+            onOpenWorkItem={onOpenWorkItem}
           />
         ))}
         <TimelineLane
@@ -954,6 +995,7 @@ export function WorkItemsTimelineView({
           statusNames={statusNames}
           typeNames={typeNames}
           scale={scale}
+          onOpenWorkItem={onOpenWorkItem}
         />
       </div>
     </div>
@@ -976,7 +1018,8 @@ export function WorkItemsCalendarView({
   eras,
   typeNames,
   statusNames,
-}: Pick<LayoutViewProps, 'items' | 'eras' | 'typeNames' | 'statusNames'>) {
+  onOpenWorkItem,
+}: Pick<LayoutViewProps, 'items' | 'eras' | 'typeNames' | 'statusNames' | 'onOpenWorkItem'>) {
   const eraMap = new Map(eras.map((e) => [e.id, e]));
   const buckets = new Map<string, WorkItem[]>();
   for (const item of items) {
@@ -1006,9 +1049,11 @@ export function WorkItemsCalendarView({
                 key={item.id}
                 className="grid gap-1.5 rounded-sm border border-transparent bg-card p-2.5 text-sm shadow-card transition-colors hover:border-input"
               >
-                <Link to={workItemPath(item.id)} className="font-medium hover:underline">
-                  {item.title}
-                </Link>
+                <WorkItemTitleLink
+                  item={item}
+                  onOpenWorkItem={onOpenWorkItem}
+                  className="font-medium hover:underline"
+                />
                 <div className="flex flex-wrap gap-1">
                   <Tag>{typeNames.get(item.workItemTypeId) ?? 'Item'}</Tag>
                   <Badge variant="secondary">{statusNames.get(item.statusId) ?? 'Status'}</Badge>

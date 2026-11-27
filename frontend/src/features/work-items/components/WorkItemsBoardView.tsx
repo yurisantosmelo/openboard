@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { useState, type DragEvent } from 'react';
+import { useRef, useState, type DragEvent, type MouseEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,14 @@ function readDragPayload(event: DragEvent, fallback: DragPayload | null): DragPa
   return fallback;
 }
 
+function isPlainLeftClick(event: MouseEvent): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+function isInteractiveCardTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest('a,button,select,input,textarea'));
+}
+
 export interface WorkItemsBoardViewProps {
   items: WorkItem[];
   statuses: ProjectStatus[];
@@ -49,6 +57,7 @@ export interface WorkItemsBoardViewProps {
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
+  onOpenWorkItem?: (workItemId: string) => void;
 }
 
 interface BoardCardProps {
@@ -62,6 +71,7 @@ interface BoardCardProps {
   onDragStart: (item: WorkItem, event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
   onTransition: (workItemId: string, statusId: string) => void;
+  onOpenWorkItem?: (workItemId: string) => void;
 }
 
 function BoardCardAssignee({ name, username }: { name: string; username: string }) {
@@ -141,21 +151,48 @@ function BoardCard({
   onDragStart,
   onDragEnd,
   onTransition,
+  onOpenWorkItem,
 }: BoardCardProps) {
   const estimate = formatEstimate(item);
   const canDrag = canWrite && !busy;
+  const draggedRef = useRef(false);
+
+  function handleCardClick(event: MouseEvent<HTMLElement>) {
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
+    if (!onOpenWorkItem || !isPlainLeftClick(event) || isInteractiveCardTarget(event.target)) {
+      return;
+    }
+    onOpenWorkItem(item.id);
+  }
+
+  function handleTitleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!onOpenWorkItem || !isPlainLeftClick(event)) return;
+    event.preventDefault();
+    onOpenWorkItem(item.id);
+  }
 
   return (
     <article
       data-slot="work-item-card"
       draggable={canDrag}
+      onClick={handleCardClick}
       onDragStart={(event) => {
-        if (canDrag) onDragStart(item, event);
+        if (!canDrag) return;
+        draggedRef.current = true;
+        onDragStart(item, event);
       }}
-      onDragEnd={onDragEnd}
+      onDragEnd={() => {
+        onDragEnd();
+        setTimeout(() => {
+          draggedRef.current = false;
+        }, 0);
+      }}
       className={cn(
         'flex flex-col gap-2 rounded-sm border border-transparent bg-card p-3 shadow-card transition-[border-color,box-shadow,opacity,transform] hover:border-input',
-        canDrag && 'cursor-grab active:cursor-grabbing',
+        canDrag ? 'cursor-grab active:cursor-grabbing' : onOpenWorkItem && 'cursor-pointer',
         isDragging && 'scale-[0.98] opacity-50',
       )}
     >
@@ -174,6 +211,7 @@ function BoardCard({
       {/* Row 2: Clickable Title */}
       <Link
         to={workItemPath(item.id)}
+        onClick={handleTitleClick}
         className="text-sm leading-snug font-medium break-words text-foreground hover:underline focus-visible:underline"
       >
         {item.title}
@@ -219,6 +257,7 @@ interface BoardColumnProps {
   onCardDragEnd: () => void;
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
+  onOpenWorkItem?: (workItemId: string) => void;
 }
 
 function BoardColumn({
@@ -238,6 +277,7 @@ function BoardColumn({
   onCardDragEnd,
   onTransition,
   onStartCreate,
+  onOpenWorkItem,
 }: BoardColumnProps) {
   const tone = resolveStatusTone(status);
 
@@ -294,6 +334,7 @@ function BoardColumn({
               onDragStart={onCardDragStart}
               onDragEnd={onCardDragEnd}
               onTransition={onTransition}
+              onOpenWorkItem={onOpenWorkItem}
             />
           ))
         )}
@@ -328,6 +369,7 @@ export function WorkItemsBoardView({
   busy,
   onTransition,
   onStartCreate,
+  onOpenWorkItem,
 }: WorkItemsBoardViewProps) {
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null);
@@ -410,6 +452,7 @@ export function WorkItemsBoardView({
             onCardDragEnd={handleCardDragEnd}
             onTransition={onTransition}
             onStartCreate={onStartCreate}
+            onOpenWorkItem={onOpenWorkItem}
           />
         );
       })}

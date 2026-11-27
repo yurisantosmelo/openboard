@@ -1,4 +1,15 @@
-import { AlertCircle, ArrowLeft, Loader2, Trash2, UserCheck, UserMinus, X } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ExternalLink,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Trash2,
+  UserCheck,
+  UserMinus,
+  X,
+} from 'lucide-react';
 import { useState, type KeyboardEvent, type SubmitEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -33,6 +44,7 @@ import {
   useWorkItems,
 } from '../hooks/useWorkItems';
 import { EstimateInput, ParentSelect } from './CreateWorkItemForm';
+import { workItemPath } from '../paths';
 import { initialsOf, resolveStatusTone, typeDotClass } from './statusTone';
 import {
   CollapsibleSection,
@@ -101,7 +113,26 @@ function ErrorBanner({ error, hidden }: { error: unknown; hidden?: boolean }) {
   );
 }
 
-function EditorTopBar({ item, typeName }: { item: WorkItem; typeName: string }) {
+type EditorMode = 'page' | 'dialog';
+
+const topBarActionClass =
+  'inline-flex h-6 cursor-pointer items-center gap-1 rounded-xs border border-transparent px-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:border-input hover:bg-secondary hover:text-foreground';
+
+function EditorTopBar({
+  item,
+  typeName,
+  mode,
+  maximized,
+  onToggleMaximize,
+  onClose,
+}: {
+  item: WorkItem;
+  typeName: string;
+  mode: EditorMode;
+  maximized: boolean;
+  onToggleMaximize?: () => void;
+  onClose?: () => void;
+}) {
   return (
     <div className="flex items-center justify-between gap-2 px-6 pt-3.5 pb-1">
       <div className="flex items-center gap-2 text-2xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -110,16 +141,59 @@ function EditorTopBar({ item, typeName }: { item: WorkItem; typeName: string }) 
           {typeName} · {formatShortKey(item.id)}
         </span>
       </div>
-      <Link
-        to={projectPath(item.projectId)}
-        aria-label="Back to Project"
-        title="Back to Project"
-        className="inline-flex h-6 items-center gap-1 rounded-xs border border-transparent px-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:border-input hover:bg-secondary hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" aria-hidden="true" />
-        <span className="hidden sm:inline">Back to Project</span>
-        <X className="size-3.5 sm:hidden" aria-hidden="true" />
-      </Link>
+      <div className="flex items-center gap-1">
+        {onToggleMaximize && (
+          <button
+            type="button"
+            aria-label={maximized ? 'Restore work item size' : 'Maximize work item'}
+            aria-pressed={maximized}
+            title={maximized ? 'Restore size' : 'Maximize'}
+            onClick={onToggleMaximize}
+            className={topBarActionClass}
+          >
+            {maximized ? (
+              <Minimize2 className="size-3.5" aria-hidden="true" />
+            ) : (
+              <Maximize2 className="size-3.5" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">{maximized ? 'Restore' : 'Maximize'}</span>
+          </button>
+        )}
+
+        {mode === 'dialog' ? (
+          <>
+            <Link
+              to={workItemPath(item.id)}
+              onClick={onClose}
+              aria-label="Open full page"
+              title="Open full page"
+              className={topBarActionClass}
+            >
+              <ExternalLink className="size-3.5" aria-hidden="true" />
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close work item"
+              title="Close"
+              className={topBarActionClass}
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          </>
+        ) : (
+          <Link
+            to={projectPath(item.projectId)}
+            aria-label="Back to Project"
+            title="Back to Project"
+            className={topBarActionClass}
+          >
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Back to Project</span>
+            <X className="size-3.5 sm:hidden" aria-hidden="true" />
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
@@ -591,7 +665,21 @@ function isCtrlEnter(event: KeyboardEvent<HTMLFormElement>): boolean {
   return (event.ctrlKey || event.metaKey) && event.key === 'Enter';
 }
 
-function WorkItemEditor({ item }: { item: WorkItem }) {
+function editorShellClass(mode: EditorMode, maximized: boolean): string {
+  if (mode === 'dialog') return 'flex min-h-full flex-col bg-card';
+  if (maximized) return 'fixed inset-0 z-40 flex flex-col overflow-y-auto bg-card';
+  return 'flex flex-col overflow-hidden rounded-md border border-border bg-card shadow-card';
+}
+
+interface WorkItemEditorProps {
+  item: WorkItem;
+  mode: EditorMode;
+  maximized: boolean;
+  onToggleMaximize?: () => void;
+  onClose?: () => void;
+}
+
+function WorkItemEditor({ item, mode, maximized, onToggleMaximize, onClose }: WorkItemEditorProps) {
   const navigate = useNavigate();
   const ctx = useWorkItemContext(item);
   const update = useUpdateWorkItem(item.id);
@@ -615,6 +703,14 @@ function WorkItemEditor({ item }: { item: WorkItem }) {
   const errs = readDetailErrors(updateError);
   const linksLabel = ctx.linksCount === 1 ? '1 Link' : `${String(ctx.linksCount)} Links`;
 
+  function exitEditor() {
+    if (onClose) {
+      onClose();
+      return;
+    }
+    void navigate(projectPath(item.projectId));
+  }
+
   function saveItem(closeAfter: boolean) {
     if (locked) return;
     setSaved(false);
@@ -631,7 +727,7 @@ function WorkItemEditor({ item }: { item: WorkItem }) {
     update.mutate(payload, {
       onSuccess: () => {
         if (closeAfter) {
-          void navigate(projectPath(item.projectId));
+          exitEditor();
           return;
         }
         setSaved(true);
@@ -651,9 +747,20 @@ function WorkItemEditor({ item }: { item: WorkItem }) {
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-md border border-border bg-card shadow-card">
+    <div
+      data-slot="work-item-editor"
+      data-maximized={maximized ? 'true' : 'false'}
+      className={editorShellClass(mode, maximized)}
+    >
       <h1 className="sr-only">{item.title}</h1>
-      <EditorTopBar item={item} typeName={ctx.typeName} />
+      <EditorTopBar
+        item={item}
+        typeName={ctx.typeName}
+        mode={mode}
+        maximized={maximized}
+        onToggleMaximize={onToggleMaximize}
+        onClose={onClose}
+      />
 
       <form
         aria-label="Work Item details"
@@ -699,11 +806,7 @@ function WorkItemEditor({ item }: { item: WorkItem }) {
               saveItem(true);
             }}
             onDelete={() => {
-              remove.mutate(item.id, {
-                onSuccess: () => {
-                  void navigate(projectPath(item.projectId));
-                },
-              });
+              remove.mutate(item.id, { onSuccess: exitEditor });
             }}
           />
         </div>
@@ -769,29 +872,79 @@ function WorkItemEditor({ item }: { item: WorkItem }) {
   );
 }
 
-/** Displays and edits a single Work Item inside its Project using the 01C 5-band architectural editor. */
-export function WorkItemPage() {
-  const { workItemId = '' } = useParams();
+export interface WorkItemDetailSurfaceProps {
+  workItemId: string;
+  mode: EditorMode;
+  maximized: boolean;
+  onToggleMaximize?: () => void;
+  onClose?: () => void;
+}
+
+/** Loads and renders the 01C Work Item 5-band editor for either full-page or overlay dialog mode. */
+export function WorkItemDetailSurface({
+  workItemId,
+  mode,
+  maximized,
+  onToggleMaximize,
+  onClose,
+}: WorkItemDetailSurfaceProps) {
   const query = useWorkItem(workItemId);
 
   if (query.isPending) {
     return (
-      <span
-        role="status"
-        aria-label="Loading"
-        className="inline-flex items-center text-muted-foreground"
-      >
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-      </span>
+      <div className={cn('flex items-center justify-center', mode === 'dialog' && 'min-h-64 p-6')}>
+        <span
+          role="status"
+          aria-label="Loading"
+          className="inline-flex items-center text-muted-foreground"
+        >
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        </span>
+      </div>
     );
   }
   if (query.isError) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle aria-hidden="true" />
-        <AlertDescription role="alert">{errorMessage(query.error)}</AlertDescription>
-      </Alert>
+      <div className={cn('flex flex-col gap-3', mode === 'dialog' && 'p-6')}>
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription role="alert">{errorMessage(query.error)}</AlertDescription>
+        </Alert>
+        {mode === 'dialog' && onClose && (
+          <div className="flex justify-end">
+            <Button type="button" size="compact" variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        )}
+      </div>
     );
   }
-  return <WorkItemEditor key={query.data.id} item={query.data} />;
+  return (
+    <WorkItemEditor
+      key={query.data.id}
+      item={query.data}
+      mode={mode}
+      maximized={maximized}
+      onToggleMaximize={onToggleMaximize}
+      onClose={onClose}
+    />
+  );
+}
+
+/** Displays and edits a single Work Item inside its Project using the 01C 5-band architectural editor. */
+export function WorkItemPage() {
+  const { workItemId = '' } = useParams();
+  const [maximized, setMaximized] = useState(false);
+
+  return (
+    <WorkItemDetailSurface
+      workItemId={workItemId}
+      mode="page"
+      maximized={maximized}
+      onToggleMaximize={() => {
+        setMaximized((prev) => !prev);
+      }}
+    />
+  );
 }

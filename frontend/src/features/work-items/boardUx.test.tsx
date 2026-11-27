@@ -412,4 +412,71 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
       }),
     );
   });
+
+  it('opens the maximizable 01C Work Item card dialog when clicking any Board card and supports maximize/restore/full-page', async () => {
+    let currentItem = workItemDto();
+    const p1Stub = projectApiStubs('p1', [currentItem]);
+
+    stubApi({
+      'GET /api/v1/users/me': Response.json(
+        userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys' }),
+      ),
+      'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      ...p1Stub.routes,
+      'GET /api/v1/work-items/wi1': () => Response.json(currentItem),
+      'GET /api/v1/work-items/wi1/links': Response.json({ items: [] }),
+      'PATCH /api/v1/work-items/wi1': ({ body }: RequestInit) => {
+        const parsed =
+          typeof body === 'string' ? (JSON.parse(body) as Record<string, unknown>) : {};
+        currentItem = {
+          ...currentItem,
+          title: typeof parsed.title === 'string' ? parsed.title : currentItem.title,
+        };
+        return Response.json(currentItem);
+      },
+    });
+
+    const { user, router } = renderRoute('/projects/p1');
+    const board = await screen.findByRole('region', { name: 'Work Items board' });
+    const cardLink = await within(board).findByRole('link', { name: 'Ship board drag and drop' });
+    const cardArticle = cardLink.closest('article');
+    if (!cardArticle) throw new Error('expected board card article');
+
+    // Click card body (not just the link) -> opens new 01C maximizable dialog
+    await user.click(within(cardArticle).getByText('Task'));
+    const dialog = await screen.findByRole('dialog', { name: 'Work Item details' });
+    const backdrop = document.querySelector('[data-slot="work-item-detail-backdrop"]');
+    expect(backdrop).toHaveClass('z-[55]');
+    expect(dialog).toHaveClass('z-[60]');
+    expect(router.state.location.pathname).toBe('/projects/p1');
+    expect(dialog).toHaveAttribute('data-maximized', 'false');
+    expect(within(dialog).getByText('Task · WI1')).toBeInTheDocument();
+
+    // Maximize and restore
+    await user.click(within(dialog).getByRole('button', { name: 'Maximize work item' }));
+    expect(dialog).toHaveAttribute('data-maximized', 'true');
+    await user.click(within(dialog).getByRole('button', { name: 'Restore work item size' }));
+    expect(dialog).toHaveAttribute('data-maximized', 'false');
+
+    // Save & Close updates the Work Item and closes the dialog
+    const titleInput = within(dialog).getByLabelText('Title');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Ship maximizable card modal');
+    await user.click(within(dialog).getByRole('button', { name: 'Save & Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Work Item details' })).not.toBeInTheDocument();
+
+    // Clicking the card title link reopens the modal, and Open full page navigates to /work-items/wi1
+    await user.click(cardLink);
+    const reopened = await screen.findByRole('dialog', { name: 'Work Item details' });
+    await user.click(within(reopened).getByRole('link', { name: 'Open full page' }));
+    expect(router.state.location.pathname).toBe('/work-items/wi1');
+
+    const fullEditor = await screen.findByRole('form', { name: 'Work Item details' });
+    expect(fullEditor).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Maximize work item' }));
+    expect(screen.getByRole('button', { name: 'Restore work item size' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
 });

@@ -126,6 +126,7 @@ interface BodyProps {
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
   onQuickCreate?: (statusId: string, title: string) => Promise<void>;
+  onOpenWorkItem?: (workItemId: string) => void;
 }
 
 function renderActiveLayout(props: Omit<BodyProps, 'isPending' | 'error'>) {
@@ -399,6 +400,7 @@ export function ProjectWorkItems({
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<WorkItemFilters>({});
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const { openWorkItem } = useProjectShell();
 
   const data = useProjectWorkItemsData(project.id, filters, page);
   const createWorkItem = useCreateWorkItem(project.id);
@@ -631,6 +633,7 @@ export function ProjectWorkItems({
           }}
           onStartCreate={canCreateWorkItem ? handleStartCreate : undefined}
           onQuickCreate={canCreateWorkItem ? handleQuickCreate : undefined}
+          onOpenWorkItem={openWorkItem}
         />
         <WorkItemsPagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
       </div>

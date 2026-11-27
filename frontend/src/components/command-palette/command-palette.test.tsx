@@ -1,8 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { ProjectShellContext, type ProjectShellState } from '@/app/project-shell-context';
+import {
+  ProjectShellContext,
+  useProjectShell,
+  type ProjectShellState,
+} from '@/app/project-shell-context';
+import { ProjectShellProvider } from '@/app/ProjectShellProvider';
 import { GlobalHeader } from '@/components/global-header';
 import type {
   Project,
@@ -283,6 +289,9 @@ function seedClient(): QueryClient {
   client.setQueryData(['project-statuses', 'p1'], STATUSES);
   client.setQueryData(['project-work-item-types', 'p1'], TYPES);
   client.setQueryData(['project-eras', 'p1'], ERAS);
+  client.setQueryData(['project', 'p1'], PRIMARY_PROJECT);
+  client.setQueryData(['work-item', 'abcdef123456'], FIRST_WORK_ITEM);
+  client.setQueryData(['work-item-links', 'abcdef123456'], []);
   client.setQueryData(['projects', 'w1', 1, false], {
     items: PROJECTS,
     page: 1,
@@ -324,7 +333,7 @@ describe('command-palette-types pure helpers', () => {
     expect(parsePaletteQuery('/sprint')).toEqual({ prefix: '/', term: 'sprint' });
     expect(parsePaletteQuery('OIDC')).toEqual({ prefix: null, term: 'oidc' });
 
-    expect(formatShortKey('abcdef123456')).toBe('#ABCDEF');
+    expect(formatShortKey('abcdef123456')).toBe('ABCDEF12');
     expect(projectCode('Core Platform')).toBe('CP');
     expect(projectCode('Platform')).toBe('PL');
     expect(projectCode('   ')).toBe('P');
@@ -631,4 +640,57 @@ describe('CommandPalette overlay', () => {
     await user.click(portalCmd);
     expect(await screen.findByText('Organizations route')).toBeInTheDocument();
   });
+
+  it('opens the maximizable 01C Work Item card dialog when selecting a card from Command Palette', async () => {
+    const user = userEvent.setup();
+    const shell = makeShell();
+    const client = seedClient();
+
+    function ShellBridge() {
+      return (
+        <ProjectShellProvider>
+          <SeedShell shell={shell} />
+          <GlobalHeader />
+        </ProjectShellProvider>
+      );
+    }
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/projects/p1']}>
+          <ShellBridge />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await user.keyboard('{Control>}/{/Control}');
+    const palette = await screen.findByRole('dialog', { name: 'Command palette' });
+    await user.click(within(palette).getByText('Implement OIDC token refresh'));
+
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument();
+    const cardDialog = await screen.findByRole('dialog', { name: 'Work Item details' });
+    expect(cardDialog).toHaveAttribute('data-maximized', 'false');
+    expect(within(cardDialog).getByText('Story · ABCDEF12')).toBeInTheDocument();
+
+    const maxBtn = within(cardDialog).getByRole('button', { name: 'Maximize work item' });
+    await user.click(maxBtn);
+    expect(cardDialog).toHaveAttribute('data-maximized', 'true');
+    expect(
+      within(cardDialog).getByRole('button', { name: 'Restore work item size' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(within(cardDialog).getByRole('button', { name: 'Restore work item size' }));
+    expect(cardDialog).toHaveAttribute('data-maximized', 'false');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Work Item details' })).not.toBeInTheDocument();
+  });
 });
+
+function SeedShell({ shell }: { shell: ProjectShellState }) {
+  const ctx = useProjectShell();
+  useEffect(() => {
+    ctx.setShell(shell);
+  }, [ctx, shell]);
+  return null;
+}
