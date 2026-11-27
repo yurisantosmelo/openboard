@@ -115,15 +115,17 @@ describe('BoardColumn semantic tones and WorkItemModal maximize toggle', () => {
 
     render(
       <QueryClientProvider client={client}>
-        <CreateWorkItemDialog
-          open={true}
-          onOpenChange={vi.fn()}
-          projectId="p1"
-          statuses={statuses}
-          workItemTypes={types}
-          existingItems={[sampleItem]}
-          participants={[{ id: 'u1', name: 'Alfredo Melo', username: 'alfredo' }]}
-        />
+        <MemoryRouter>
+          <CreateWorkItemDialog
+            open={true}
+            onOpenChange={vi.fn()}
+            projectId="p1"
+            statuses={statuses}
+            workItemTypes={types}
+            existingItems={[sampleItem]}
+            participants={[{ id: 'u1', name: 'Alfredo Melo', username: 'alfredo' }]}
+          />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -139,5 +141,56 @@ describe('BoardColumn semantic tones and WorkItemModal maximize toggle', () => {
     expect(minBtn).toHaveTextContent('');
     await user.click(minBtn);
     expect(dialog).not.toHaveAttribute('data-maximized');
+  });
+
+  it('inserts markdown formatting, displays project and Era dates, and supports Create & Open', async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <CreateWorkItemDialog
+            open={true}
+            onOpenChange={vi.fn()}
+            projectId="p1"
+            projectName="Core Platform"
+            statuses={statuses}
+            workItemTypes={types}
+            existingItems={[sampleItem]}
+            eras={[
+              {
+                id: 'e1',
+                projectId: 'p1',
+                name: 'Sprint 14',
+                goal: 'Ship UI',
+                startDate: '2026-11-18',
+                endDate: '2026-12-01',
+                state: 'active',
+                closedAt: null,
+                createdAt: '2026-11-18T00:00:00Z',
+                updatedAt: '2026-11-18T00:00:00Z',
+              },
+            ]}
+            participants={[{ id: 'u1', name: 'Alfredo Melo', username: 'alfredo' }]}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Core Platform')).toBeInTheDocument();
+    expect(screen.getByText('Markdown enabled')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create & Open' })).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Era'), 'e1');
+    expect(screen.getByText('2026-11-18')).toBeInTheDocument();
+    expect(screen.getByText('2026-12-01')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Bold' }));
+    expect(screen.getByLabelText('Description')).toHaveValue('**bold**');
+
+    // Collapsible Planning & Details toggle
+    await user.click(screen.getByRole('button', { name: 'Planning & Details' }));
+    expect(screen.queryByText('2026-11-18')).not.toBeInTheDocument();
   });
 });

@@ -595,6 +595,7 @@ export function ProjectWorkItems({
           if (!nextOpen) setCreateStatusId(undefined);
         }}
         projectId={project.id}
+        projectName={project.name}
         statuses={data.statuses}
         workItemTypes={data.types}
         existingItems={data.items}
