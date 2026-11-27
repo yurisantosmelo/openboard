@@ -1,4 +1,4 @@
-import { BookOpen, Bug, CheckSquare, Layers, Sparkles, Zap, type LucideIcon } from 'lucide-react';
+import { BookOpenText, Bug, Crown, FileCheck, Layers, Trophy, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TypeVisual {
@@ -8,22 +8,40 @@ interface TypeVisual {
 
 function resolveTypeVisual(typeName: string): TypeVisual {
   const lower = typeName.trim().toLowerCase();
-  if (lower.includes('feature')) {
-    return { icon: Sparkles, badgeClass: 'bg-primary/12 text-primary' };
-  }
   if (lower.includes('epic')) {
-    return { icon: Zap, badgeClass: 'bg-primary/12 text-primary' };
+    return {
+      icon: Crown,
+      badgeClass: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+    };
   }
   if (lower.includes('bug')) {
-    return { icon: Bug, badgeClass: 'bg-destructive/12 text-destructive' };
+    return {
+      icon: Bug,
+      badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    };
+  }
+  if (lower.includes('feature')) {
+    return {
+      icon: Trophy,
+      badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    };
   }
   if (lower.includes('task')) {
-    return { icon: CheckSquare, badgeClass: 'bg-info/12 text-info' };
+    return {
+      icon: FileCheck,
+      badgeClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+    };
   }
   if (lower.includes('story')) {
-    return { icon: BookOpen, badgeClass: 'bg-success/12 text-success' };
+    return {
+      icon: BookOpenText,
+      badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    };
   }
-  return { icon: Layers, badgeClass: 'bg-primary/12 text-primary' };
+  return {
+    icon: Layers,
+    badgeClass: 'bg-secondary text-muted-foreground',
+  };
 }
 
 export interface WorkItemTypeIconProps {
@@ -31,7 +49,7 @@ export interface WorkItemTypeIconProps {
   className?: string;
 }
 
-/** Crisp Lucide icon badge representing a Work Item Type (Feature, Story, Bug, Task, Epic, or custom). */
+/** Distinct Lucide icon & color badge per Work Item Type: Epic (Crown/violet), Bug (Bug/rose), Feature (Trophy/amber), Task (FileCheck/sky), User Story (BookOpenText/emerald). */
 export function WorkItemTypeIcon({ typeName, className }: WorkItemTypeIconProps) {
   const { icon: Icon, badgeClass } = resolveTypeVisual(typeName);
   return (

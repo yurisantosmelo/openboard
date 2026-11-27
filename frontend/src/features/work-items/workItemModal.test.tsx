@@ -6,6 +6,7 @@ import type { ProjectStatus, ProjectWorkItemType } from '@/features/projects';
 import type { WorkItem } from './api/workItemsApi';
 import { CreateWorkItemDialog } from './components/CreateWorkItemForm';
 import { WorkItemsBoardView } from './components/WorkItemsBoardView';
+import { WorkItemTypeIcon } from './components/WorkItemTypeIcon';
 
 const statuses: ProjectStatus[] = [
   {
@@ -192,5 +193,30 @@ describe('BoardColumn semantic tones and WorkItemModal maximize toggle', () => {
     // Collapsible Planning & Details toggle
     await user.click(screen.getByRole('button', { name: 'Planning & Details' }));
     expect(screen.queryByText('2026-11-18')).not.toBeInTheDocument();
+  });
+
+  it('maps each Work Item Type to its exact Lucide icon (Crown, Bug, Trophy, FileCheck, BookOpenText)', () => {
+    const { container } = render(
+      <div>
+        <WorkItemTypeIcon typeName="Epic" />
+        <WorkItemTypeIcon typeName="Bug" />
+        <WorkItemTypeIcon typeName="Feature" />
+        <WorkItemTypeIcon typeName="Task" />
+        <WorkItemTypeIcon typeName="User Story" />
+        <WorkItemTypeIcon typeName="Spike" />
+      </div>,
+    );
+
+    expect(container.querySelector('.lucide-crown')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-bug')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-trophy')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-file-check')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-book-open-text')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-layers')).toBeInTheDocument();
+
+    const badges = Array.from(container.querySelectorAll('[data-slot="work-item-type-icon"]')).map(
+      (el) => el.className,
+    );
+    expect(new Set(badges).size).toBe(6);
   });
 });
