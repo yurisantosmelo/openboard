@@ -14,7 +14,7 @@ import type { WorkItem } from '../api/workItemsApi';
 import { workItemPath } from '../paths';
 import { AssigneePickerPopover } from './AssigneePickerPopover';
 import type { Participant } from './ProjectWorkspaceHeader';
-import { initialsOf, resolveStatusTone, typeDotClass } from './statusTone';
+import { initialsOf, resolveStatusTone } from './statusTone';
 import { formatEstimate, formatShortKey } from './workItemLabels';
 import { WorkItemTypeIcon } from './WorkItemTypeIcon';
 
@@ -311,10 +311,7 @@ function ListInlineCreateRow({
       >
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <span className="size-3.5 shrink-0" aria-hidden="true" />
-          <span
-            className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(defaultTypeName))}
-            aria-hidden="true"
-          />
+          <WorkItemTypeIcon typeName={defaultTypeName} />
           <input
             type="text"
             autoFocus
@@ -945,10 +942,10 @@ function TimelineLane({
               >
                 <div className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 md:border-r md:border-border">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
-                      aria-hidden="true"
-                    />
+                    <WorkItemTypeIcon typeName={typeName} />
+                    <span className="shrink-0 font-mono text-2xs font-medium text-muted-foreground tabular-nums">
+                      {formatShortKey(item.id)}
+                    </span>
                     <WorkItemTitleLink
                       item={item}
                       onOpenWorkItem={onOpenWorkItem}
@@ -1096,11 +1093,19 @@ export function WorkItemsCalendarView({
                 key={item.id}
                 className="grid gap-1.5 rounded-sm border border-transparent bg-card p-2.5 text-sm shadow-card transition-colors hover:border-input"
               >
-                <WorkItemTitleLink
-                  item={item}
-                  onOpenWorkItem={onOpenWorkItem}
-                  className="font-medium hover:underline"
-                />
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 inline-flex shrink-0 items-center gap-1.5">
+                    <WorkItemTypeIcon typeName={typeNames.get(item.workItemTypeId) ?? 'Item'} />
+                    <span className="font-mono text-2xs font-medium text-muted-foreground tabular-nums">
+                      {formatShortKey(item.id)}
+                    </span>
+                  </span>
+                  <WorkItemTitleLink
+                    item={item}
+                    onOpenWorkItem={onOpenWorkItem}
+                    className="min-w-0 flex-1 font-medium hover:underline"
+                  />
+                </div>
                 <div className="flex flex-wrap gap-1">
                   <Tag>{typeNames.get(item.workItemTypeId) ?? 'Item'}</Tag>
                   <Badge variant="secondary">{statusNames.get(item.statusId) ?? 'Status'}</Badge>

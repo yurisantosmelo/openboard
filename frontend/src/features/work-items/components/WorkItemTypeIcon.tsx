@@ -3,17 +3,27 @@ import { cn } from '@/lib/utils';
 
 interface TypeVisual {
   icon: LucideIcon;
-  toneClass: string;
+  badgeClass: string;
 }
 
 function resolveTypeVisual(typeName: string): TypeVisual {
   const lower = typeName.trim().toLowerCase();
-  if (lower.includes('feature')) return { icon: Sparkles, toneClass: 'text-primary' };
-  if (lower.includes('epic')) return { icon: Zap, toneClass: 'text-primary' };
-  if (lower.includes('bug')) return { icon: Bug, toneClass: 'text-destructive' };
-  if (lower.includes('task')) return { icon: CheckSquare, toneClass: 'text-info' };
-  if (lower.includes('story')) return { icon: BookOpen, toneClass: 'text-success' };
-  return { icon: Layers, toneClass: 'text-primary' };
+  if (lower.includes('feature')) {
+    return { icon: Sparkles, badgeClass: 'bg-primary/12 text-primary' };
+  }
+  if (lower.includes('epic')) {
+    return { icon: Zap, badgeClass: 'bg-primary/12 text-primary' };
+  }
+  if (lower.includes('bug')) {
+    return { icon: Bug, badgeClass: 'bg-destructive/12 text-destructive' };
+  }
+  if (lower.includes('task')) {
+    return { icon: CheckSquare, badgeClass: 'bg-info/12 text-info' };
+  }
+  if (lower.includes('story')) {
+    return { icon: BookOpen, badgeClass: 'bg-success/12 text-success' };
+  }
+  return { icon: Layers, badgeClass: 'bg-primary/12 text-primary' };
 }
 
 export interface WorkItemTypeIconProps {
@@ -21,17 +31,21 @@ export interface WorkItemTypeIconProps {
   className?: string;
 }
 
-/** Lucide icon representing a Work Item Type (Feature, Story, Bug, Task, Epic, or custom). */
+/** Crisp Lucide icon badge representing a Work Item Type (Feature, Story, Bug, Task, Epic, or custom). */
 export function WorkItemTypeIcon({ typeName, className }: WorkItemTypeIconProps) {
-  const { icon: Icon, toneClass } = resolveTypeVisual(typeName);
+  const { icon: Icon, badgeClass } = resolveTypeVisual(typeName);
   return (
     <span
       data-slot="work-item-type-icon"
       data-work-item-type={typeName}
       title={typeName}
-      className={cn('inline-flex shrink-0 items-center justify-center', toneClass, className)}
+      className={cn(
+        'inline-flex size-4 shrink-0 items-center justify-center rounded-xs',
+        badgeClass,
+        className,
+      )}
     >
-      <Icon className="size-3.5" aria-hidden="true" />
+      <Icon className="size-3" aria-hidden="true" />
     </span>
   );
 }
