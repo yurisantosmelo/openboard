@@ -201,13 +201,7 @@ function ReadOnlyContextControl<T extends { id: string; name: string }>({
   const resolvedLabel = items.find((item) => item.id === activeId)?.name ?? label;
 
   if (items.length <= 1) {
-    if (!resolvedLabel) return null;
-    return (
-      <span className="inline-flex max-w-44 items-center gap-1.5 px-2 py-1 text-xs font-medium text-foreground">
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="truncate">{resolvedLabel}</span>
-      </span>
-    );
+    return null;
   }
 
   return (
@@ -245,10 +239,6 @@ function ReadOnlyContextControl<T extends { id: string; name: string }>({
   );
 }
 
-function hasContextLabel(count: number, storedName?: string): boolean {
-  return count > 0 || Boolean(storedName);
-}
-
 function firstFallbackName(
   items: Array<{ name: string }>,
   storedName?: string,
@@ -265,9 +255,8 @@ interface ContextBarProps {
 
 function ContextBar({ userId, orgs, workspaces, active }: ContextBarProps) {
   const navigate = useNavigate();
-  const showOrg = hasContextLabel(orgs.length, active.organizationName);
-  const showWs =
-    Boolean(active.organizationId) && hasContextLabel(workspaces.length, active.workspaceName);
+  const showOrg = orgs.length > 1;
+  const showWs = Boolean(active.organizationId) && workspaces.length > 1;
 
   if (!showOrg && !showWs) return null;
 
