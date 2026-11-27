@@ -18,7 +18,8 @@
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono:
-    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+    'JetBrains Mono', ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono',
+    monospace;
 }
 
 @theme inline {
@@ -95,13 +96,29 @@
   --color-sidebar-border: var(--contrast-sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Radii. */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
+  /* Status-tinted Kanban / List / Timeline column tokens. */
+  --color-column-neutral-surface: var(--column-neutral-surface);
+  --color-column-neutral-border: var(--column-neutral-border);
+  --color-column-planned-surface: var(--column-planned-surface);
+  --color-column-planned-border: var(--column-planned-border);
+  --color-column-in-progress-surface: var(--column-in-progress-surface);
+  --color-column-in-progress-border: var(--column-in-progress-border);
+  --color-column-in-review-surface: var(--column-in-review-surface);
+  --color-column-in-review-border: var(--column-in-review-border);
+  --color-column-done-surface: var(--column-done-surface);
+  --color-column-done-border: var(--column-done-border);
+
+  /* Soft floating card elevation. */
+  --shadow-card: var(--card-shadow);
+
+  /* OpenBoard architectural corner hierarchy (2px / 4px / 6px / 8px). */
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.25rem;
 
   @keyframes skeleton {
     0%,
@@ -158,8 +175,9 @@
 
 :root {
   color-scheme: light;
-  --radius: 0.5rem;
-  --control-radius: 0.5rem;
+  --radius: 0.375rem;
+  --control-radius: 0.25rem;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 3px 8px rgb(0 0 0 / 4%);
   --app-scrollbar-width: 6px;
   --app-scrollbar-thumb: rgb(217 217 217);
   --app-scrollbar-thumb-hover: rgb(191 191 191);
@@ -177,7 +195,7 @@
     var(--contrast-sidebar-muted-foreground) 85%,
     var(--sidebar)
   );
-  --workspace-topbar-height: 52px;
+  --workspace-topbar-height: 44px;
   --workspace-titlebar-control-size: 1.75rem;
   --workspace-titlebar-scroll-fade-height: 1.5rem;
   --z-sheet: 46;
@@ -243,8 +261,21 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
+  /* Status-tinted column tokens (Light). */
+  --column-neutral-surface: var(--color-zinc-100);
+  --column-neutral-border: var(--color-zinc-200);
+  --column-planned-surface: rgb(43 127 255 / 4.5%);
+  --column-planned-border: rgb(43 127 255 / 16%);
+  --column-in-progress-surface: rgb(254 154 0 / 5.5%);
+  --column-in-progress-border: rgb(254 154 0 / 20%);
+  --column-in-review-surface: rgb(27 78 216 / 4.5%);
+  --column-in-review-border: rgb(27 78 216 / 16%);
+  --column-done-surface: rgb(0 188 125 / 5%);
+  --column-done-border: rgb(0 188 125 / 18%);
+
   @variant dark {
     color-scheme: dark;
+    --card-shadow: 0 2px 8px rgb(0 0 0 / 50%);
     --appearance-contrast-target: white;
     --app-scrollbar-thumb: rgb(255 255 255 / 36%);
     --app-scrollbar-thumb-hover: rgb(255 255 255 / 45%);
@@ -286,6 +317,18 @@
     --sidebar-accent: var(--sidebar-row-hover);
     --sidebar-accent-foreground: var(--sidebar-foreground);
     --sidebar-border: var(--border);
+
+    /* Status-tinted column tokens (Dark). */
+    --column-neutral-surface: rgb(255 255 255 / 3%);
+    --column-neutral-border: rgb(255 255 255 / 8%);
+    --column-planned-surface: rgb(81 162 255 / 7%);
+    --column-planned-border: rgb(81 162 255 / 20%);
+    --column-in-progress-surface: rgb(255 185 0 / 8%);
+    --column-in-progress-border: rgb(255 185 0 / 22%);
+    --column-in-review-surface: rgb(52 107 241 / 9%);
+    --column-in-review-border: rgb(52 107 241 / 24%);
+    --column-done-surface: rgb(0 212 146 / 7%);
+    --column-done-border: rgb(0 212 146 / 20%);
   }
 }
 

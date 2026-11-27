@@ -39,9 +39,9 @@ Full product and architecture context: `docs/product-vision.md`. Read the releva
 
 ## Frontend (React + TypeScript)
 
-- Organized by feature (`src/features/<feature>/`), with shadcn/ui components in `src/components/ui/`.
+- Organized by feature (`src/features/<feature>/`), with OpenBoard Design System primitives in `src/components/ui/`.
 - Separate presentation, state and API communication.
-- Build every screen only with **shadcn/ui** components (`src/components/ui/`), Tailwind CSS and **Lucide** icons (`lucide-react`) (ADR 0012). Do not create custom UI primitives — only compose existing shadcn/ui components when no single component covers the need.
+- Build every screen with OpenBoard Design System primitives (`src/components/ui/`), Tailwind CSS semantic tokens, headless `radix-ui` primitives for accessible overlays and **Lucide** icons (`lucide-react`) (ADR 0013). Do not reintroduce shadcn/ui CLI scaffolding or generic rounded defaults.
 - Tools: ESLint, TypeScript in `strict` mode, Prettier.
 
 ## Before considering a task done
