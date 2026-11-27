@@ -30,7 +30,7 @@ import {
   useUpdateProjectView,
 } from '../../projects/hooks/useProjectViews';
 import type { Priority, WorkItem, WorkItemFilters } from '../api/workItemsApi';
-import { useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
+import { useCreateWorkItem, useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
 import { CreateWorkItemDialog } from './CreateWorkItemForm';
 import { SaveViewBanner } from './ProjectViewsBar';
 import { ProjectWorkspaceHeader, type Participant } from './ProjectWorkspaceHeader';
@@ -125,12 +125,13 @@ interface BodyProps {
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
+  onQuickCreate?: (statusId: string, title: string) => Promise<void>;
 }
 
 function renderActiveLayout(props: Omit<BodyProps, 'isPending' | 'error'>) {
   const typeNames = new Map(props.types.map((t) => [t.id, t.name]));
   const statusNames = new Map(props.statuses.map((s) => [s.id, s.name]));
-  const shared = { ...props, typeNames, statusNames };
+  const shared = { ...props, typeNames, statusNames, defaultTypeName: props.types[0]?.name };
   if (props.viewMode === 'board' && props.statuses.length > 0) {
     return <WorkItemsBoardView {...shared} />;
   }
@@ -164,19 +165,9 @@ function WorkItemsBody({ isPending, error, ...rest }: BodyProps) {
       </div>
     );
   }
-  if (rest.items.length === 0 && rest.viewMode !== 'board') {
-    return (
-      <div className="grid gap-1 p-10 text-center">
-        <p className="text-sm font-medium">No Work Items yet</p>
-        <p className="text-sm text-muted-foreground">
-          {rest.canWrite
-            ? 'Create the first Work Item to start planning and tracking work.'
-            : 'Work Items created in this Project will appear here.'}
-        </p>
-      </div>
-    );
-  }
-  if (rest.items.length === 0 && rest.statuses.length === 0) {
+  const keepsEmptyLayout =
+    (rest.viewMode === 'board' || rest.viewMode === 'list') && rest.statuses.length > 0;
+  if (rest.items.length === 0 && !keepsEmptyLayout) {
     return (
       <div className="grid gap-1 p-10 text-center">
         <p className="text-sm font-medium">No Work Items yet</p>
@@ -410,10 +401,12 @@ export function ProjectWorkItems({
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
 
   const data = useProjectWorkItemsData(project.id, filters, page);
+  const createWorkItem = useCreateWorkItem(project.id);
   const unarchive = useUnarchiveProject(project.id);
   const isReadOnly = Boolean(project.isReadOnly);
   const canWrite = project.currentUserRole !== 'viewer' && !isReadOnly;
-  const canCreateWorkItem = canWrite && !creating && data.types.length > 0;
+  const canCreateWorkItem = canWrite && data.types.length > 0;
+  const defaultTypeId = data.types[0]?.id ?? '';
   const viewMeta = useActiveViewMeta(
     project,
     data.views,
@@ -453,9 +446,21 @@ export function ProjectWorkItems({
   }, []);
 
   const handleStartCreate = useCallback((preferredStatusId?: string) => {
-    setCreateStatusId(preferredStatusId);
+    setCreateStatusId(typeof preferredStatusId === 'string' ? preferredStatusId : undefined);
     setCreating(true);
   }, []);
+
+  const handleQuickCreate = useCallback(
+    async (statusId: string, title: string) => {
+      if (!defaultTypeId) return;
+      await createWorkItem.mutateAsync({
+        workItemTypeId: defaultTypeId,
+        statusId,
+        title,
+      });
+    },
+    [createWorkItem, defaultTypeId],
+  );
 
   const viewHandlers = useSavedViewHandlers(data, viewMeta.activeView, viewMode, filters, () => {
     handleApplySavedView(null);
@@ -546,7 +551,9 @@ export function ProjectWorkItems({
         }}
         onToggleConfig={onToggleConfig}
         onOpenConfigTab={onOpenConfigTab}
-        onStartCreate={handleStartCreate}
+        onStartCreate={() => {
+          handleStartCreate();
+        }}
         onRequestSaveView={handleRequestSaveView}
         onUpdateActiveView={viewHandlers.onUpdateActiveView}
         onToggleActiveViewVisibility={viewHandlers.onToggleActiveViewVisibility}
@@ -622,6 +629,7 @@ export function ProjectWorkItems({
             data.transition.mutate({ workItemId, statusId });
           }}
           onStartCreate={canCreateWorkItem ? handleStartCreate : undefined}
+          onQuickCreate={canCreateWorkItem ? handleQuickCreate : undefined}
         />
         <WorkItemsPagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
       </div>

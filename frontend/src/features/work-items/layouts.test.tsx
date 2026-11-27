@@ -147,10 +147,79 @@ describe('OpenBoard List, Table and Timeline views', () => {
       within(inProgress).queryByRole('link', { name: 'Custom OpenBoard UI components' }),
     ).not.toBeInTheDocument();
 
-    // Trigger Add item on Planned group
+    // Trigger Add item on Planned group falls back to onStartCreate when onQuickCreate is omitted
     const planned = screen.getByRole('region', { name: 'Planned' });
     await user.click(within(planned).getByRole('button', { name: 'Add item' }));
     expect(onStartCreate).toHaveBeenCalledWith('s1');
+  });
+
+  it('opens an inline title row at the top of any status group (including custom statuses) on + Add item', async () => {
+    const user = userEvent.setup();
+    const customStatus: ProjectStatus = {
+      id: 's-custom',
+      projectId: 'p1',
+      name: 'QA Review',
+      statusGroup: 'started',
+      position: 3,
+      createdAt: '2026-11-24T00:00:00Z',
+    };
+    const allStatuses = [...statuses, customStatus];
+    const allStatusNames = new Map([...statusNames, ['s-custom', 'QA Review']]);
+    const onQuickCreate = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <WorkItemsListView
+          items={items}
+          statuses={allStatuses}
+          eras={eras}
+          typeNames={typeNames}
+          statusNames={allStatusNames}
+          defaultTypeName="Task"
+          canWrite={true}
+          busy={false}
+          onTransition={vi.fn()}
+          onQuickCreate={onQuickCreate}
+        />
+      </MemoryRouter>,
+    );
+
+    // Clicking + Add item on In Progress inserts inline row at the very top of the list
+    const inProgress = screen.getByRole('region', { name: 'In Progress' });
+    await user.click(within(inProgress).getByRole('button', { name: 'Add item' }));
+
+    const listItems = within(inProgress).getAllByRole('listitem');
+    expect(listItems[0]).toHaveAttribute('data-slot', 'list-inline-create-row');
+    expect(listItems[1]).toHaveAttribute('data-slot', 'list-work-item-row');
+
+    const titleInput = within(inProgress).getByLabelText('New Work Item title in In Progress');
+    expect(titleInput).toHaveFocus();
+    await user.type(titleInput, 'Inline task in progress{Enter}');
+    expect(onQuickCreate).toHaveBeenCalledWith('s2', 'Inline task in progress');
+    expect(
+      within(inProgress).queryByLabelText('New Work Item title in In Progress'),
+    ).not.toBeInTheDocument();
+
+    // Works identically on an empty custom status group (QA Review) and supports Escape cancel
+    const qaReview = screen.getByRole('region', { name: 'QA Review' });
+    await user.click(within(qaReview).getByRole('button', { name: 'Add item' }));
+    const customInput = within(qaReview).getByLabelText('New Work Item title in QA Review');
+    await user.type(customInput, 'Verify custom status');
+    await user.keyboard('{Escape}');
+    expect(
+      within(qaReview).queryByLabelText('New Work Item title in QA Review'),
+    ).not.toBeInTheDocument();
+
+    // Surfaces API error without closing the inline row
+    onQuickCreate.mockRejectedValueOnce(new Error('Network down'));
+    await user.click(within(qaReview).getByRole('button', { name: 'Add item' }));
+    const retryInput = within(qaReview).getByLabelText('New Work Item title in QA Review');
+    await user.type(retryInput, 'Failing item');
+    await user.click(within(qaReview).getByRole('button', { name: 'Add' }));
+    expect(await within(qaReview).findByRole('alert')).toHaveTextContent(
+      /Could not reach the server/,
+    );
+    expect(retryInput).toHaveValue('Failing item');
   });
 
   it('supports row selection, select-all and estimate summary in TableView', async () => {

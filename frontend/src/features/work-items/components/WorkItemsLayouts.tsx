@@ -1,11 +1,14 @@
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
+import { useState, type KeyboardEvent, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/icon-button';
 import { PriorityBadge } from '@/components/ui/priority-badge';
 import { Tag } from '@/components/ui/tag';
 import { cn } from '@/lib/utils';
+import { errorMessage } from '../../../shared/api/httpClient';
 import type { ProjectEra, ProjectStatus } from '../../projects';
 import type { WorkItem } from '../api/workItemsApi';
 import { workItemPath } from '../paths';
@@ -18,10 +21,12 @@ export interface LayoutViewProps {
   eras: ProjectEra[];
   typeNames: Map<string, string>;
   statusNames: Map<string, string>;
+  defaultTypeName?: string;
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
+  onQuickCreate?: (statusId: string, title: string) => Promise<void>;
 }
 
 const quietRowSelectClass =
@@ -210,18 +215,193 @@ function ListRow({
   );
 }
 
+interface ListInlineCreateRowProps {
+  status: ProjectStatus;
+  defaultTypeName: string;
+  onSubmit: (title: string) => Promise<void>;
+  onCancel: () => void;
+}
+
+function ListInlineCreateRow({
+  status,
+  defaultTypeName,
+  onSubmit,
+  onCancel,
+}: ListInlineCreateRowProps) {
+  const [title, setTitle] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const tone = resolveStatusTone(status);
+
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit(trimmed);
+    } catch (err) {
+      setError(errorMessage(err));
+      setSubmitting(false);
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onCancel();
+    }
+  }
+
+  return (
+    <li
+      data-slot="list-inline-create-row"
+      className="flex flex-col gap-1.5 rounded-sm border border-ring bg-card px-3 py-1.5 ring-2 ring-ring/15"
+    >
+      <form
+        aria-label={`Add Work Item to ${status.name}`}
+        onSubmit={(event) => {
+          void handleSubmit(event);
+        }}
+        className="flex min-h-7 flex-wrap items-center justify-between gap-3"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <span className="size-3.5 shrink-0" aria-hidden="true" />
+          <span
+            className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(defaultTypeName))}
+            aria-hidden="true"
+          />
+          <input
+            type="text"
+            autoFocus
+            maxLength={255}
+            disabled={submitting}
+            aria-label={`New Work Item title in ${status.name}`}
+            placeholder="Work item title..."
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+            }}
+            onKeyDown={handleKeyDown}
+            className="h-7 min-w-0 flex-1 bg-transparent text-sm font-medium text-foreground outline-none placeholder:text-placeholder"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Tag>{defaultTypeName}</Tag>
+          <span
+            className={cn(
+              'hidden h-[22px] items-center gap-1.5 rounded-xs border px-1.5 text-2xs font-medium text-foreground sm:inline-flex',
+              tone.surface,
+            )}
+          >
+            <span className={cn('size-1.5 rounded-xs', tone.dot)} aria-hidden="true" />
+            <span>{status.name}</span>
+          </span>
+          <Button
+            type="submit"
+            size="compact"
+            disabled={submitting || title.trim().length === 0}
+            aria-busy={submitting || undefined}
+          >
+            Add
+          </Button>
+          <IconButton
+            size="sm"
+            variant="ghost"
+            aria-label={`Cancel adding item to ${status.name}`}
+            disabled={submitting}
+            onClick={onCancel}
+          >
+            <X aria-hidden="true" />
+          </IconButton>
+        </div>
+      </form>
+      {error && (
+        <p role="alert" className="pl-8 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </li>
+  );
+}
+
 interface ListGroupProps {
   status: ProjectStatus;
   items: WorkItem[];
   statuses: ProjectStatus[];
   typeNames: Map<string, string>;
   eraNames: Map<string, string>;
+  defaultTypeName: string;
   selectedIds: Set<string>;
   canWrite: boolean;
   busy: boolean;
   onToggleSelect: (id: string) => void;
   onTransition: (workItemId: string, statusId: string) => void;
   onStartCreate?: (statusId?: string) => void;
+  onQuickCreate?: (statusId: string, title: string) => Promise<void>;
+}
+
+interface ListStatusGroupHeaderProps {
+  status: ProjectStatus;
+  count: number;
+  summary: string;
+  collapsed: boolean;
+  canAdd: boolean;
+  onToggleCollapse: () => void;
+  onAddClick: () => void;
+}
+
+function ListStatusGroupHeader({
+  status,
+  count,
+  summary,
+  collapsed,
+  canAdd,
+  onToggleCollapse,
+  onAddClick,
+}: ListStatusGroupHeaderProps) {
+  const tone = resolveStatusTone(status);
+  return (
+    <div
+      data-slot="list-group-header"
+      className={cn(
+        'flex h-8 items-center justify-between gap-2 rounded-sm border px-3',
+        tone.surface,
+      )}
+    >
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={onToggleCollapse}
+        className="flex min-w-0 cursor-pointer items-center gap-2 text-left outline-none focus-visible:underline"
+      >
+        {collapsed ? (
+          <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        )}
+        <span className={cn('size-2 shrink-0 rounded-xs', tone.dot)} aria-hidden="true" />
+        <span className="truncate text-xs font-medium text-foreground">{status.name}</span>
+        <span className="text-2xs text-muted-foreground tabular-nums">{count}</span>
+      </button>
+
+      <div className="flex items-center gap-3">
+        {summary && <span className="text-2xs text-muted-foreground tabular-nums">{summary}</span>}
+        {canAdd && (
+          <button
+            type="button"
+            onClick={onAddClick}
+            className="inline-flex cursor-pointer items-center gap-1 rounded-xs px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-card/80 hover:text-foreground"
+          >
+            <Plus className="size-3" aria-hidden="true" />
+            <span>Add item</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function ListStatusGroup({
@@ -230,65 +410,59 @@ function ListStatusGroup({
   statuses,
   typeNames,
   eraNames,
+  defaultTypeName,
   selectedIds,
   canWrite,
   busy,
   onToggleSelect,
   onTransition,
   onStartCreate,
+  onQuickCreate,
 }: ListGroupProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const tone = resolveStatusTone(status);
+  const [adding, setAdding] = useState(false);
   const summary = sumEstimates(items);
+  const canAdd = canWrite && Boolean(onQuickCreate ?? onStartCreate);
+  const showList = !collapsed && (adding || items.length > 0);
+
+  function handleAddClick() {
+    if (onQuickCreate) {
+      setCollapsed(false);
+      setAdding(true);
+      return;
+    }
+    onStartCreate?.(status.id);
+  }
 
   return (
     <section aria-label={status.name} className="flex flex-col gap-1">
-      <div
-        data-slot="list-group-header"
-        className={cn(
-          'flex h-8 items-center justify-between gap-2 rounded-sm border px-3',
-          tone.surface,
-        )}
-      >
-        <button
-          type="button"
-          aria-expanded={!collapsed}
-          onClick={() => {
-            setCollapsed((prev) => !prev);
-          }}
-          className="flex min-w-0 cursor-pointer items-center gap-2 text-left outline-none focus-visible:underline"
-        >
-          {collapsed ? (
-            <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          ) : (
-            <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          )}
-          <span className={cn('size-2 shrink-0 rounded-xs', tone.dot)} aria-hidden="true" />
-          <span className="truncate text-xs font-medium text-foreground">{status.name}</span>
-          <span className="text-2xs text-muted-foreground tabular-nums">{items.length}</span>
-        </button>
+      <ListStatusGroupHeader
+        status={status}
+        count={items.length}
+        summary={summary}
+        collapsed={collapsed}
+        canAdd={canAdd}
+        onToggleCollapse={() => {
+          setCollapsed((prev) => !prev);
+        }}
+        onAddClick={handleAddClick}
+      />
 
-        <div className="flex items-center gap-3">
-          {summary && (
-            <span className="text-2xs text-muted-foreground tabular-nums">{summary}</span>
-          )}
-          {canWrite && onStartCreate && (
-            <button
-              type="button"
-              onClick={() => {
-                onStartCreate(status.id);
-              }}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-xs px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-card/80 hover:text-foreground"
-            >
-              <Plus className="size-3" aria-hidden="true" />
-              <span>Add item</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {!collapsed && items.length > 0 && (
+      {showList && (
         <ul className="divide-y divide-border/70">
+          {adding && onQuickCreate && (
+            <ListInlineCreateRow
+              status={status}
+              defaultTypeName={defaultTypeName}
+              onSubmit={async (title) => {
+                await onQuickCreate(status.id, title);
+                setAdding(false);
+              }}
+              onCancel={() => {
+                setAdding(false);
+              }}
+            />
+          )}
           {items.map((item) => (
             <ListRow
               key={item.id}
@@ -318,13 +492,16 @@ export function WorkItemsListView({
   eras,
   typeNames,
   statusNames,
+  defaultTypeName,
   canWrite,
   busy,
   onTransition,
   onStartCreate,
+  onQuickCreate,
 }: LayoutViewProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const eraNames = new Map(eras.map((e) => [e.id, e.name]));
+  const resolvedDefaultType = defaultTypeName ?? typeNames.values().next().value ?? 'Item';
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -384,12 +561,14 @@ export function WorkItemsListView({
             statuses={statuses}
             typeNames={typeNames}
             eraNames={eraNames}
+            defaultTypeName={resolvedDefaultType}
             selectedIds={selectedIds}
             canWrite={canWrite}
             busy={busy}
             onToggleSelect={toggleSelect}
             onTransition={onTransition}
             onStartCreate={onStartCreate}
+            onQuickCreate={status.id === '__all__' ? undefined : onQuickCreate}
           />
         );
       })}
