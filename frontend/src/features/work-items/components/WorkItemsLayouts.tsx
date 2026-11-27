@@ -1093,8 +1093,8 @@ export function WorkItemsCalendarView({
                 key={item.id}
                 className="grid gap-1.5 rounded-sm border border-transparent bg-card p-2.5 text-sm shadow-card transition-colors hover:border-input"
               >
-                <div className="flex items-start gap-2">
-                  <span className="mt-0.5 inline-flex shrink-0 items-center gap-1.5">
+                <div className="text-sm leading-snug break-words">
+                  <span className="mr-1.5 inline-flex items-center gap-1.5 align-text-bottom">
                     <WorkItemTypeIcon typeName={typeNames.get(item.workItemTypeId) ?? 'Item'} />
                     <span className="font-mono text-2xs font-medium text-muted-foreground tabular-nums">
                       {formatShortKey(item.id)}
@@ -1103,7 +1103,7 @@ export function WorkItemsCalendarView({
                   <WorkItemTitleLink
                     item={item}
                     onOpenWorkItem={onOpenWorkItem}
-                    className="min-w-0 flex-1 font-medium hover:underline"
+                    className="inline font-medium hover:underline"
                   />
                 </div>
                 <div className="flex flex-wrap gap-1">

@@ -190,9 +190,9 @@ function BoardCard({
         canDrag ? 'cursor-grab active:cursor-grabbing' : onOpenWorkItem && 'cursor-pointer',
       )}
     >
-      {/* Row 1: Type icon + 8-digit card key + card title */}
-      <div className="flex items-start gap-2">
-        <span className="mt-0.5 inline-flex shrink-0 items-center gap-1.5">
+      {/* Row 1: Inline flow — type icon + 8-digit card key followed by full-width wrapping title */}
+      <div className="text-sm leading-snug break-words">
+        <span className="mr-1.5 inline-flex items-center gap-1.5 align-text-bottom">
           <WorkItemTypeIcon typeName={typeName} />
           <span
             data-slot="work-item-key"
@@ -204,7 +204,7 @@ function BoardCard({
         <Link
           to={workItemPath(item.id)}
           onClick={handleTitleClick}
-          className="min-w-0 flex-1 text-sm leading-snug font-medium break-words text-foreground hover:underline focus-visible:underline"
+          className="inline font-medium text-foreground hover:underline focus-visible:underline"
         >
           {item.title}
         </Link>
