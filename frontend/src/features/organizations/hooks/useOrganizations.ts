@@ -234,10 +234,11 @@ export function useRemoveOrganizationMembership(organizationId: string) {
   });
 }
 
-export function useWorkspaceMemberships(workspaceId: string, page: number) {
+export function useWorkspaceMemberships(workspaceId: string, page: number, enabled = true) {
   return useQuery({
     queryKey: [...workspaceMembershipsKey(workspaceId), page],
     queryFn: ({ signal }) => listWorkspaceMemberships(workspaceId, page, signal),
+    enabled: enabled && Boolean(workspaceId),
   });
 }
 

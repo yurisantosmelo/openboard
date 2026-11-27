@@ -1,7 +1,6 @@
 import { Plus } from 'lucide-react';
 import { useRef, useState, type DragEvent, type MouseEvent } from 'react';
 import { Link } from 'react-router';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { PriorityBadge } from '@/components/ui/priority-badge';
@@ -10,8 +9,11 @@ import type { ProjectEra, ProjectStatus } from '@/features/projects';
 import { cn } from '@/lib/utils';
 import type { WorkItem } from '../api/workItemsApi';
 import { workItemPath } from '../paths';
-import { initialsOf, resolveStatusTone, typeDotClass } from './statusTone';
-import { formatEstimate } from './workItemLabels';
+import { AssigneePickerPopover } from './AssigneePickerPopover';
+import type { Participant } from './ProjectWorkspaceHeader';
+import { resolveStatusTone } from './statusTone';
+import { formatEstimate, formatShortKey } from './workItemLabels';
+import { WorkItemTypeIcon } from './WorkItemTypeIcon';
 
 const DRAG_ITEM_MIME = 'application/x-openboard-work-item';
 
@@ -47,94 +49,82 @@ function isInteractiveCardTarget(target: EventTarget | null): boolean {
   return target instanceof Element && Boolean(target.closest('a,button,select,input,textarea'));
 }
 
+function attachCardDragPreview(event: DragEvent<HTMLElement>): void {
+  if (typeof event.dataTransfer.setDragImage !== 'function') return;
+  const source = event.currentTarget;
+  const rect = source.getBoundingClientRect();
+  const ghost = source.cloneNode(true) as HTMLElement;
+  ghost.style.position = 'fixed';
+  ghost.style.top = '-9999px';
+  ghost.style.left = '-9999px';
+  ghost.style.width = `${String(Math.max(rect.width, 240))}px`;
+  ghost.style.pointerEvents = 'none';
+  ghost.style.opacity = '1';
+  ghost.style.margin = '0';
+  ghost.style.boxShadow = '0 14px 32px rgba(15, 23, 42, 0.22)';
+  ghost.style.borderColor = 'var(--ring)';
+  document.body.appendChild(ghost);
+
+  const offsetX =
+    rect.width > 0 ? Math.max(0, Math.min(rect.width, event.clientX - rect.left)) : 24;
+  const offsetY =
+    rect.height > 0 ? Math.max(0, Math.min(rect.height, event.clientY - rect.top)) : 20;
+  event.dataTransfer.setDragImage(ghost, offsetX, offsetY);
+
+  window.requestAnimationFrame(() => {
+    ghost.remove();
+  });
+}
+
 export interface WorkItemsBoardViewProps {
   items: WorkItem[];
   statuses: ProjectStatus[];
   eras: ProjectEra[];
   typeNames: Map<string, string>;
+  workspaceId?: string;
+  participants?: Participant[];
   statusFilterId?: string;
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
+  onAssign?: (workItemId: string, assigneeId: string | null) => void;
   onStartCreate?: (statusId?: string) => void;
   onOpenWorkItem?: (workItemId: string) => void;
 }
 
 interface BoardCardProps {
   item: WorkItem;
-  statuses: ProjectStatus[];
   typeName: string;
   era?: ProjectEra;
+  workspaceId?: string;
+  participants: Participant[];
   canWrite: boolean;
   busy: boolean;
   isDragging: boolean;
   onDragStart: (item: WorkItem, event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
-  onTransition: (workItemId: string, statusId: string) => void;
+  onAssign?: (workItemId: string, assigneeId: string | null) => void;
   onOpenWorkItem?: (workItemId: string) => void;
 }
 
-function BoardCardAssignee({ name, username }: { name: string; username: string }) {
-  if (!name && !username) return null;
-  const displayName = name || `@${username}`;
-  return (
-    <div
-      data-slot="card-assignee"
-      className="flex items-center gap-1.5 text-2xs text-muted-foreground"
-    >
-      <Avatar size="xs">
-        <AvatarFallback className="text-3xs font-semibold">
-          {initialsOf(name, username)}
-        </AvatarFallback>
-      </Avatar>
-      <span className="truncate">{displayName}</span>
-    </div>
-  );
-}
-
-function BoardCardFooter({
-  item,
-  statuses,
+function BoardCardMeta({
+  priority,
+  era,
   estimate,
-  canWrite,
-  busy,
-  onTransition,
 }: {
-  item: WorkItem;
-  statuses: ProjectStatus[];
+  priority: WorkItem['priority'];
+  era?: ProjectEra;
   estimate: string | null;
-  canWrite: boolean;
-  busy: boolean;
-  onTransition: (workItemId: string, statusId: string) => void;
 }) {
-  if (!estimate && !canWrite) return null;
-
+  if (priority === 'none' && !era && !estimate) return null;
   return (
-    <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2">
-      {estimate ? (
+    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+      {priority !== 'none' && <PriorityBadge priority={priority} />}
+      {era && <Tag tone="info">{era.name}</Tag>}
+      {estimate && (
         <span className="rounded-xs border border-border bg-secondary px-1.5 py-0.5 text-2xs text-muted-foreground tabular-nums">
           {estimate}
         </span>
-      ) : (
-        <span />
-      )}
-
-      {canWrite && (
-        <select
-          aria-label={`Status for ${item.title}`}
-          className="h-6 max-w-32 cursor-pointer rounded-xs border border-transparent bg-transparent px-1.5 text-2xs font-medium text-muted-foreground transition-colors outline-none hover:border-input hover:bg-secondary/60 hover:text-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:text-foreground disabled:opacity-50"
-          value={item.statusId}
-          disabled={busy}
-          onChange={(e) => {
-            onTransition(item.id, e.target.value);
-          }}
-        >
-          {statuses.map((st) => (
-            <option key={st.id} value={st.id}>
-              {st.name}
-            </option>
-          ))}
-        </select>
       )}
     </div>
   );
@@ -142,15 +132,16 @@ function BoardCardFooter({
 
 function BoardCard({
   item,
-  statuses,
   typeName,
   era,
+  workspaceId,
+  participants,
   canWrite,
   busy,
   isDragging,
   onDragStart,
   onDragEnd,
-  onTransition,
+  onAssign,
   onOpenWorkItem,
 }: BoardCardProps) {
   const estimate = formatEstimate(item);
@@ -182,6 +173,7 @@ function BoardCard({
       onDragStart={(event) => {
         if (!canDrag) return;
         draggedRef.current = true;
+        attachCardDragPreview(event);
         onDragStart(item, event);
       }}
       onDragEnd={() => {
@@ -191,51 +183,56 @@ function BoardCard({
         }, 0);
       }}
       className={cn(
-        'flex flex-col gap-2 rounded-sm border border-transparent bg-card p-3 shadow-card transition-[border-color,box-shadow,opacity,transform] hover:border-input',
+        'flex flex-col gap-2 rounded-sm border bg-card p-3 shadow-card transition-[border-color,box-shadow,opacity,transform]',
+        isDragging
+          ? 'scale-[0.98] border-dashed border-primary/50 opacity-35'
+          : 'border-transparent hover:border-input',
         canDrag ? 'cursor-grab active:cursor-grabbing' : onOpenWorkItem && 'cursor-pointer',
-        isDragging && 'scale-[0.98] opacity-50',
       )}
     >
-      {/* Row 1: Type identity & Priority badge */}
-      <div className="flex items-center justify-between gap-2 text-2xs text-muted-foreground">
-        <span className="inline-flex min-w-0 items-center gap-1.5 font-medium">
+      {/* Row 1: Type icon + 8-digit card key + card title */}
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 inline-flex shrink-0 items-center gap-1.5">
+          <WorkItemTypeIcon typeName={typeName} />
           <span
-            className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
-            aria-hidden="true"
-          />
-          <span className="truncate">{typeName}</span>
+            data-slot="work-item-key"
+            className="font-mono text-2xs font-medium text-muted-foreground tabular-nums"
+          >
+            {formatShortKey(item.id)}
+          </span>
         </span>
-        {item.priority !== 'none' && <PriorityBadge priority={item.priority} />}
+        <Link
+          to={workItemPath(item.id)}
+          onClick={handleTitleClick}
+          className="min-w-0 flex-1 text-sm leading-snug font-medium break-words text-foreground hover:underline focus-visible:underline"
+        >
+          {item.title}
+        </Link>
       </div>
 
-      {/* Row 2: Clickable Title */}
-      <Link
-        to={workItemPath(item.id)}
-        onClick={handleTitleClick}
-        className="text-sm leading-snug font-medium break-words text-foreground hover:underline focus-visible:underline"
-      >
-        {item.title}
-      </Link>
+      {/* Row 2: Assignee picker directly below title (always rendered, even when unassigned) */}
+      <div className="-ml-1">
+        <AssigneePickerPopover
+          workItemTitle={item.title}
+          assigneeId={item.assigneeId}
+          assigneeName={item.assigneeName}
+          assigneeUsername={item.assigneeUsername}
+          workspaceId={workspaceId}
+          participants={participants}
+          canWrite={canWrite}
+          busy={busy}
+          onAssign={
+            onAssign
+              ? (nextAssigneeId) => {
+                  onAssign(item.id, nextAssigneeId);
+                }
+              : undefined
+          }
+        />
+      </div>
 
-      {/* Row 3: Assignee directly below Title, left-aligned */}
-      <BoardCardAssignee name={item.assigneeName} username={item.assigneeUsername} />
-
-      {/* Row 4: Era tag */}
-      {era && (
-        <div className="flex flex-wrap items-center gap-1">
-          <Tag tone="info">{era.name}</Tag>
-        </div>
-      )}
-
-      {/* Row 5: Quiet footer with estimate and border-on-hover status control */}
-      <BoardCardFooter
-        item={item}
-        statuses={statuses}
-        estimate={estimate}
-        canWrite={canWrite}
-        busy={busy}
-        onTransition={onTransition}
-      />
+      {/* Row 3: Priority, Era and Estimate badges */}
+      <BoardCardMeta priority={item.priority} era={era} estimate={estimate} />
     </article>
   );
 }
@@ -243,9 +240,10 @@ function BoardCard({
 interface BoardColumnProps {
   status: ProjectStatus;
   items: WorkItem[];
-  statuses: ProjectStatus[];
   eraMap: Map<string, ProjectEra>;
   typeNames: Map<string, string>;
+  workspaceId?: string;
+  participants: Participant[];
   canWrite: boolean;
   busy: boolean;
   draggingId: string | null;
@@ -255,7 +253,7 @@ interface BoardColumnProps {
   onDrop: (event: DragEvent<HTMLElement>) => void;
   onCardDragStart: (item: WorkItem, event: DragEvent<HTMLElement>) => void;
   onCardDragEnd: () => void;
-  onTransition: (workItemId: string, statusId: string) => void;
+  onAssign?: (workItemId: string, assigneeId: string | null) => void;
   onStartCreate?: (statusId?: string) => void;
   onOpenWorkItem?: (workItemId: string) => void;
 }
@@ -263,9 +261,10 @@ interface BoardColumnProps {
 function BoardColumn({
   status,
   items,
-  statuses,
   eraMap,
   typeNames,
+  workspaceId,
+  participants,
   canWrite,
   busy,
   draggingId,
@@ -275,7 +274,7 @@ function BoardColumn({
   onDrop,
   onCardDragStart,
   onCardDragEnd,
-  onTransition,
+  onAssign,
   onStartCreate,
   onOpenWorkItem,
 }: BoardColumnProps) {
@@ -325,15 +324,16 @@ function BoardColumn({
             <BoardCard
               key={item.id}
               item={item}
-              statuses={statuses}
               typeName={typeNames.get(item.workItemTypeId) ?? 'Item'}
               era={item.eraId ? eraMap.get(item.eraId) : undefined}
+              workspaceId={workspaceId}
+              participants={participants}
               canWrite={canWrite}
               busy={busy}
               isDragging={draggingId === item.id}
               onDragStart={onCardDragStart}
               onDragEnd={onCardDragEnd}
-              onTransition={onTransition}
+              onAssign={onAssign}
               onOpenWorkItem={onOpenWorkItem}
             />
           ))
@@ -358,16 +358,21 @@ function BoardColumn({
   );
 }
 
+const EMPTY_PARTICIPANTS: Participant[] = [];
+
 /** Kanban board view displaying status-tinted columns and floating draggable Work Item cards. */
 export function WorkItemsBoardView({
   items,
   statuses,
   eras,
   typeNames,
+  workspaceId,
+  participants = EMPTY_PARTICIPANTS,
   statusFilterId,
   canWrite,
   busy,
   onTransition,
+  onAssign,
   onStartCreate,
   onOpenWorkItem,
 }: WorkItemsBoardViewProps) {
@@ -432,9 +437,10 @@ export function WorkItemsBoardView({
             key={status.id}
             status={status}
             items={columnItems}
-            statuses={statuses}
             eraMap={eraMap}
             typeNames={typeNames}
+            workspaceId={workspaceId}
+            participants={participants}
             canWrite={canWrite}
             busy={busy}
             draggingId={dragging?.id ?? null}
@@ -450,7 +456,7 @@ export function WorkItemsBoardView({
             }}
             onCardDragStart={handleCardDragStart}
             onCardDragEnd={handleCardDragEnd}
-            onTransition={onTransition}
+            onAssign={onAssign}
             onStartCreate={onStartCreate}
             onOpenWorkItem={onOpenWorkItem}
           />

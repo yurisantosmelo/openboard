@@ -333,7 +333,8 @@ describe('command-palette-types pure helpers', () => {
     expect(parsePaletteQuery('/sprint')).toEqual({ prefix: '/', term: 'sprint' });
     expect(parsePaletteQuery('OIDC')).toEqual({ prefix: null, term: 'oidc' });
 
-    expect(formatShortKey('abcdef123456')).toBe('ABCDEF12');
+    expect(formatShortKey('abcdef123456')).toMatch(/^\d{8}$/);
+    expect(formatShortKey('abcdef123456')).toBe(formatShortKey('abcdef123456'));
     expect(projectCode('Core Platform')).toBe('CP');
     expect(projectCode('Platform')).toBe('PL');
     expect(projectCode('   ')).toBe('P');
@@ -359,7 +360,7 @@ describe('command-palette-types pure helpers', () => {
     expect(
       filterPaletteWorkItems({
         items: WORK_ITEMS,
-        parsed: parsePaletteQuery('#abcdef'),
+        parsed: parsePaletteQuery(`#${formatShortKey('abcdef123456')}`),
         filters: INITIAL_PALETTE_FILTERS,
         statusById,
         nowMs,
@@ -670,7 +671,10 @@ describe('CommandPalette overlay', () => {
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument();
     const cardDialog = await screen.findByRole('dialog', { name: 'Work Item details' });
     expect(cardDialog).toHaveAttribute('data-maximized', 'false');
-    expect(within(cardDialog).getByText('Story · ABCDEF12')).toBeInTheDocument();
+    expect(within(cardDialog).getByText(formatShortKey('abcdef123456'))).toBeInTheDocument();
+    expect(
+      within(cardDialog).queryByRole('link', { name: 'Open full page' }),
+    ).not.toBeInTheDocument();
 
     const maxBtn = within(cardDialog).getByRole('button', { name: 'Maximize work item' });
     await user.click(maxBtn);

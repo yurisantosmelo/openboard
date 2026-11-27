@@ -12,8 +12,13 @@ import { errorMessage } from '../../../shared/api/httpClient';
 import type { ProjectEra, ProjectStatus } from '../../projects';
 import type { WorkItem } from '../api/workItemsApi';
 import { workItemPath } from '../paths';
+import { AssigneePickerPopover } from './AssigneePickerPopover';
+import type { Participant } from './ProjectWorkspaceHeader';
 import { initialsOf, resolveStatusTone, typeDotClass } from './statusTone';
-import { formatEstimate } from './workItemLabels';
+import { formatEstimate, formatShortKey } from './workItemLabels';
+import { WorkItemTypeIcon } from './WorkItemTypeIcon';
+
+const EMPTY_PARTICIPANTS: Participant[] = [];
 
 export interface LayoutViewProps {
   items: WorkItem[];
@@ -21,10 +26,13 @@ export interface LayoutViewProps {
   eras: ProjectEra[];
   typeNames: Map<string, string>;
   statusNames: Map<string, string>;
+  workspaceId?: string;
+  participants?: Participant[];
   defaultTypeName?: string;
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
+  onAssign?: (workItemId: string, assigneeId: string | null) => void;
   onStartCreate?: (statusId?: string) => void;
   onQuickCreate?: (statusId: string, title: string) => Promise<void>;
   onOpenWorkItem?: (workItemId: string) => void;
@@ -72,23 +80,6 @@ function sumEstimates(items: WorkItem[]): string {
   if (pts > 0) parts.push(`${String(pts)} pts`);
   if (hrs > 0) parts.push(`${String(hrs)} h`);
   return parts.join(' · ');
-}
-
-function AssigneeCell({ name, username }: { name: string; username: string }) {
-  if (!name && !username) {
-    return <span className="text-2xs text-muted-foreground">Unassigned</span>;
-  }
-  const label = name || `@${username}`;
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-      <Avatar size="xs">
-        <AvatarFallback className="text-3xs font-semibold">
-          {initialsOf(name, username)}
-        </AvatarFallback>
-      </Avatar>
-      <span className="truncate">{label}</span>
-    </span>
-  );
 }
 
 function InlineStatusCell({
@@ -161,10 +152,13 @@ interface ListRowProps {
   typeName: string;
   eraName?: string;
   selected: boolean;
+  workspaceId?: string;
+  participants: Participant[];
   canWrite: boolean;
   busy: boolean;
   onToggleSelect: (id: string) => void;
   onTransition: (workItemId: string, statusId: string) => void;
+  onAssign?: (workItemId: string, assigneeId: string | null) => void;
   onOpenWorkItem?: (workItemId: string) => void;
 }
 
@@ -176,10 +170,13 @@ function ListRow({
   typeName,
   eraName,
   selected,
+  workspaceId,
+  participants,
   canWrite,
   busy,
   onToggleSelect,
   onTransition,
+  onAssign,
   onOpenWorkItem,
 }: ListRowProps) {
   const estimate = formatEstimate(item);
@@ -204,10 +201,10 @@ function ListRow({
           }}
           className="size-3.5 shrink-0 cursor-pointer rounded-xs border-border accent-primary"
         />
-        <span
-          className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
-          aria-hidden="true"
-        />
+        <WorkItemTypeIcon typeName={typeName} />
+        <span className="shrink-0 font-mono text-2xs font-medium text-muted-foreground tabular-nums">
+          {formatShortKey(item.id)}
+        </span>
         <WorkItemTitleLink
           item={item}
           onOpenWorkItem={onOpenWorkItem}
@@ -228,8 +225,24 @@ function ListRow({
         <span className="w-12 text-right text-2xs text-muted-foreground tabular-nums">
           {estimate ?? '—'}
         </span>
-        <div className="w-28 truncate">
-          <AssigneeCell name={item.assigneeName} username={item.assigneeUsername} />
+        <div className="w-32 truncate">
+          <AssigneePickerPopover
+            workItemTitle={item.title}
+            assigneeId={item.assigneeId}
+            assigneeName={item.assigneeName}
+            assigneeUsername={item.assigneeUsername}
+            workspaceId={workspaceId}
+            participants={participants}
+            canWrite={canWrite}
+            busy={busy}
+            onAssign={
+              onAssign
+                ? (nextAssigneeId) => {
+                    onAssign(item.id, nextAssigneeId);
+                  }
+                : undefined
+            }
+          />
         </div>
         <InlineStatusCell
           item={item}
@@ -365,10 +378,13 @@ interface ListGroupProps {
   eraNames: Map<string, string>;
   defaultTypeName: string;
   selectedIds: Set<string>;
+  workspaceId?: string;
+  participants: Participant[];
   canWrite: boolean;
   busy: boolean;
   onToggleSelect: (id: string) => void;
   onTransition: (workItemId: string, statusId: string) => void;
+  onAssign?: (workItemId: string, assigneeId: string | null) => void;
   onStartCreate?: (statusId?: string) => void;
   onQuickCreate?: (statusId: string, title: string) => Promise<void>;
   onOpenWorkItem?: (workItemId: string) => void;
@@ -443,10 +459,13 @@ function ListStatusGroup({
   eraNames,
   defaultTypeName,
   selectedIds,
+  workspaceId,
+  participants,
   canWrite,
   busy,
   onToggleSelect,
   onTransition,
+  onAssign,
   onStartCreate,
   onQuickCreate,
   onOpenWorkItem,
@@ -505,10 +524,13 @@ function ListStatusGroup({
               typeName={typeNames.get(item.workItemTypeId) ?? 'Item'}
               eraName={item.eraId ? eraNames.get(item.eraId) : undefined}
               selected={selectedIds.has(item.id)}
+              workspaceId={workspaceId}
+              participants={participants}
               canWrite={canWrite}
               busy={busy}
               onToggleSelect={onToggleSelect}
               onTransition={onTransition}
+              onAssign={onAssign}
               onOpenWorkItem={onOpenWorkItem}
             />
           ))}
@@ -525,10 +547,13 @@ export function WorkItemsListView({
   eras,
   typeNames,
   statusNames,
+  workspaceId,
+  participants = EMPTY_PARTICIPANTS,
   defaultTypeName,
   canWrite,
   busy,
   onTransition,
+  onAssign,
   onStartCreate,
   onQuickCreate,
   onOpenWorkItem,
@@ -597,10 +622,13 @@ export function WorkItemsListView({
             eraNames={eraNames}
             defaultTypeName={resolvedDefaultType}
             selectedIds={selectedIds}
+            workspaceId={workspaceId}
+            participants={participants}
             canWrite={canWrite}
             busy={busy}
             onToggleSelect={toggleSelect}
             onTransition={onTransition}
+            onAssign={onAssign}
             onStartCreate={onStartCreate}
             onQuickCreate={status.id === '__all__' ? undefined : onQuickCreate}
             onOpenWorkItem={onOpenWorkItem}
@@ -622,9 +650,12 @@ export function WorkItemsTableView({
   eras,
   typeNames,
   statusNames,
+  workspaceId,
+  participants = EMPTY_PARTICIPANTS,
   canWrite,
   busy,
   onTransition,
+  onAssign,
   onStartCreate,
   onOpenWorkItem,
 }: LayoutViewProps) {
@@ -701,10 +732,10 @@ export function WorkItemsTableView({
                   </td>
                   <td className="max-w-sm px-3 py-2 font-medium text-foreground">
                     <span className="inline-flex min-w-0 items-center gap-2">
-                      <span
-                        className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
-                        aria-hidden="true"
-                      />
+                      <WorkItemTypeIcon typeName={typeName} />
+                      <span className="shrink-0 font-mono text-2xs font-medium text-muted-foreground tabular-nums">
+                        {formatShortKey(item.id)}
+                      </span>
                       <WorkItemTitleLink
                         item={item}
                         onOpenWorkItem={onOpenWorkItem}
@@ -734,7 +765,23 @@ export function WorkItemsTableView({
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <AssigneeCell name={item.assigneeName} username={item.assigneeUsername} />
+                    <AssigneePickerPopover
+                      workItemTitle={item.title}
+                      assigneeId={item.assigneeId}
+                      assigneeName={item.assigneeName}
+                      assigneeUsername={item.assigneeUsername}
+                      workspaceId={workspaceId}
+                      participants={participants}
+                      canWrite={canWrite}
+                      busy={busy}
+                      onAssign={
+                        onAssign
+                          ? (nextAssigneeId) => {
+                              onAssign(item.id, nextAssigneeId);
+                            }
+                          : undefined
+                      }
+                    />
                   </td>
                   <td className="px-3 py-2 text-2xs text-muted-foreground">
                     {item.eraId ? (eraNames.get(item.eraId) ?? '—') : '—'}

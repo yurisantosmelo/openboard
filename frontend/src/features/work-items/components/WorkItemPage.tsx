@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   ArrowLeft,
-  ExternalLink,
   Loader2,
   Maximize2,
   Minimize2,
@@ -44,8 +43,8 @@ import {
   useWorkItems,
 } from '../hooks/useWorkItems';
 import { EstimateInput, ParentSelect } from './CreateWorkItemForm';
-import { workItemPath } from '../paths';
 import { initialsOf, resolveStatusTone, typeDotClass } from './statusTone';
+import { WorkItemTypeIcon } from './WorkItemTypeIcon';
 import {
   CollapsibleSection,
   EraDateWindow,
@@ -136,10 +135,9 @@ function EditorTopBar({
   return (
     <div className="flex items-center justify-between gap-2 px-6 pt-3.5 pb-1">
       <div className="flex items-center gap-2 text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-        <span className={cn('size-2 rounded-xs', typeDotClass(typeName))} aria-hidden="true" />
-        <span>
-          {typeName} · {formatShortKey(item.id)}
-        </span>
+        <WorkItemTypeIcon typeName={typeName} />
+        <span className="font-mono tabular-nums">{formatShortKey(item.id)}</span>
+        <span>· {typeName}</span>
       </div>
       <div className="flex items-center gap-1">
         {onToggleMaximize && (
@@ -161,26 +159,15 @@ function EditorTopBar({
         )}
 
         {mode === 'dialog' ? (
-          <>
-            <Link
-              to={workItemPath(item.id)}
-              onClick={onClose}
-              aria-label="Open full page"
-              title="Open full page"
-              className={topBarActionClass}
-            >
-              <ExternalLink className="size-3.5" aria-hidden="true" />
-            </Link>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close work item"
-              title="Close"
-              className={topBarActionClass}
-            >
-              <X className="size-3.5" aria-hidden="true" />
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close work item"
+            title="Close"
+            className={topBarActionClass}
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
         ) : (
           <Link
             to={projectPath(item.projectId)}

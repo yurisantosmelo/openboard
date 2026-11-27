@@ -65,6 +65,18 @@ export function useTransitionWorkItem(projectId: string) {
   });
 }
 
+export function useAssignWorkItem(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workItemId, assigneeId }: { workItemId: string; assigneeId: string | null }) =>
+      updateWorkItem(workItemId, { assigneeId }),
+    onSuccess: (item) => {
+      queryClient.setQueryData(['work-item', item.id], item);
+      return queryClient.invalidateQueries({ queryKey: workItemsKey(projectId) });
+    },
+  });
+}
+
 export function useDeleteWorkItem(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

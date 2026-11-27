@@ -64,9 +64,9 @@ function workItemDto(overrides: object = {}) {
     project_id: 'p1',
     work_item_type_id: 't1',
     status_id: 's1',
-    parent_id: null,
-    era_id: null,
-    assignee_id: null,
+    parent_id: null as string | null,
+    era_id: null as string | null,
+    assignee_id: null as string | null,
     assignee_username: '',
     assignee_name: '',
     title: 'Ship board drag and drop',
@@ -249,9 +249,12 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     expect(await screen.findByRole('link', { name: 'Design Polish' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/projects/p3');
 
-    // Switch Organization -> jumps straight into Globex's first Board
+    // Switch Organization -> supports search input to filter organizations
     await user.click(screen.getByRole('button', { name: 'Switch Organization' }));
     expect(screen.queryByRole('menuitem', { name: 'Add Organization' })).not.toBeInTheDocument();
+    const orgSearch = await screen.findByLabelText('Search organizations');
+    await user.type(orgSearch, 'Glob');
+    expect(screen.queryByRole('menuitem', { name: 'Acme' })).not.toBeInTheDocument();
     await user.click(await screen.findByRole('menuitem', { name: 'Globex' }));
     expect(await screen.findByRole('link', { name: 'Globex Launch' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/projects/p2');
@@ -275,12 +278,14 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     expect(cardArticle).toHaveAttribute('draggable', 'true');
     expect(cardArticle).toHaveClass('cursor-grab');
 
-    // Drag card from Backlog column to In Progress column
+    // Drag card from Backlog column to In Progress column (renders real card drag image)
     const inProgressColumn = within(board).getByRole('region', { name: 'In Progress' });
     const dataMap = new Map<string, string>();
+    const setDragImage = vi.fn();
     const dataTransfer = {
       effectAllowed: 'move',
       dropEffect: 'move',
+      setDragImage,
       setData: (type: string, value: string) => {
         dataMap.set(type, value);
       },
@@ -289,6 +294,7 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
 
     if (!cardArticle) throw new Error('expected draggable card article');
     fireEvent.dragStart(cardArticle, { dataTransfer });
+    expect(setDragImage).toHaveBeenCalledTimes(1);
     fireEvent.dragOver(inProgressColumn, { dataTransfer });
     fireEvent.drop(inProgressColumn, { dataTransfer });
     fireEvent.dragEnd(cardArticle, { dataTransfer });
@@ -413,7 +419,7 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     );
   });
 
-  it('opens the maximizable 01C Work Item card dialog when clicking any Board card and supports maximize/restore/full-page', async () => {
+  it('opens the 80% resizable & maximizable 01C Work Item card dialog from Board card, supports board assignee picker, and omits Open full page', async () => {
     let currentItem = workItemDto();
     const p1Stub = projectApiStubs('p1', [currentItem]);
 
@@ -422,6 +428,26 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
         userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys' }),
       ),
       'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      'GET /api/v1/workspaces/w1/memberships?page=1&page_size=20': pageOf([
+        {
+          workspace_id: 'w1',
+          organization_id: 'o1',
+          user_id: 'u1',
+          username: 'thamirys',
+          name: 'Thamirys',
+          role: 'owner',
+          created_at: '2026-11-24T12:00:00Z',
+        },
+        {
+          workspace_id: 'w1',
+          organization_id: 'o1',
+          user_id: 'u2',
+          username: 'bruno',
+          name: 'Bruno Silva',
+          role: 'contributor',
+          created_at: '2026-11-24T12:00:00Z',
+        },
+      ]),
       ...p1Stub.routes,
       'GET /api/v1/work-items/wi1': () => Response.json(currentItem),
       'GET /api/v1/work-items/wi1/links': Response.json({ items: [] }),
@@ -431,6 +457,12 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
         currentItem = {
           ...currentItem,
           title: typeof parsed.title === 'string' ? parsed.title : currentItem.title,
+          assignee_id:
+            'assignee_id' in parsed
+              ? (parsed.assignee_id as string | null)
+              : currentItem.assignee_id,
+          assignee_name: parsed.assignee_id === 'u2' ? 'Bruno Silva' : currentItem.assignee_name,
+          assignee_username: parsed.assignee_id === 'u2' ? 'bruno' : currentItem.assignee_username,
         };
         return Response.json(currentItem);
       },
@@ -442,19 +474,55 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     const cardArticle = cardLink.closest('article');
     if (!cardArticle) throw new Error('expected board card article');
 
-    // Click card body (not just the link) -> opens new 01C maximizable dialog
-    await user.click(within(cardArticle).getByText('Task'));
+    // Board card renders type icon, 8-digit numeric key, Unassigned picker below title, and no status select
+    const cardKey = cardArticle.querySelector('[data-slot="work-item-key"]');
+    expect(cardKey?.textContent).toMatch(/^\d{8}$/);
+    expect(cardArticle.querySelector('[data-slot="work-item-type-icon"]')).toBeInTheDocument();
+    expect(
+      within(cardArticle).queryByLabelText('Status for Ship board drag and drop'),
+    ).not.toBeInTheDocument();
+
+    // Assign a user directly from the Board card searchable popover
+    await user.click(
+      within(cardArticle).getByRole('button', { name: 'Assign Ship board drag and drop' }),
+    );
+    const assigneeSearch = await screen.findByLabelText('Search assignee');
+    await user.type(assigneeSearch, 'Bruno');
+    await user.click(await screen.findByRole('button', { name: /Bruno Silva/i }));
+    expect(screen.queryByRole('dialog', { name: 'Work Item details' })).not.toBeInTheDocument();
+
+    // Click card body (key badge) -> opens 80% x 80% resizable & maximizable 01C dialog without Open full page
+    if (!cardKey) throw new Error('expected work-item-key element');
+    await user.click(cardKey);
     const dialog = await screen.findByRole('dialog', { name: 'Work Item details' });
     const backdrop = document.querySelector('[data-slot="work-item-detail-backdrop"]');
     expect(backdrop).toHaveClass('z-[55]');
-    expect(dialog).toHaveClass('z-[60]');
+    expect(dialog).toHaveClass('z-[60]', 'w-[80vw]', 'h-[80svh]');
     expect(router.state.location.pathname).toBe('/projects/p1');
     expect(dialog).toHaveAttribute('data-maximized', 'false');
-    expect(within(dialog).getByText('Task · WI1')).toBeInTheDocument();
+    expect(within(dialog).getByText(cardKey.textContent)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: 'Open full page' })).not.toBeInTheDocument();
 
-    // Maximize and restore
+    // Resize vertically via top and bottom border handles
+    const bottomHandle = within(dialog).getByRole('separator', {
+      name: 'Resize card bottom border',
+    });
+    fireEvent.pointerDown(bottomHandle, { clientY: 700 });
+    fireEvent.pointerMove(window, { clientY: 740 });
+    fireEvent.pointerUp(window);
+    expect(dialog.style.height).not.toBe('');
+
+    const topHandle = within(dialog).getByRole('separator', { name: 'Resize card top border' });
+    fireEvent.pointerDown(topHandle, { clientY: 90 });
+    fireEvent.pointerMove(window, { clientY: 130 });
+    fireEvent.pointerUp(window);
+
+    // Maximize hides resize handles, Restore brings them back
     await user.click(within(dialog).getByRole('button', { name: 'Maximize work item' }));
     expect(dialog).toHaveAttribute('data-maximized', 'true');
+    expect(
+      within(dialog).queryByRole('separator', { name: 'Resize card bottom border' }),
+    ).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Restore work item size' }));
     expect(dialog).toHaveAttribute('data-maximized', 'false');
 
@@ -464,19 +532,5 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     await user.type(titleInput, 'Ship maximizable card modal');
     await user.click(within(dialog).getByRole('button', { name: 'Save & Close' }));
     expect(screen.queryByRole('dialog', { name: 'Work Item details' })).not.toBeInTheDocument();
-
-    // Clicking the card title link reopens the modal, and Open full page navigates to /work-items/wi1
-    await user.click(cardLink);
-    const reopened = await screen.findByRole('dialog', { name: 'Work Item details' });
-    await user.click(within(reopened).getByRole('link', { name: 'Open full page' }));
-    expect(router.state.location.pathname).toBe('/work-items/wi1');
-
-    const fullEditor = await screen.findByRole('form', { name: 'Work Item details' });
-    expect(fullEditor).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Maximize work item' }));
-    expect(screen.getByRole('button', { name: 'Restore work item size' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
   });
 });

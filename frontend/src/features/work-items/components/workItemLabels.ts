@@ -32,9 +32,15 @@ export const textareaClassName =
 export const quietEditorSelectClass =
   'h-7 w-full min-w-0 cursor-pointer rounded-sm border border-transparent bg-transparent px-2 text-xs font-medium text-foreground transition-[border-color,background-color] outline-none hover:border-input hover:bg-secondary/60 focus-visible:border-ring focus-visible:bg-background disabled:pointer-events-none disabled:opacity-60';
 
+/** Deterministic 8-digit numeric card key (e.g. "19827634") derived from a Work Item ID. */
 export function formatShortKey(id: string): string {
-  const clean = id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  return clean.length > 8 ? clean.slice(0, 8) : clean || 'ITEM';
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i += 1) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const numeric = 10_000_000 + ((hash >>> 0) % 90_000_000);
+  return String(numeric);
 }
 
 export function formatEstimate(item: Pick<WorkItem, 'storyPoints' | 'hours'>): string | null {
