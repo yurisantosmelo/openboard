@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { clearNavigationContext } from '@/app/navigationContext';
 import { stubApi, userDto } from '../../test/fakeApi';
 import { renderRoute } from '../../test/renderRoute';
@@ -293,9 +293,13 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     };
 
     if (!cardArticle) throw new Error('expected draggable card article');
-    fireEvent.dragStart(cardArticle, { dataTransfer });
+    fireEvent.dragStart(cardArticle, { dataTransfer, clientX: 120, clientY: 160 });
     expect(setDragImage).toHaveBeenCalledTimes(1);
-    fireEvent.dragOver(inProgressColumn, { dataTransfer });
+    const preview = document.querySelector('[data-slot="board-drag-preview"]');
+    expect(preview).toBeInTheDocument();
+    expect(preview).toHaveClass('opacity-100');
+    expect(cardArticle).toHaveClass('opacity-100');
+    fireEvent.dragOver(inProgressColumn, { dataTransfer, clientX: 420, clientY: 160 });
     fireEvent.drop(inProgressColumn, { dataTransfer });
     fireEvent.dragEnd(cardArticle, { dataTransfer });
 
@@ -532,5 +536,122 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     await user.type(titleInput, 'Ship maximizable card modal');
     await user.click(within(dialog).getByRole('button', { name: 'Save & Close' }));
     expect(screen.queryByRole('dialog', { name: 'Work Item details' })).not.toBeInTheDocument();
+  });
+
+  it('reorders cards above or below another card in the same column with visual insertion indicator', async () => {
+    const p1Stub = projectApiStubs('p1', [
+      workItemDto({ id: 'wi1', title: 'First card', status_id: 's1' }),
+      workItemDto({ id: 'wi2', title: 'Second card', status_id: 's1' }),
+      workItemDto({ id: 'wi3', title: 'Third card', status_id: 's1' }),
+    ]);
+
+    stubApi({
+      'GET /api/v1/users/me': Response.json(
+        userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys' }),
+      ),
+      'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      ...p1Stub.routes,
+    });
+
+    renderRoute('/projects/p1');
+    const board = await screen.findByRole('region', { name: 'Work Items board' });
+    const backlogCol = within(board).getByRole('region', { name: 'Backlog' });
+    const firstCard = (await within(backlogCol).findByRole('link', { name: 'First card' })).closest(
+      'article',
+    );
+    const thirdCard = within(backlogCol)
+      .getByRole('link', { name: 'Third card' })
+      .closest('article');
+    if (!firstCard || !thirdCard) throw new Error('expected board cards');
+
+    vi.spyOn(firstCard, 'getBoundingClientRect').mockReturnValue({
+      top: 100,
+      bottom: 200,
+      height: 100,
+      left: 20,
+      right: 280,
+      width: 260,
+      x: 20,
+      y: 100,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(thirdCard, 'getBoundingClientRect').mockReturnValue({
+      top: 320,
+      bottom: 420,
+      height: 100,
+      left: 20,
+      right: 280,
+      width: 260,
+      x: 20,
+      y: 320,
+      toJSON: () => ({}),
+    });
+
+    const dataMap = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: 'move',
+      dropEffect: 'move',
+      setDragImage: vi.fn(),
+      setData: (type: string, value: string) => {
+        dataMap.set(type, value);
+      },
+      getData: (type: string) => dataMap.get(type) ?? '',
+    };
+
+    function fireDrag(
+      type: 'dragStart' | 'dragOver' | 'drop' | 'dragEnd',
+      target: Element,
+      clientY: number,
+    ) {
+      const event = createEvent[type](target);
+      Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+      Object.defineProperty(event, 'clientX', { value: 60 });
+      Object.defineProperty(event, 'clientY', { value: clientY });
+      fireEvent(target, event);
+    }
+
+    // Drag Third card ABOVE First card (top half of First card: clientY = 110 < 150)
+    fireDrag('dragStart', thirdCard, 350);
+    fireDrag('dragOver', firstCard, 110);
+    expect(
+      backlogCol.querySelector('[data-slot="board-drop-indicator"][data-position="before"]'),
+    ).toBeInTheDocument();
+    fireDrag('drop', firstCard, 110);
+    fireDrag('dragEnd', thirdCard, 110);
+
+    const afterBeforeDrop = within(backlogCol)
+      .getAllByRole('link')
+      .map((el) => el.textContent);
+    expect(afterBeforeDrop).toEqual(['Third card', 'First card', 'Second card']);
+
+    // Drag Third card BELOW Second card (bottom half of Second card: clientY = 390 > 370)
+    const secondCard = within(backlogCol)
+      .getByRole('link', { name: 'Second card' })
+      .closest('article');
+    if (!secondCard) throw new Error('expected second card');
+    vi.spyOn(secondCard, 'getBoundingClientRect').mockReturnValue({
+      top: 320,
+      bottom: 420,
+      height: 100,
+      left: 20,
+      right: 280,
+      width: 260,
+      x: 20,
+      y: 320,
+      toJSON: () => ({}),
+    });
+
+    fireDrag('dragStart', thirdCard, 120);
+    fireDrag('dragOver', secondCard, 390);
+    expect(
+      backlogCol.querySelector('[data-slot="board-drop-indicator"][data-position="after"]'),
+    ).toBeInTheDocument();
+    fireDrag('drop', secondCard, 390);
+    fireDrag('dragEnd', thirdCard, 390);
+
+    const afterBottomDrop = within(backlogCol)
+      .getAllByRole('link')
+      .map((el) => el.textContent);
+    expect(afterBottomDrop).toEqual(['First card', 'Second card', 'Third card']);
   });
 });
