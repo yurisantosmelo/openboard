@@ -1,10 +1,11 @@
-import { Building2, Inbox, KeyRound, LogOut, Settings2 } from 'lucide-react';
-import { useEffect, useRef, type RefObject } from 'react';
+import { Building2, Inbox, KeyRound, LogOut, Search, Settings2, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { ContextSwitchers } from '@/app/ContextSwitchers';
 import { clearNavigationContext } from '@/app/navigationContext';
 import { useProjectShell } from '@/app/project-shell-context';
 import { usePortalAccess } from '@/app/usePortalAccess';
+import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -17,11 +18,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { IconButton } from '@/components/ui/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { SearchInput } from '@/components/ui/search-input';
 import { CHANGE_PASSWORD_PATH, useCurrentUser, useSignOut } from '@/features/auth';
+import { cn } from '@/lib/utils';
 
 const SHORTCUT_ITEMS = [
-  { label: 'Global search', keys: 'Ctrl + /' },
+  { label: 'Command palette', keys: 'Ctrl + /' },
   { label: 'Submit Work Item', keys: 'Ctrl + Enter' },
   { label: 'Close overlay', keys: 'Esc' },
 ] as const;
@@ -35,25 +36,73 @@ function userInitials(name: string): string {
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
 }
 
-function useGlobalSearchShortcut(
-  inputRef: RefObject<HTMLInputElement | null>,
-  enabled: boolean,
-): void {
+function useCommandPaletteShortcut(onToggle: () => void): void {
   useEffect(() => {
-    if (!enabled) return undefined;
-
     function handleKeyDown(event: KeyboardEvent) {
       if (!(event.ctrlKey || event.metaKey) || event.key !== '/') return;
       event.preventDefault();
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      onToggle();
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [enabled, inputRef]);
+  }, [onToggle]);
+}
+
+function GlobalSearchTrigger({
+  query,
+  open,
+  onOpen,
+  onClear,
+}: {
+  query: string;
+  open: boolean;
+  onOpen: () => void;
+  onClear?: () => void;
+}) {
+  const hasQuery = query.length > 0;
+
+  return (
+    <div
+      data-slot="global-search-trigger"
+      className={cn(
+        'flex h-7 w-full max-w-[380px] items-center gap-2 rounded-sm border bg-background px-2.5 text-xs transition-colors',
+        open
+          ? 'border-ring ring-2 ring-ring/20'
+          : 'border-input hover:border-ring/60 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20',
+      )}
+    >
+      <button
+        type="button"
+        aria-label="Global search work items"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left outline-none"
+      >
+        <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className={cn('truncate', hasQuery ? 'text-foreground' : 'text-placeholder')}>
+          {hasQuery ? query : 'Search work items, projects, views...'}
+        </span>
+      </button>
+      {hasQuery && onClear ? (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Clear search"
+          className="inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <X className="size-3" aria-hidden="true" />
+        </button>
+      ) : (
+        <kbd className="inline-flex h-5 shrink-0 items-center rounded-xs border border-border bg-secondary px-[5px] font-sans text-2xs font-normal text-muted-foreground">
+          Ctrl + /
+        </kbd>
+      )}
+    </div>
+  );
 }
 
 function HeaderNotificationsButton() {
@@ -198,9 +247,13 @@ function HeaderUserMenu() {
 
 export function GlobalHeader() {
   const { shell } = useProjectShell();
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
-  useGlobalSearchShortcut(searchInputRef, shell !== null);
+  const togglePalette = useCallback(() => {
+    setPaletteOpen((prev) => !prev);
+  }, []);
+
+  useCommandPaletteShortcut(togglePalette);
 
   return (
     <header
@@ -208,22 +261,20 @@ export function GlobalHeader() {
       className="flex h-[var(--workspace-topbar-height)] w-full shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-6"
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        {shell && (
-          <SearchInput
-            ref={searchInputRef}
-            aria-label="Global search work items"
-            placeholder="Search work items, projects, views..."
-            shortcut="Ctrl + /"
-            value={shell.searchQuery}
-            onChange={(e) => {
-              shell.onSearchChange(e.target.value);
-            }}
-            onClear={() => {
-              shell.onSearchChange('');
-            }}
-            containerClassName="max-w-[380px]"
-          />
-        )}
+        <GlobalSearchTrigger
+          query={shell?.searchQuery ?? ''}
+          open={paletteOpen}
+          onOpen={() => {
+            setPaletteOpen(true);
+          }}
+          onClear={
+            shell
+              ? () => {
+                  shell.onSearchChange('');
+                }
+              : undefined
+          }
+        />
         <ContextSwitchers />
       </div>
 
@@ -233,6 +284,12 @@ export function GlobalHeader() {
         <HeaderHelpButton />
         <HeaderUserMenu />
       </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        initialQuery={shell?.searchQuery ?? ''}
+      />
     </header>
   );
 }

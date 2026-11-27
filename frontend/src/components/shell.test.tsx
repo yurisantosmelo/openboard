@@ -133,7 +133,7 @@ describe('OpenBoard navigation shell', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders GlobalHeader with Ctrl + / search, keyboard focus, utilities and avatar menu', async () => {
+  it('renders GlobalHeader with Ctrl + / command palette, utilities and avatar menu', async () => {
     const user = userEvent.setup();
     const shell = makeShell({ searchQuery: '' });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -155,14 +155,15 @@ describe('OpenBoard navigation shell', () => {
       </QueryClientProvider>,
     );
 
-    const search = screen.getByLabelText('Global search work items');
+    expect(screen.getByRole('button', { name: 'Global search work items' })).toBeInTheDocument();
     expect(screen.getByText('Ctrl + /')).toBeInTheDocument();
 
     await user.keyboard('{Control>}/{/Control}');
-    expect(search).toHaveFocus();
+    const paletteInput = await screen.findByLabelText('Command palette search');
+    expect(paletteInput).toHaveFocus();
 
-    await user.type(search, 'C');
-    expect(shell.onSearchChange).toHaveBeenCalledWith('C');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByLabelText('Command palette search')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Notifications' }));
     expect(await screen.findByText(/all caught up/i)).toBeInTheDocument();
@@ -200,8 +201,7 @@ describe('OpenBoard navigation shell', () => {
     );
 
     expect(screen.getByText('BR')).toBeInTheDocument();
-    const search = screen.getByLabelText('Global search work items');
-    expect(search).toHaveValue('CORE');
+    expect(screen.getByText('CORE')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(shell.onSearchChange).toHaveBeenCalledWith('');
   });

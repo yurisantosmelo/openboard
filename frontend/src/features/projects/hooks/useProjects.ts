@@ -137,6 +137,7 @@ export function useProjectStatuses(projectId: string) {
   return useQuery({
     queryKey: statusesKey(projectId),
     queryFn: ({ signal }) => listProjectStatuses(projectId, signal),
+    enabled: Boolean(projectId),
   });
 }
 
@@ -180,6 +181,7 @@ export function useProjectWorkItemTypes(projectId: string) {
   return useQuery({
     queryKey: typesKey(projectId),
     queryFn: ({ signal }) => listProjectWorkItemTypes(projectId, signal),
+    enabled: Boolean(projectId),
   });
 }
 
