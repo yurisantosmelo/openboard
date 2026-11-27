@@ -29,6 +29,14 @@ export const selectClassName =
 export const textareaClassName =
   'min-h-24 w-full min-w-0 rounded-lg border border-input bg-background not-dark:bg-clip-padding px-3 py-2 text-sm text-foreground shadow-xs/5 transition-[color,box-shadow,border-color] outline-none placeholder:text-placeholder dark:bg-input/32 focus-visible:border-ring focus-visible:shadow-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/24 disabled:pointer-events-none disabled:opacity-64';
 
+export const quietEditorSelectClass =
+  'h-7 w-full min-w-0 cursor-pointer rounded-sm border border-transparent bg-transparent px-2 text-xs font-medium text-foreground transition-[border-color,background-color] outline-none hover:border-input hover:bg-secondary/60 focus-visible:border-ring focus-visible:bg-background disabled:pointer-events-none disabled:opacity-60';
+
+export function formatShortKey(id: string): string {
+  const clean = id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return clean.length > 8 ? clean.slice(0, 8) : clean || 'ITEM';
+}
+
 export function formatEstimate(item: Pick<WorkItem, 'storyPoints' | 'hours'>): string | null {
   if (item.storyPoints !== null) return `${String(item.storyPoints)} pts`;
   if (item.hours !== null) return `${String(item.hours)} h`;
