@@ -214,9 +214,17 @@ describe('BoardColumn semantic tones and WorkItemModal maximize toggle', () => {
     expect(container.querySelector('.lucide-book-open-text')).toBeInTheDocument();
     expect(container.querySelector('.lucide-layers')).toBeInTheDocument();
 
-    const badges = Array.from(container.querySelectorAll('[data-slot="work-item-type-icon"]')).map(
-      (el) => el.className,
-    );
-    expect(new Set(badges).size).toBe(6);
+    const wrappers = Array.from(container.querySelectorAll('[data-slot="work-item-type-icon"]'));
+    expect(wrappers).toHaveLength(6);
+    for (const wrapper of wrappers) {
+      expect(wrapper.className).not.toMatch(/\bbg-/);
+    }
+
+    const svgClasses = wrappers.map((el) => el.querySelector('svg')?.getAttribute('class') ?? '');
+    expect(new Set(svgClasses).size).toBe(6);
+    for (const cls of svgClasses) {
+      expect(cls).toMatch(/\btext-/);
+      expect(cls).toMatch(/\bfill-/);
+    }
   });
 });

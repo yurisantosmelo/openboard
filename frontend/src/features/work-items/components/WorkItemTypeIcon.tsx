@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 interface TypeVisual {
   icon: LucideIcon;
-  badgeClass: string;
+  toneClass: string;
 }
 
 function resolveTypeVisual(typeName: string): TypeVisual {
@@ -11,36 +11,37 @@ function resolveTypeVisual(typeName: string): TypeVisual {
   if (lower.includes('epic')) {
     return {
       icon: Crown,
-      badgeClass: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+      toneClass: 'text-violet-600 fill-violet-500/25 dark:text-violet-400 dark:fill-violet-400/25',
     };
   }
   if (lower.includes('bug')) {
     return {
       icon: Bug,
-      badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+      toneClass: 'text-rose-600 fill-rose-500/25 dark:text-rose-400 dark:fill-rose-400/25',
     };
   }
   if (lower.includes('feature')) {
     return {
       icon: Trophy,
-      badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+      toneClass: 'text-amber-600 fill-amber-500/25 dark:text-amber-400 dark:fill-amber-400/25',
     };
   }
   if (lower.includes('task')) {
     return {
       icon: FileCheck,
-      badgeClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+      toneClass: 'text-sky-600 fill-sky-500/25 dark:text-sky-400 dark:fill-sky-400/25',
     };
   }
   if (lower.includes('story')) {
     return {
       icon: BookOpenText,
-      badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+      toneClass:
+        'text-emerald-600 fill-emerald-500/25 dark:text-emerald-400 dark:fill-emerald-400/25',
     };
   }
   return {
     icon: Layers,
-    badgeClass: 'bg-secondary text-muted-foreground',
+    toneClass: 'text-muted-foreground fill-muted-foreground/20',
   };
 }
 
@@ -49,21 +50,17 @@ export interface WorkItemTypeIconProps {
   className?: string;
 }
 
-/** Distinct Lucide icon & color badge per Work Item Type: Epic (Crown/violet), Bug (Bug/rose), Feature (Trophy/amber), Task (FileCheck/sky), User Story (BookOpenText/emerald). */
+/** Distinct duotone Lucide icon per Work Item Type (no background box, tinted stroke + soft interior fill). */
 export function WorkItemTypeIcon({ typeName, className }: WorkItemTypeIconProps) {
-  const { icon: Icon, badgeClass } = resolveTypeVisual(typeName);
+  const { icon: Icon, toneClass } = resolveTypeVisual(typeName);
   return (
     <span
       data-slot="work-item-type-icon"
       data-work-item-type={typeName}
       title={typeName}
-      className={cn(
-        'inline-flex size-4 shrink-0 items-center justify-center rounded-xs',
-        badgeClass,
-        className,
-      )}
+      className={cn('inline-flex shrink-0 items-center justify-center', className)}
     >
-      <Icon className="size-3" aria-hidden="true" />
+      <Icon className={cn('size-3.5', toneClass)} aria-hidden="true" />
     </span>
   );
 }
