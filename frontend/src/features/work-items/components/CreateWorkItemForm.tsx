@@ -1,18 +1,12 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Maximize2, Minimize2, X } from 'lucide-react';
 import { useState, type KeyboardEvent, type SubmitEvent } from 'react';
-import { FormField } from '@/components/form-field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { IconButton } from '@/components/ui/icon-button';
+import { InlineInput, InlineTextarea } from '@/components/ui/inline-field';
+import { cn } from '@/lib/utils';
 import { errorMessage } from '../../../shared/api/httpClient';
 import type { EstimateUnit, ProjectEra, ProjectStatus, ProjectWorkItemType } from '../../projects';
 import type { Priority, WorkItem } from '../api/workItemsApi';
@@ -23,10 +17,11 @@ import {
   parseEstimateInput,
   PRIORITIES,
   priorityLabels,
-  selectClassName,
-  textareaClassName,
   workItemFieldError,
 } from './workItemLabels';
+
+const quietSelectClass =
+  'h-7 w-full min-w-0 cursor-pointer rounded-sm border border-transparent bg-transparent px-2 text-xs font-medium text-foreground transition-[border-color,background-color] outline-none hover:border-input hover:bg-secondary/60 focus-visible:border-ring focus-visible:bg-background disabled:pointer-events-none disabled:opacity-60';
 
 interface EstimateInputProps {
   id: string;
@@ -41,12 +36,15 @@ export function EstimateInput({ id, unit, value, error, disabled, onChange }: Es
   if (unit === 'none') return null;
   return (
     <Field data-invalid={error ? true : undefined}>
-      <FieldLabel htmlFor={id}>{unit === 'story_points' ? 'Story Points' : 'Hours'}</FieldLabel>
-      <Input
+      <FieldLabel htmlFor={id} className="text-2xs text-muted-foreground">
+        {unit === 'story_points' ? 'Story Points' : 'Hours'}
+      </FieldLabel>
+      <InlineInput
         id={id}
         type="number"
         min="0"
         step="0.5"
+        placeholder="0"
         value={value}
         disabled={disabled}
         aria-invalid={error ? true : undefined}
@@ -78,10 +76,12 @@ export function ParentSelect({
 }: ParentSelectProps) {
   return (
     <Field data-invalid={error ? true : undefined}>
-      <FieldLabel htmlFor={id}>Parent</FieldLabel>
+      <FieldLabel htmlFor={id} className="text-2xs text-muted-foreground">
+        Parent
+      </FieldLabel>
       <select
         id={id}
-        className={selectClassName}
+        className={quietSelectClass}
         value={value}
         disabled={disabled}
         onChange={(e) => {
@@ -108,6 +108,8 @@ interface CreateWorkItemFormProps {
   eras?: ProjectEra[];
   participants?: Participant[];
   initialStatusId?: string;
+  maximized?: boolean;
+  onToggleMaximize?: () => void;
   onClose: () => void;
 }
 
@@ -165,85 +167,70 @@ function buildCreatePayload(fields: {
 function FormErrorBanner({ error, hidden }: { error: unknown; hidden: boolean }) {
   if (!error || hidden) return null;
   return (
-    <Alert variant="destructive">
-      <AlertCircle aria-hidden="true" />
-      <AlertDescription role="alert">{errorMessage(error)}</AlertDescription>
-    </Alert>
+    <div className="px-5 pt-3">
+      <Alert variant="destructive">
+        <AlertCircle aria-hidden="true" />
+        <AlertDescription role="alert">{errorMessage(error)}</AlertDescription>
+      </Alert>
+    </div>
   );
 }
 
-interface MetadataColumnProps {
-  workItemTypes: ProjectWorkItemType[];
+interface ModalMetaBandProps {
   statuses: ProjectStatus[];
   eras: ProjectEra[];
-  participants: Participant[];
-  eligibleParents: WorkItem[];
-  unit: EstimateUnit;
-  workItemTypeId: string;
   statusId: string;
   priority: Priority;
-  estimate: string;
   eraId: string;
-  assigneeId: string;
-  parentId: string;
-  errs: FormFieldErrors;
-  onTypeChange: (id: string) => void;
   onStatusChange: (id: string) => void;
   onPriorityChange: (priority: Priority) => void;
-  onEstimateChange: (value: string) => void;
   onEraChange: (id: string) => void;
-  onAssigneeChange: (id: string) => void;
-  onParentChange: (id: string) => void;
 }
 
-function MetadataColumn(props: MetadataColumnProps) {
-  const activeEras = props.eras.filter((era) => era.state !== 'completed');
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
-      <Field>
-        <FieldLabel htmlFor="create-wi-type">Work Item Type</FieldLabel>
-        <select
-          id="create-wi-type"
-          className={selectClassName}
-          value={props.workItemTypeId}
-          onChange={(e) => {
-            props.onTypeChange(e.target.value);
-          }}
-        >
-          {props.workItemTypes.map((wt) => (
-            <option key={wt.id} value={wt.id}>
-              {wt.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+function ModalMetaBand({
+  statuses,
+  eras,
+  statusId,
+  priority,
+  eraId,
+  onStatusChange,
+  onPriorityChange,
+  onEraChange,
+}: ModalMetaBandProps) {
+  const activeEras = eras.filter((era) => era.state !== 'completed');
 
-      <Field>
-        <FieldLabel htmlFor="create-wi-status">Status</FieldLabel>
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-y border-border bg-secondary/60 px-5 py-2.5">
+      <div className="flex items-center gap-2">
+        <label htmlFor="create-wi-status" className="text-2xs font-medium text-muted-foreground">
+          Status
+        </label>
         <select
           id="create-wi-status"
-          className={selectClassName}
-          value={props.statusId}
+          className={cn(quietSelectClass, 'w-auto min-w-28')}
+          value={statusId}
           onChange={(e) => {
-            props.onStatusChange(e.target.value);
+            onStatusChange(e.target.value);
           }}
         >
-          {props.statuses.map((st) => (
+          {statuses.map((st) => (
             <option key={st.id} value={st.id}>
               {st.name}
             </option>
           ))}
         </select>
-      </Field>
+      </div>
 
-      <Field>
-        <FieldLabel htmlFor="create-wi-priority">Priority</FieldLabel>
+      <div className="flex items-center gap-2">
+        <label htmlFor="create-wi-priority" className="text-2xs font-medium text-muted-foreground">
+          Priority
+        </label>
         <select
           id="create-wi-priority"
-          className={selectClassName}
-          value={props.priority}
+          className={cn(quietSelectClass, 'w-auto min-w-24')}
+          value={priority}
           onChange={(e) => {
-            props.onPriorityChange(e.target.value as Priority);
+            onPriorityChange(e.target.value as Priority);
           }}
         >
           {PRIORITIES.map((p) => (
@@ -252,25 +239,19 @@ function MetadataColumn(props: MetadataColumnProps) {
             </option>
           ))}
         </select>
-      </Field>
-
-      <EstimateInput
-        id="create-wi-estimate"
-        unit={props.unit}
-        value={props.estimate}
-        error={props.errs.estimate}
-        onChange={props.onEstimateChange}
-      />
+      </div>
 
       {activeEras.length > 0 && (
-        <Field>
-          <FieldLabel htmlFor="create-wi-era">Era</FieldLabel>
+        <div className="flex items-center gap-2">
+          <label htmlFor="create-wi-era" className="text-2xs font-medium text-muted-foreground">
+            Era
+          </label>
           <select
             id="create-wi-era"
-            className={selectClassName}
-            value={props.eraId}
+            className={cn(quietSelectClass, 'w-auto min-w-28')}
+            value={eraId}
             onChange={(e) => {
-              props.onEraChange(e.target.value);
+              onEraChange(e.target.value);
             }}
           >
             <option value="">No era</option>
@@ -280,58 +261,231 @@ function MetadataColumn(props: MetadataColumnProps) {
               </option>
             ))}
           </select>
-        </Field>
-      )}
-
-      {props.participants.length > 0 && (
-        <Field>
-          <FieldLabel htmlFor="create-wi-assignee">Assignee</FieldLabel>
-          <select
-            id="create-wi-assignee"
-            className={selectClassName}
-            value={props.assigneeId}
-            onChange={(e) => {
-              props.onAssigneeChange(e.target.value);
-            }}
-          >
-            <option value="">Unassigned</option>
-            {props.participants.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name || `@${person.username}`}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-
-      {props.eligibleParents.length > 0 && (
-        <ParentSelect
-          id="create-wi-parent"
-          value={props.parentId}
-          candidates={props.eligibleParents}
-          error={props.errs.parent}
-          onChange={props.onParentChange}
-        />
+        </div>
       )}
     </div>
   );
 }
 
-/** Two-column Work Item creation form with Ctrl+Enter quick save. */
-export function CreateWorkItemForm({
-  projectId,
-  statuses,
+interface SettingsColumnProps {
+  workItemTypes: ProjectWorkItemType[];
+  eligibleParents: WorkItem[];
+  unit: EstimateUnit;
+  workItemTypeId: string;
+  estimate: string;
+  parentId: string;
+  errs: FormFieldErrors;
+  onTypeChange: (id: string) => void;
+  onEstimateChange: (value: string) => void;
+  onParentChange: (id: string) => void;
+}
+
+function SettingsColumn({
   workItemTypes,
-  existingItems,
-  eras = [],
-  participants = [],
-  initialStatusId,
+  eligibleParents,
+  unit,
+  workItemTypeId,
+  estimate,
+  parentId,
+  errs,
+  onTypeChange,
+  onEstimateChange,
+  onParentChange,
+}: SettingsColumnProps) {
+  return (
+    <aside className="flex flex-col gap-3.5 border-t border-border p-5 md:border-t-0 md:border-l">
+      <h2 className="text-sm font-semibold tracking-tight text-foreground">
+        Planning &amp; Details
+      </h2>
+
+      <Field>
+        <FieldLabel htmlFor="create-wi-type" className="text-2xs text-muted-foreground">
+          Work Item Type
+        </FieldLabel>
+        <select
+          id="create-wi-type"
+          className={quietSelectClass}
+          value={workItemTypeId}
+          onChange={(e) => {
+            onTypeChange(e.target.value);
+          }}
+        >
+          {workItemTypes.map((wt) => (
+            <option key={wt.id} value={wt.id}>
+              {wt.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {eligibleParents.length > 0 && (
+        <ParentSelect
+          id="create-wi-parent"
+          value={parentId}
+          candidates={eligibleParents}
+          error={errs.parent}
+          onChange={onParentChange}
+        />
+      )}
+
+      <EstimateInput
+        id="create-wi-estimate"
+        unit={unit}
+        value={estimate}
+        error={errs.estimate}
+        onChange={onEstimateChange}
+      />
+    </aside>
+  );
+}
+
+interface ModalTopBarProps {
+  typeName: string;
+  maximized: boolean;
+  onToggleMaximize?: () => void;
+  onClose: () => void;
+}
+
+function ModalTopBar({ typeName, maximized, onToggleMaximize, onClose }: ModalTopBarProps) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-5 pt-3.5 pb-1">
+      <div className="flex items-center gap-2 text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+        <span className="size-1.5 rounded-xs bg-primary" aria-hidden="true" />
+        <span>{typeName} · New</span>
+      </div>
+      <div className="flex items-center gap-1">
+        {onToggleMaximize && (
+          <IconButton
+            size="sm"
+            variant="ghost"
+            aria-label={maximized ? 'Minimize editor' : 'Maximize editor'}
+            onClick={onToggleMaximize}
+          >
+            {maximized ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+          </IconButton>
+        )}
+        <IconButton size="sm" variant="ghost" aria-label="Close modal" onClick={onClose}>
+          <X aria-hidden="true" />
+        </IconButton>
+      </div>
+    </div>
+  );
+}
+
+interface ModalActionsBarProps {
+  participants: Participant[];
+  assigneeId: string;
+  isPending: boolean;
+  onAssigneeChange: (id: string) => void;
+  onClose: () => void;
+}
+
+function ModalActionsBar({
+  participants,
+  assigneeId,
+  isPending,
+  onAssigneeChange,
   onClose,
-}: CreateWorkItemFormProps) {
+}: ModalActionsBarProps) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-1 pb-3">
+      <div className="flex items-center gap-3">
+        {participants.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="create-wi-assignee" className="sr-only">
+              Assignee
+            </label>
+            <select
+              id="create-wi-assignee"
+              className={cn(quietSelectClass, 'w-auto min-w-32')}
+              value={assigneeId}
+              onChange={(e) => {
+                onAssigneeChange(e.target.value);
+              }}
+            >
+              <option value="">Unassigned</option>
+              {participants.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name || `@${person.username}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <span className="text-2xs text-muted-foreground">Ctrl + Enter to save</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button type="button" size="compact" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          size="compact"
+          disabled={isPending}
+          aria-busy={isPending || undefined}
+        >
+          Create Work Item
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ModalTitleBand({
+  value,
+  error,
+  onChange,
+}: {
+  value: string;
+  error?: string;
+  onChange: (next: string) => void;
+}) {
+  const invalid = error ? true : undefined;
+  return (
+    <div className="px-4 py-1">
+      <Field data-invalid={invalid}>
+        <FieldLabel htmlFor="create-wi-title" className="sr-only">
+          Title
+        </FieldLabel>
+        <InlineInput
+          id="create-wi-title"
+          name="title"
+          required
+          autoFocus
+          maxLength={255}
+          placeholder="Work item title..."
+          value={value}
+          aria-invalid={invalid}
+          className="h-9 text-base font-semibold tracking-tight"
+          onChange={(e) => {
+            onChange(e.target.value);
+          }}
+        />
+        {error && <FieldError className="px-2">{error}</FieldError>}
+      </Field>
+    </div>
+  );
+}
+
+function resolveTypeMeta(
+  workItemTypes: ProjectWorkItemType[],
+  id: string,
+): { name: string; unit: EstimateUnit } {
+  const found = workItemTypes.find((t) => t.id === id);
+  return {
+    name: found?.name ?? 'Work Item',
+    unit: found?.estimateUnit ?? 'none',
+  };
+}
+
+/** Multi-row Work Item modal form with quiet border-on-hover fields and 2-column Row 5 layout. */
+export function CreateWorkItemForm(props: CreateWorkItemFormProps) {
+  const { projectId, statuses, workItemTypes, existingItems, initialStatusId, onClose } = props;
   const create = useCreateWorkItem(projectId);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [workItemTypeId, setWorkItemTypeId] = useState(workItemTypes[0]?.id ?? '');
+  const [workItemTypeId, setWorkItemTypeId] = useState(() => workItemTypes[0]?.id ?? '');
   const [statusId, setStatusId] = useState(() => defaultStatusId(statuses, initialStatusId));
   const [priority, setPriority] = useState<Priority>('none');
   const [parentId, setParentId] = useState('');
@@ -339,10 +493,10 @@ export function CreateWorkItemForm({
   const [assigneeId, setAssigneeId] = useState('');
   const [estimate, setEstimate] = useState('');
 
-  const unit: EstimateUnit =
-    workItemTypes.find((t) => t.id === workItemTypeId)?.estimateUnit ?? 'none';
+  const typeMeta = resolveTypeMeta(workItemTypes, workItemTypeId);
   const eligibleParents = eligibleParentsForType(existingItems, workItemTypes, workItemTypeId);
-  const errs = readFormErrors(create.isError ? create.error : null);
+  const createError = create.isError ? create.error : null;
+  const errs = readFormErrors(createError);
 
   function submitWorkItem() {
     if (create.isPending) return;
@@ -356,7 +510,7 @@ export function CreateWorkItemForm({
       title,
       description,
       priority,
-      unit,
+      unit: typeMeta.unit,
       estimate,
     });
     create.mutate(payload, { onSuccess: onClose });
@@ -376,35 +530,55 @@ export function CreateWorkItemForm({
 
   return (
     <form
-      className="grid gap-4"
+      className="flex min-h-0 flex-1 flex-col"
       aria-label="New Work Item"
       onSubmit={handleSubmit}
       onKeyDown={handleKeyDown}
     >
-      <FormErrorBanner error={create.isError ? create.error : null} hidden={errs.hasField} />
+      <ModalTopBar
+        typeName={typeMeta.name}
+        maximized={Boolean(props.maximized)}
+        onToggleMaximize={props.onToggleMaximize}
+        onClose={onClose}
+      />
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_224px]">
-        {/* Column 1: Title + Description */}
-        <div className="flex min-w-0 flex-col gap-3">
-          <FormField
-            label="Title"
-            name="title"
-            required
-            autoFocus
-            maxLength={255}
-            placeholder="Work item title..."
-            value={title}
-            error={errs.title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-            }}
-          />
+      <ModalTitleBand value={title} error={errs.title} onChange={setTitle} />
+
+      <ModalActionsBar
+        participants={props.participants ?? []}
+        assigneeId={assigneeId}
+        isPending={create.isPending}
+        onAssigneeChange={setAssigneeId}
+        onClose={onClose}
+      />
+
+      <ModalMetaBand
+        statuses={statuses}
+        eras={props.eras ?? []}
+        statusId={statusId}
+        priority={priority}
+        eraId={eraId}
+        onStatusChange={setStatusId}
+        onPriorityChange={setPriority}
+        onEraChange={setEraId}
+      />
+
+      <FormErrorBanner error={createError} hidden={errs.hasField} />
+
+      {/* Row 5: Two main columns — Content (left) & Planning/Settings (right) */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="flex min-w-0 flex-col gap-2 p-5">
           <Field className="flex flex-1 flex-col">
-            <FieldLabel htmlFor="create-wi-description">Description</FieldLabel>
-            <textarea
+            <FieldLabel
+              htmlFor="create-wi-description"
+              className="text-sm font-semibold tracking-tight text-foreground"
+            >
+              Description
+            </FieldLabel>
+            <InlineTextarea
               id="create-wi-description"
               placeholder="Add context, acceptance criteria, or notes..."
-              className={`${textareaClassName} min-h-44 flex-1 resize-y`}
+              className="min-h-48 flex-1 text-sm"
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value);
@@ -413,20 +587,12 @@ export function CreateWorkItemForm({
           </Field>
         </div>
 
-        {/* Column 2: Compact stacked metadata */}
-        <MetadataColumn
+        <SettingsColumn
           workItemTypes={workItemTypes}
-          statuses={statuses}
-          eras={eras}
-          participants={participants}
           eligibleParents={eligibleParents}
-          unit={unit}
+          unit={typeMeta.unit}
           workItemTypeId={workItemTypeId}
-          statusId={statusId}
-          priority={priority}
           estimate={estimate}
-          eraId={eraId}
-          assigneeId={assigneeId}
           parentId={parentId}
           errs={errs}
           onTypeChange={(nextTypeId) => {
@@ -434,30 +600,10 @@ export function CreateWorkItemForm({
             setEstimate('');
             setParentId('');
           }}
-          onStatusChange={setStatusId}
-          onPriorityChange={setPriority}
           onEstimateChange={setEstimate}
-          onEraChange={setEraId}
-          onAssigneeChange={setAssigneeId}
           onParentChange={setParentId}
         />
       </div>
-
-      <DialogFooter className="border-t border-border pt-3 sm:justify-between">
-        <span className="text-xs text-muted-foreground">Press Ctrl + Enter to save</span>
-        <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={create.isPending}
-            aria-busy={create.isPending || undefined}
-          >
-            Create Work Item
-          </Button>
-        </div>
-      </DialogFooter>
     </form>
   );
 }
@@ -467,25 +613,45 @@ interface CreateWorkItemDialogProps extends Omit<CreateWorkItemFormProps, 'onClo
   onOpenChange: (open: boolean) => void;
 }
 
-/** Modal dialog for creating a Work Item without disturbing the board canvas. */
+/** Multi-row Work Item modal supporting compact quick-create and maximized editor modes. */
 export function CreateWorkItemDialog({
   open,
   onOpenChange,
   ...formProps
 }: CreateWorkItemDialogProps) {
+  const [maximized, setMaximized] = useState(false);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>New Work Item</DialogTitle>
-          <DialogDescription>
-            Add a title and description on the left and configure its details on the right.
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setMaximized(false);
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        data-maximized={maximized ? 'true' : undefined}
+        className={cn(
+          'flex flex-col gap-0 overflow-hidden p-0',
+          maximized
+            ? 'h-[calc(100svh-2rem)] max-h-none w-[calc(100vw-2rem)] max-w-none sm:max-w-none'
+            : 'max-h-[90svh] sm:max-w-[920px]',
+        )}
+      >
+        <DialogTitle className="sr-only">New Work Item</DialogTitle>
+        <DialogDescription className="sr-only">
+          Create a new work item with description on the left and planning details on the right.
+        </DialogDescription>
         {open && (
           <CreateWorkItemForm
             {...formProps}
+            maximized={maximized}
+            onToggleMaximize={() => {
+              setMaximized((prev) => !prev);
+            }}
             onClose={() => {
+              setMaximized(false);
               onOpenChange(false);
             }}
           />
