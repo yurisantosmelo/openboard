@@ -9,7 +9,6 @@ import {
   Plus,
   RotateCcw,
   Save,
-  Search,
   SlidersHorizontal,
   Star,
   Trash2,
@@ -27,16 +26,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import { IconButton } from '@/components/ui/icon-button';
+import { SearchInput } from '@/components/ui/search-input';
+import { ViewSwitcher } from '@/components/ui/view-switcher';
 import type {
   Project,
   ProjectEra,
   ProjectStatus,
   ProjectView,
   ProjectWorkItemType,
+  ViewLayout,
 } from '@/features/projects';
 import { cn } from '@/lib/utils';
 import type { Priority, WorkItemFilters } from '../api/workItemsApi';
+import { BoardSwitcher } from './BoardSwitcher';
 import { PRIORITIES, priorityLabels } from './workItemLabels';
 
 export interface Participant {
@@ -297,14 +300,14 @@ function FilterChipSelect({
   return (
     <label
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors',
+        'inline-flex h-[22px] items-center gap-1 rounded-xs border px-2 text-2xs transition-colors',
         active
-          ? 'border-primary/40 bg-primary/10 text-primary'
-          : 'border-border bg-muted/50 text-muted-foreground',
+          ? 'border-primary/50 bg-column-planned-surface text-primary'
+          : 'border-border bg-secondary text-muted-foreground hover:border-input',
       )}
     >
-      {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
-      <span>{label}</span>
+      {Icon && <Icon className="size-3 shrink-0" aria-hidden="true" />}
+      <span>{label}:</span>
       <select
         aria-label={ariaLabel}
         className={chipSelectClass}
@@ -505,10 +508,14 @@ export interface ProjectWorkspaceHeaderProps {
   participants: Participant[];
   canWrite: boolean;
   showCreateButton: boolean;
+  activeViewMode: ViewLayout;
   activeView: ProjectView | null;
+  views: ProjectView[];
   canEditActiveView: boolean;
   isActiveViewCreator: boolean;
   viewBusy: boolean;
+  onSelectLayout: (mode: ViewLayout) => void;
+  onSelectSavedView: (view: ProjectView | null) => void;
   onSearchChange: (value: string) => void;
   onFilterChange: (patch: Partial<WorkItemFilters>) => void;
   onResetFilters: () => void;
@@ -559,91 +566,97 @@ function HeaderControlsRow({
   onStartCreate,
 }: HeaderControlsRowProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <div className="relative w-48 sm:w-56">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            aria-label="Search work items"
-            placeholder="Search board"
-            value={searchQuery}
-            onChange={(e) => {
-              onSearchChange(e.target.value);
-            }}
-            className="h-8 pl-8 text-xs"
-          />
-        </div>
+    <div className="flex flex-wrap items-center gap-2">
+      <SearchInput
+        aria-label="Search work items"
+        placeholder="Search board..."
+        value={searchQuery}
+        onChange={(e) => {
+          onSearchChange(e.target.value);
+        }}
+        onClear={() => {
+          onSearchChange('');
+        }}
+        containerClassName="w-44"
+      />
 
-        <ParticipantAvatars
-          participants={participants}
-          selectedOwnerId={filters.assigneeId}
-          onSelectOwner={(assigneeId) => {
-            onFilterChange({ assigneeId });
-          }}
-        />
+      <ParticipantAvatars
+        participants={participants}
+        selectedOwnerId={filters.assigneeId}
+        onSelectOwner={(assigneeId) => {
+          onFilterChange({ assigneeId });
+        }}
+      />
 
-        <select
-          aria-label="Filter by Work Item Type"
-          className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          value={filters.workItemTypeId ?? ''}
-          onChange={(e) => {
-            onFilterChange({ workItemTypeId: e.target.value || undefined });
-          }}
-        >
-          <option value="">All types</option>
-          {orderedTypes.map((wt) => (
-            <option key={wt.id} value={wt.id}>
-              {wt.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <select
+        aria-label="Filter by Work Item Type"
+        className="h-7 rounded-sm border border-input bg-background px-2 text-xs font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
+        value={filters.workItemTypeId ?? ''}
+        onChange={(e) => {
+          onFilterChange({ workItemTypeId: e.target.value || undefined });
+        }}
+      >
+        <option value="">All types</option>
+        {orderedTypes.map((wt) => (
+          <option key={wt.id} value={wt.id}>
+            {wt.name}
+          </option>
+        ))}
+      </select>
 
-      <div className="flex items-center gap-1.5">
-        <Button
-          type="button"
-          size="icon-sm"
-          variant={filtersOpen || activeFilterCount > 0 ? 'secondary' : 'ghost'}
-          aria-label="Toggle filters"
-          aria-expanded={filtersOpen}
-          onClick={onToggleFilters}
-          className="relative"
-        >
-          <ListFilter className="size-4" aria-hidden="true" />
-          {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-3xs font-semibold text-primary-foreground">
-              {activeFilterCount}
-            </span>
-          )}
-        </Button>
-
-        <Button
-          type="button"
-          size="compact"
-          variant={configOpen ? 'secondary' : 'outline'}
-          aria-pressed={configOpen}
-          onClick={onToggleConfig}
-        >
-          <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-          Configure
-        </Button>
-
-        {showCreateButton && (
-          <Button type="button" size="compact" onClick={onStartCreate}>
-            <Plus className="size-3.5" aria-hidden="true" />
-            New Work Item
-          </Button>
+      <Button
+        type="button"
+        size="compact"
+        variant={filtersOpen || activeFilterCount > 0 ? 'active' : 'outline'}
+        aria-label="Toggle filters"
+        aria-expanded={filtersOpen}
+        onClick={onToggleFilters}
+      >
+        <ListFilter className="size-3.5" aria-hidden="true" />
+        <span>Filter</span>
+        {activeFilterCount > 0 && (
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-xs bg-primary px-1 text-3xs font-semibold text-primary-foreground tabular-nums">
+            {activeFilterCount}
+          </span>
         )}
-      </div>
+      </Button>
+
+      <Button
+        type="button"
+        size="compact"
+        variant={configOpen ? 'active' : 'outline'}
+        aria-pressed={configOpen}
+        onClick={onToggleConfig}
+      >
+        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+        Configure
+      </Button>
+
+      {showCreateButton && (
+        <Button type="button" size="compact" onClick={onStartCreate}>
+          <Plus className="size-3.5" aria-hidden="true" />
+          New Work Item
+        </Button>
+      )}
     </div>
   );
 }
 
-/** Persistent 4-row center header shared across Board, Timeline, Calendar, Table and List views. */
+function ActiveEraBadge({ eras }: { eras: ProjectEra[] }) {
+  const activeEra = eras.find((era) => era.state === 'active');
+  if (!activeEra) return null;
+
+  return (
+    <span className="hidden items-center gap-1.5 rounded-xs border border-border bg-secondary px-2 py-0.5 text-2xs text-muted-foreground sm:inline-flex">
+      <span className="size-1.5 rounded-xs bg-success" aria-hidden="true" />
+      <span>
+        {activeEra.name} · {activeEra.startDate} – {activeEra.endDate}
+      </span>
+    </span>
+  );
+}
+
+/** Persistent 3-row workspace header shared across Board, List, Table, Timeline and Calendar views. */
 export function ProjectWorkspaceHeader(props: ProjectWorkspaceHeaderProps) {
   const { project, viewKey, viewTitle, visibleCount, searchQuery, filters, filtersOpen } = props;
   const [favoriteKey, setFavoriteKey] = useState(`${project.id}:${viewKey}`);
@@ -670,36 +683,30 @@ export function ProjectWorkspaceHeader(props: ProjectWorkspaceHeaderProps) {
   return (
     <header className="shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
       <div className="flex flex-col gap-2.5">
-        {/* Sub-row 1: Projects / <Project Name> */}
-        <nav
-          aria-label="Project breadcrumb"
-          className="flex items-center gap-1.5 text-xs text-muted-foreground"
-        >
-          <span>Projects</span>
-          <span aria-hidden="true">/</span>
-          <span className="truncate font-medium text-foreground">{project.name}</span>
-        </nav>
-
-        {/* Sub-row 2: Board/View Name (left) + Favorite Star & 3-dot Menu (right) */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-xl font-semibold tracking-tight">{viewTitle}</h1>
-            <Badge variant="secondary" className="tabular-nums">
-              {visibleCount}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
+        {/* Row 1: Breadcrumb (left) + View Switcher, Favorite & More (right) */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <nav
+            aria-label="Project breadcrumb"
+            className="flex items-center gap-1.5 text-2xs text-muted-foreground"
+          >
+            <span>Projects</span>
+            <span aria-hidden="true">/</span>
+            <span className="truncate">{project.name}</span>
+            <span aria-hidden="true">/</span>
+            <span className="truncate font-medium text-foreground">{viewTitle}</span>
+          </nav>
+          <div className="flex items-center gap-1.5">
+            <ViewSwitcher value={props.activeViewMode} onChange={props.onSelectLayout} />
+            <IconButton
+              size="sm"
+              variant="outline"
               aria-label={starred ? 'Remove from favorites' : 'Favorite board'}
               aria-pressed={starred}
               onClick={toggleStar}
               className={cn(starred && 'text-warning')}
             >
-              <Star className={cn('size-4', starred && 'fill-current')} aria-hidden="true" />
-            </Button>
+              <Star className={cn('size-3.5', starred && 'fill-current')} aria-hidden="true" />
+            </IconButton>
             <BoardMoreMenu
               canWrite={props.canWrite}
               isOwner={project.currentUserRole === 'owner'}
@@ -716,24 +723,43 @@ export function ProjectWorkspaceHeader(props: ProjectWorkspaceHeaderProps) {
           </div>
         </div>
 
-        {/* Sub-row 3: Search + Participant Avatars + Work Item Type (Epic first) | Filter icon & Config */}
-        <HeaderControlsRow
-          searchQuery={searchQuery}
-          filters={filters}
-          filtersOpen={filtersOpen}
-          configOpen={props.configOpen}
-          activeFilterCount={activeFilterCount}
-          orderedTypes={orderedTypes}
-          participants={props.participants}
-          showCreateButton={props.showCreateButton}
-          onSearchChange={props.onSearchChange}
-          onFilterChange={props.onFilterChange}
-          onToggleFilters={props.onToggleFilters}
-          onToggleConfig={props.onToggleConfig}
-          onStartCreate={props.onStartCreate}
-        />
+        {/* Row 2: Title + Board Switcher + Count + Active Era (left) | Controls Cluster (right) */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-xl font-semibold tracking-tight">{viewTitle}</h1>
+            <BoardSwitcher
+              projectName={project.name}
+              views={props.views}
+              activeViewId={props.activeView?.id ?? null}
+              totalCount={visibleCount}
+              canWrite={props.canWrite}
+              onSelectView={props.onSelectSavedView}
+              onRequestCreateBoard={props.onRequestSaveView}
+            />
+            <Badge variant="secondary" className="tabular-nums">
+              {visibleCount}
+            </Badge>
+            <ActiveEraBadge eras={props.eras} />
+          </div>
 
-        {/* Sub-row 4: Collapsible Notion-style Filter Row */}
+          <HeaderControlsRow
+            searchQuery={searchQuery}
+            filters={filters}
+            filtersOpen={filtersOpen}
+            configOpen={props.configOpen}
+            activeFilterCount={activeFilterCount}
+            orderedTypes={orderedTypes}
+            participants={props.participants}
+            showCreateButton={props.showCreateButton}
+            onSearchChange={props.onSearchChange}
+            onFilterChange={props.onFilterChange}
+            onToggleFilters={props.onToggleFilters}
+            onToggleConfig={props.onToggleConfig}
+            onStartCreate={props.onStartCreate}
+          />
+        </div>
+
+        {/* Row 3: Collapsible Inline Filter Bar */}
         {filtersOpen && (
           <NotionFilterRow
             filters={filters}
