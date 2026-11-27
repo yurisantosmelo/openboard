@@ -13,6 +13,8 @@ export const buttonVariants = cva(
           'border-input bg-popover not-dark:bg-clip-padding text-destructive-foreground shadow-xs/5 not-disabled:not-active:before:shadow-[0_1px_rgb(0_0_0/4%)] dark:bg-input/32 dark:not-disabled:not-active:before:shadow-[0_-1px_rgb(255_255_255/6%)] disabled:shadow-none hover:border-destructive/32 hover:bg-destructive/4',
         outline:
           '[--control-icon-color:var(--contrast-muted-foreground)] border-input bg-popover not-dark:bg-clip-padding text-foreground shadow-xs/5 not-disabled:not-active:before:shadow-[0_1px_rgb(0_0_0/4%)] dark:bg-input/32 dark:not-disabled:not-active:before:shadow-[0_-1px_rgb(255_255_255/6%)] disabled:shadow-none hover:bg-accent/50 dark:hover:bg-input/64',
+        active:
+          '[--control-icon-color:var(--primary)] border-primary/40 bg-column-planned-surface text-primary hover:border-primary/60',
         secondary:
           'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/90 active:bg-secondary/80',
         ghost:
@@ -26,8 +28,8 @@ export const buttonVariants = cva(
       size: {
         default: 'h-9 px-3 sm:h-8',
         compact:
-          "h-7 gap-1.5 rounded-md px-2 text-xs before:rounded-[calc(var(--radius-md)-1px)] [&_svg:not([class*='size-'])]:size-3.5",
-        xs: "h-7 gap-1.5 rounded-md px-2 text-xs sm:h-6 [&_svg:not([class*='size-'])]:size-3.5",
+          "h-7 gap-1.5 rounded-sm px-2 text-xs before:rounded-[calc(var(--radius-sm)-1px)] [&_svg:not([class*='size-'])]:size-3.5",
+        xs: "h-7 gap-1.5 rounded-sm px-2 text-xs sm:h-6 [&_svg:not([class*='size-'])]:size-3.5",
         sm: 'h-8 gap-1.5 px-2.5 sm:h-7',
         lg: 'h-10 px-4 sm:h-9',
         icon: 'size-9 sm:size-8',

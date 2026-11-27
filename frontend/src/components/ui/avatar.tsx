@@ -7,16 +7,20 @@ import { Avatar as AvatarPrimitive } from 'radix-ui';
 function Avatar({
   className,
   size = 'default',
+  selected = false,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Root> & {
-  size?: 'default' | 'sm' | 'lg';
+  size?: 'xs' | 'sm' | 'default' | 'lg';
+  selected?: boolean;
 }) {
   return (
     <AvatarPrimitive.Root
       data-slot="avatar"
       data-size={size}
+      data-selected={selected ? 'true' : undefined}
       className={cn(
-        'group/avatar relative flex size-8 shrink-0 overflow-hidden rounded-full select-none data-[size=lg]:size-10 data-[size=sm]:size-6',
+        'group/avatar relative flex size-8 shrink-0 overflow-hidden rounded-full select-none data-[size=lg]:size-10 data-[size=sm]:size-6 data-[size=xs]:size-5',
+        selected && 'z-10 ring-2 ring-primary ring-offset-1 ring-offset-card',
         className,
       )}
       {...props}
@@ -71,7 +75,7 @@ function AvatarGroup({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="avatar-group"
       className={cn(
-        'group/avatar-group flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background',
+        'group/avatar-group flex items-center -space-x-[7px] *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-card',
         className,
       )}
       {...props}
