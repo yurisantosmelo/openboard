@@ -141,12 +141,13 @@ describe('Role-separated Management Portal and Work Shell', () => {
     expect(await screen.findByRole('heading', { name: 'Board', level: 1 })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/projects/p2');
 
-    // Inside Project shell: no structural management clutter, only a link back to Portal
+    // Inside Project shell: no structural management clutter, only a link back to Portal in user menu
     expect(screen.queryByRole('button', { name: 'New Project' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Workspace & Teams' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('link', { name: 'Management Portal' }));
+    await user.click(screen.getByRole('button', { name: 'Administrator' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Management Portal' }));
     expect(
       await screen.findByRole('heading', { name: 'Organizations', level: 1 }),
     ).toBeInTheDocument();
