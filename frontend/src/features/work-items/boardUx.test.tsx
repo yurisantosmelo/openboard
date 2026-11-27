@@ -135,14 +135,19 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     vi.unstubAllGlobals();
   });
 
-  it('lands directly on the first Project Board when opening Home', async () => {
+  it('lands Contributors directly on the first Project Board when opening Home', async () => {
     const projectStub = projectApiStubs('p1');
     stubApi({
       'GET /api/v1/users/me': Response.json(
-        userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys' }),
+        userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys', is_administrator: false }),
       ),
       'GET /api/v1/organizations?page=1&page_size=20': pageOf([
-        { id: 'o1', name: 'Acme', created_at: '2026-11-24T12:00:00Z', current_user_role: 'owner' },
+        {
+          id: 'o1',
+          name: 'Acme',
+          created_at: '2026-11-24T12:00:00Z',
+          current_user_role: 'contributor',
+        },
       ]),
       'GET /api/v1/workspaces?organization_id=o1&page=1&page_size=20': pageOf([
         {
@@ -152,10 +157,12 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
           visibility: 'open',
           created_at: '2026-11-24T12:00:00Z',
           updated_at: '2026-11-24T12:00:00Z',
-          current_user_role: 'owner',
+          current_user_role: 'contributor',
         },
       ]),
-      'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([
+        projectDto({ current_user_role: 'contributor' }),
+      ]),
       ...projectStub.routes,
     });
 
@@ -168,12 +175,15 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     expect(router.state.location.pathname).toBe('/projects/p1');
   });
 
-  it('switches Organizations and Workspaces from header dropdowns and supports Add Organization / Add Workspace', async () => {
+  it('switches Organizations and Workspaces from read-only header dropdowns when multiple exist', async () => {
     const p1Stub = projectApiStubs('p1');
     const p2Stub = projectApiStubs('p2', [
       workItemDto({ id: 'wi2', project_id: 'p2', title: 'Globex Launch' }),
     ]);
-    const fetchMock = stubApi({
+    const p3Stub = projectApiStubs('p3', [
+      workItemDto({ id: 'wi3', project_id: 'p3', title: 'Design Polish' }),
+    ]);
+    stubApi({
       'GET /api/v1/users/me': Response.json(userDto({ is_administrator: true })),
       'GET /api/v1/organizations?page=1&page_size=20': pageOf([
         { id: 'o1', name: 'Acme', created_at: '2026-11-24T12:00:00Z', current_user_role: 'owner' },
@@ -216,59 +226,35 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
         },
       ]),
       'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      'GET /api/v1/projects?workspace_id=w2&page=1&page_size=20': pageOf([
+        projectDto({ id: 'p3', organization_id: 'o1', workspace_id: 'w2', name: 'Design Hub' }),
+      ]),
       'GET /api/v1/projects?workspace_id=w3&page=1&page_size=20': pageOf([
         projectDto({ id: 'p2', organization_id: 'o2', workspace_id: 'w3', name: 'Globex Board' }),
       ]),
-      'POST /api/v1/workspaces': Response.json(
-        {
-          id: 'w-new',
-          organization_id: 'o2',
-          name: 'QA Lab',
-          visibility: 'restricted',
-          created_at: '2026-11-25T12:00:00Z',
-          updated_at: '2026-11-25T12:00:00Z',
-          current_user_role: 'owner',
-        },
-        { status: 201 },
-      ),
-      'GET /api/v1/workspaces/w-new': Response.json({
-        id: 'w-new',
-        organization_id: 'o2',
-        name: 'QA Lab',
-        visibility: 'restricted',
-        created_at: '2026-11-25T12:00:00Z',
-        updated_at: '2026-11-25T12:00:00Z',
-        current_user_role: 'owner',
-      }),
-      'GET /api/v1/projects?workspace_id=w-new&page=1&page_size=20': pageOf([]),
-      'GET /api/v1/workspaces/w-new/teams': Response.json({ items: [] }),
-      'GET /api/v1/workspaces/w-new/memberships?page=1&page_size=20': pageOf([]),
+      'GET /api/v1/workspaces/w2/teams': Response.json({ items: [] }),
       'GET /api/v1/workspaces/w3/teams': Response.json({ items: [] }),
       ...p1Stub.routes,
       ...p2Stub.routes,
+      ...p3Stub.routes,
     });
 
     const { user, router } = renderRoute('/projects/p1');
     await screen.findByRole('link', { name: 'Ship board drag and drop' });
 
-    // Switch Organization from header dropdown -> jumps straight into Globex's first Board
+    // Switch Workspace within Acme -> jumps straight into Design's first Board
+    await user.click(await screen.findByRole('button', { name: 'Switch Workspace' }));
+    expect(screen.queryByRole('menuitem', { name: 'Add Workspace' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('menuitem', { name: 'Design' }));
+    expect(await screen.findByRole('link', { name: 'Design Polish' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/projects/p3');
+
+    // Switch Organization -> jumps straight into Globex's first Board
     await user.click(screen.getByRole('button', { name: 'Switch Organization' }));
+    expect(screen.queryByRole('menuitem', { name: 'Add Organization' })).not.toBeInTheDocument();
     await user.click(await screen.findByRole('menuitem', { name: 'Globex' }));
     expect(await screen.findByRole('link', { name: 'Globex Launch' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/projects/p2');
-
-    // Open Workspace switcher and create a new Workspace via + Add Workspace dialog
-    await user.click(screen.getByRole('button', { name: 'Switch Workspace' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Add Workspace' }));
-    const dialog = await screen.findByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), 'QA Lab');
-    await user.click(within(dialog).getByRole('button', { name: 'Create Workspace' }));
-
-    expect(await screen.findByRole('heading', { name: 'QA Lab', level: 1 })).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/workspaces',
-      expect.objectContaining({ method: 'POST' }),
-    );
   });
 
   it('drags a board card across columns with grab cursor and creates a Work Item in the 2-column modal using Ctrl+Enter', async () => {

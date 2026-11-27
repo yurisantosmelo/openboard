@@ -1,30 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  Building2,
-  Check,
-  ChevronDown,
-  FolderKanban,
-  Loader2,
-  Plus,
-  Settings,
-  Users,
-} from 'lucide-react';
+import { Building2, Check, ChevronDown, FolderKanban } from 'lucide-react';
 import { useState, useSyncExternalStore } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useCurrentUser } from '@/features/auth';
@@ -33,8 +16,6 @@ import {
   type Organization,
   type Workspace,
 } from '@/features/organizations/api/organizationsApi';
-import { CreateOrganizationForm } from '@/features/organizations/components/CreateOrganizationForm';
-import { CreateWorkspaceForm } from '@/features/organizations/components/CreateWorkspaceForm';
 import { useOrganizations, useWorkspaces } from '@/features/organizations/hooks/useOrganizations';
 import { organizationPath, workspacePath } from '@/features/organizations/paths';
 import { listProjects } from '@/features/projects/api/projectsApi';
@@ -83,6 +64,14 @@ function resolveWsId(
   return paramWsId ?? shellWsId ?? fromStored ?? '';
 }
 
+function matchStoredName(
+  storedId: string | undefined,
+  activeId: string,
+  storedName: string | undefined,
+): string | undefined {
+  return storedId === activeId ? storedName : undefined;
+}
+
 function readCachedOrg(
   queryClient: ReturnType<typeof useQueryClient>,
   id?: string,
@@ -95,14 +84,6 @@ function readCachedWorkspace(
   id?: string,
 ): Workspace | undefined {
   return id ? queryClient.getQueryData<Workspace>(['workspace', id]) : undefined;
-}
-
-function matchStoredName(
-  storedId: string | undefined,
-  activeId: string,
-  storedName: string | undefined,
-): string | undefined {
-  return storedId === activeId ? storedName : undefined;
 }
 
 function useActiveContextIds(stored: NavigationContext) {
@@ -132,7 +113,6 @@ function useActiveContextIds(stored: NavigationContext) {
     organizationName:
       cachedOrg?.name ??
       matchStoredName(stored.organizationId, organizationId, stored.organizationName),
-    organizationRole: cachedOrg?.currentUserRole,
     workspaceName:
       cachedActiveWs?.name ??
       matchStoredName(stored.workspaceId, workspaceId, stored.workspaceName),
@@ -198,330 +178,146 @@ async function resolveOrganizationDestination(
   return organizationPath(organization.id);
 }
 
-interface SwitcherListProps<T extends { id: string; name: string }> {
+interface ReadOnlySwitcherProps<T extends { id: string; name: string }> {
   items: T[];
   activeId: string;
-  isPending: boolean;
-  loadingLabel: string;
-  emptyLabel: string;
+  label?: string;
+  menuTitle: string;
+  ariaLabel: string;
   icon: typeof Building2;
   onSelect: (item: T) => void;
 }
 
-function SwitcherList<T extends { id: string; name: string }>({
+function ReadOnlyContextControl<T extends { id: string; name: string }>({
   items,
   activeId,
-  isPending,
-  loadingLabel,
-  emptyLabel,
+  label,
+  menuTitle,
+  ariaLabel,
   icon: Icon,
   onSelect,
-}: SwitcherListProps<T>) {
-  if (isPending) {
-    return (
-      <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-        {loadingLabel}
-      </div>
-    );
+}: ReadOnlySwitcherProps<T>) {
+  const [open, setOpen] = useState(false);
+  const resolvedLabel = items.find((item) => item.id === activeId)?.name ?? label;
+
+  if (items.length <= 1) {
+    return null;
   }
-  if (items.length === 0) {
-    return <div className="px-2 py-2 text-xs text-muted-foreground">{emptyLabel}</div>;
-  }
+
   return (
-    <>
-      {items.map((item) => (
-        <DropdownMenuItem
-          key={item.id}
-          onSelect={() => {
-            onSelect(item);
-          }}
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="compact"
+          aria-label={ariaLabel}
+          className="max-w-44 gap-1.5 px-2 font-medium text-foreground"
         >
-          <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          <span className="flex-1 truncate">{item.name}</span>
-          {item.id === activeId && <Check className="size-3.5 text-primary" aria-hidden="true" />}
-        </DropdownMenuItem>
-      ))}
-    </>
-  );
-}
-
-interface OrganizationSwitcherProps {
-  userId?: string;
-  isAdministrator: boolean;
-  activeOrgId: string;
-  activeOrgName?: string;
-}
-
-function OrganizationSwitcher({
-  userId,
-  isAdministrator,
-  activeOrgId,
-  activeOrgName,
-}: OrganizationSwitcherProps) {
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const orgsQuery = useOrganizations(1, menuOpen);
-  const orgs = orgsQuery.data?.items ?? [];
-  const label = orgs.find((o) => o.id === activeOrgId)?.name ?? activeOrgName ?? 'Organizations';
-
-  async function handleSelectOrg(org: Organization) {
-    setMenuOpen(false);
-    const dest = await resolveOrganizationDestination(org, userId);
-    void navigate(dest);
-  }
-
-  return (
-    <>
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="compact"
-            aria-label="Switch Organization"
-            className="max-w-44 gap-1.5 px-2 font-medium text-foreground"
-          >
-            <Building2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="truncate">{label}</span>
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-60">
-          <DropdownMenuLabel>Organizations</DropdownMenuLabel>
-          <SwitcherList
-            items={orgs}
-            activeId={activeOrgId}
-            isPending={orgsQuery.isPending}
-            loadingLabel="Loading Organizations..."
-            emptyLabel="No Organizations yet."
-            icon={Building2}
-            onSelect={(org) => {
-              void handleSelectOrg(org);
-            }}
-          />
-          <DropdownMenuSeparator />
-          {activeOrgId && (
-            <DropdownMenuItem
-              onSelect={() => {
-                setMenuOpen(false);
-                void navigate(organizationPath(activeOrgId));
-              }}
-            >
-              <Settings className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              Organization settings
-            </DropdownMenuItem>
-          )}
+          <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="truncate">{resolvedLabel ?? menuTitle}</span>
+          <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-60">
+        <DropdownMenuLabel>{menuTitle}</DropdownMenuLabel>
+        {items.map((item) => (
           <DropdownMenuItem
+            key={item.id}
             onSelect={() => {
-              setMenuOpen(false);
-              void navigate('/organizations');
+              setOpen(false);
+              onSelect(item);
             }}
           >
-            <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
-            All Organizations
+            <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <span className="flex-1 truncate">{item.name}</span>
+            {item.id === activeId && <Check className="size-3.5 text-primary" aria-hidden="true" />}
           </DropdownMenuItem>
-          {isAdministrator && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  setMenuOpen(false);
-                  setDialogOpen(true);
-                }}
-              >
-                <Plus className="size-3.5 text-primary" aria-hidden="true" />
-                Add Organization
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Organization</DialogTitle>
-            <DialogDescription>
-              Create a new Organization to group Workspaces, Teams, and Projects.
-            </DialogDescription>
-          </DialogHeader>
-          <CreateOrganizationForm
-            compact
-            onClose={() => {
-              setDialogOpen(false);
-            }}
-            onCreated={(organization) => {
-              setDialogOpen(false);
-              saveNavigationContext({
-                userId,
-                organizationId: organization.id,
-                organizationName: organization.name,
-                workspaceId: undefined,
-                workspaceName: undefined,
-                projectId: undefined,
-                projectName: undefined,
-              });
-              void navigate(organizationPath(organization.id));
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-    </>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-interface WorkspaceSwitcherProps {
-  userId?: string;
-  organizationId: string;
-  activeWsId: string;
-  activeWsName?: string;
-  canCreateWorkspace: boolean;
+function firstFallbackName(
+  items: Array<{ name: string }>,
+  storedName?: string,
+): string | undefined {
+  return storedName ?? items[0]?.name;
 }
 
-function WorkspaceSwitcher({
-  userId,
-  organizationId,
-  activeWsId,
-  activeWsName,
-  canCreateWorkspace,
-}: WorkspaceSwitcherProps) {
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const wsQuery = useWorkspaces(organizationId, 1, false, menuOpen);
-  const workspaces = wsQuery.data?.items ?? [];
-  const label = workspaces.find((w) => w.id === activeWsId)?.name ?? activeWsName ?? 'Workspace';
+interface ContextBarProps {
+  userId?: string;
+  orgs: Organization[];
+  workspaces: Workspace[];
+  active: ReturnType<typeof useActiveContextIds>;
+}
 
-  async function handleSelectWorkspace(ws: Workspace) {
-    setMenuOpen(false);
-    const dest = await resolveWorkspaceDestination(ws, userId);
-    void navigate(dest);
-  }
+function ContextBar({ userId, orgs, workspaces, active }: ContextBarProps) {
+  const navigate = useNavigate();
+  const showOrg = orgs.length > 1;
+  const showWs = Boolean(active.organizationId) && workspaces.length > 1;
+
+  if (!showOrg && !showWs) return null;
 
   return (
-    <>
-      <span className="text-sm text-muted-foreground/60 select-none" aria-hidden="true">
-        /
-      </span>
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="compact"
-            aria-label="Switch Workspace"
-            className="max-w-44 gap-1.5 px-2 font-medium text-foreground"
-          >
-            <FolderKanban className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="truncate">{label}</span>
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-60">
-          <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-          <SwitcherList
-            items={workspaces}
-            activeId={activeWsId}
-            isPending={wsQuery.isPending}
-            loadingLabel="Loading Workspaces..."
-            emptyLabel="No active Workspaces."
-            icon={FolderKanban}
-            onSelect={(ws) => {
-              void handleSelectWorkspace(ws);
-            }}
-          />
-          {activeWsId && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  setMenuOpen(false);
-                  void navigate(workspacePath(activeWsId));
-                }}
-              >
-                <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                Workspace & Teams
-              </DropdownMenuItem>
-            </>
-          )}
-          {canCreateWorkspace && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  setMenuOpen(false);
-                  setDialogOpen(true);
-                }}
-              >
-                <Plus className="size-3.5 text-primary" aria-hidden="true" />
-                Add Workspace
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Workspace</DialogTitle>
-            <DialogDescription>
-              Create a new Workspace inside this Organization for Projects and Teams.
-            </DialogDescription>
-          </DialogHeader>
-          <CreateWorkspaceForm
-            compact
-            organizationId={organizationId}
-            onClose={() => {
-              setDialogOpen(false);
-            }}
-            onCreated={(workspace) => {
-              saveNavigationContext({
-                userId,
-                organizationId: workspace.organizationId,
-                workspaceId: workspace.id,
-                workspaceName: workspace.name,
-                projectId: undefined,
-                projectName: undefined,
-              });
-              void navigate(workspacePath(workspace.id));
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-    </>
+    <div className="flex min-w-0 items-center gap-0.5" aria-label="Workspace navigation">
+      {showOrg && (
+        <ReadOnlyContextControl
+          items={orgs}
+          activeId={active.organizationId}
+          label={firstFallbackName(orgs, active.organizationName)}
+          menuTitle="Organizations"
+          ariaLabel="Switch Organization"
+          icon={Building2}
+          onSelect={(org) => {
+            void resolveOrganizationDestination(org, userId).then((dest) => navigate(dest));
+          }}
+        />
+      )}
+      {showOrg && showWs && (
+        <span className="text-sm text-muted-foreground/60 select-none" aria-hidden="true">
+          /
+        </span>
+      )}
+      {showWs && (
+        <ReadOnlyContextControl
+          items={workspaces}
+          activeId={active.workspaceId}
+          label={firstFallbackName(workspaces, active.workspaceName)}
+          menuTitle="Workspaces"
+          ariaLabel="Switch Workspace"
+          icon={FolderKanban}
+          onSelect={(ws) => {
+            void resolveWorkspaceDestination(ws, userId).then((dest) => navigate(dest));
+          }}
+        />
+      )}
+    </div>
   );
 }
 
-/** Header Organization and Workspace switchers with inline quick-create dialogs. */
+/**
+ * Lean, read-only Organization and Workspace context bar inside the Project shell.
+ * Shows a dropdown only when the User belongs to more than one Organization or Workspace;
+ * all structural creation and management lives in the dedicated Management Portal.
+ */
 export function ContextSwitchers() {
   const { data: user } = useCurrentUser();
   const stored = useStoredNavContext(user?.id);
   const active = useActiveContextIds(stored);
-  const isAdmin = user?.isAdministrator ?? false;
-  const canCreateWorkspace = isAdmin || active.organizationRole === 'owner';
+
+  const orgsQuery = useOrganizations(1, Boolean(user));
+  const wsQuery = useWorkspaces(active.organizationId, 1, false, Boolean(active.organizationId));
 
   if (!user) return null;
 
   return (
-    <div className="flex min-w-0 items-center gap-0.5" aria-label="Workspace navigation">
-      <OrganizationSwitcher
-        userId={user.id}
-        isAdministrator={isAdmin}
-        activeOrgId={active.organizationId}
-        activeOrgName={active.organizationName}
-      />
-      {active.organizationId && (
-        <WorkspaceSwitcher
-          userId={user.id}
-          organizationId={active.organizationId}
-          activeWsId={active.workspaceId}
-          activeWsName={active.workspaceName}
-          canCreateWorkspace={canCreateWorkspace}
-        />
-      )}
-    </div>
+    <ContextBar
+      userId={user.id}
+      orgs={orgsQuery.data?.items ?? []}
+      workspaces={wsQuery.data?.items ?? []}
+      active={active}
+    />
   );
 }

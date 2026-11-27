@@ -17,6 +17,7 @@ import { USERS_PATH, UsersPage } from '../features/users';
 import { WORK_ITEM_ROUTE, WorkItemPage } from '../features/work-items';
 import { AppLayout } from './AppLayout';
 import { HomePage, OrganizationsPage } from './HomePage';
+import { PortalLayout } from './PortalLayout';
 
 export const routes: RouteObject[] = [
   { path: SIGN_IN_PATH, element: <LoginPage /> },
@@ -24,7 +25,7 @@ export const routes: RouteObject[] = [
     element: <RequireAuth />,
     children: [
       {
-        element: <AppLayout />,
+        element: <PortalLayout />,
         children: [
           { path: '/', element: <HomePage /> },
           { path: '/organizations', element: <OrganizationsPage /> },
@@ -32,6 +33,11 @@ export const routes: RouteObject[] = [
           { path: CHANGE_PASSWORD_PATH, element: <ChangePasswordPage /> },
           { path: ORGANIZATION_ROUTE, element: <OrganizationPage /> },
           { path: WORKSPACE_ROUTE, element: <WorkspacePage /> },
+        ],
+      },
+      {
+        element: <AppLayout />,
+        children: [
           { path: PROJECT_ROUTE, element: <ProjectPage /> },
           { path: WORK_ITEM_ROUTE, element: <WorkItemPage /> },
         ],

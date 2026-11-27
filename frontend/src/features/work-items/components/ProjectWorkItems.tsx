@@ -1,13 +1,11 @@
 import { AlertCircle, Archive, Loader2, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
 import {
   useProjectShell,
   type ProjectConfigTab,
   type ProjectShellState,
 } from '@/app/project-shell-context';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/features/auth';
 import { errorMessage } from '../../../shared/api/httpClient';
@@ -33,22 +31,16 @@ import {
 } from '../../projects/hooks/useProjectViews';
 import type { Priority, WorkItem, WorkItemFilters } from '../api/workItemsApi';
 import { useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
-import { workItemPath } from '../paths';
 import { CreateWorkItemDialog } from './CreateWorkItemForm';
 import { SaveViewBanner } from './ProjectViewsBar';
 import { ProjectWorkspaceHeader, type Participant } from './ProjectWorkspaceHeader';
 import { WorkItemsBoardView } from './WorkItemsBoardView';
 import {
   WorkItemsCalendarView,
+  WorkItemsListView,
   WorkItemsTableView,
   WorkItemsTimelineView,
 } from './WorkItemsLayouts';
-import {
-  formatEstimate,
-  priorityLabels,
-  priorityVariants,
-  selectClassName,
-} from './workItemLabels';
 
 const LAYOUT_TITLES: Record<ViewLayout, string> = {
   board: 'Board',
@@ -117,84 +109,6 @@ function filterBySearch(items: WorkItem[], query: string): WorkItem[] {
   if (!q) return items;
   return items.filter(
     (item) => item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q),
-  );
-}
-
-function WorkItemMeta({ item, typeName }: { item: WorkItem; typeName: string }) {
-  const estimate = formatEstimate(item);
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-      <Badge variant="outline">{typeName}</Badge>
-      {item.priority !== 'none' && (
-        <Badge variant={priorityVariants[item.priority]}>{priorityLabels[item.priority]}</Badge>
-      )}
-      {estimate && <Badge variant="secondary">{estimate}</Badge>}
-      {item.assigneeUsername && <span>@{item.assigneeUsername}</span>}
-    </div>
-  );
-}
-
-interface WorkItemsListViewProps {
-  items: WorkItem[];
-  statuses: ProjectStatus[];
-  typeNames: Map<string, string>;
-  statusNames: Map<string, string>;
-  canWrite: boolean;
-  busy: boolean;
-  onTransition: (workItemId: string, statusId: string) => void;
-}
-
-function WorkItemsListView({
-  items,
-  statuses,
-  typeNames,
-  statusNames,
-  canWrite,
-  busy,
-  onTransition,
-}: WorkItemsListViewProps) {
-  return (
-    <div className="p-4 md:p-6">
-      <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-accent/35"
-          >
-            <div className="grid min-w-0 gap-1">
-              <Link
-                to={workItemPath(item.id)}
-                className="font-medium break-words hover:underline focus-visible:underline"
-              >
-                {item.title}
-              </Link>
-              <WorkItemMeta item={item} typeName={typeNames.get(item.workItemTypeId) ?? 'Item'} />
-            </div>
-            <div className="flex items-center gap-2">
-              {canWrite && statuses.length > 0 ? (
-                <select
-                  aria-label={`Status for ${item.title}`}
-                  className={`${selectClassName} h-8 w-auto min-w-32 text-xs`}
-                  value={item.statusId}
-                  disabled={busy}
-                  onChange={(e) => {
-                    onTransition(item.id, e.target.value);
-                  }}
-                >
-                  {statuses.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <Badge variant="secondary">{statusNames.get(item.statusId) ?? 'Status'}</Badge>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
@@ -616,10 +530,14 @@ export function ProjectWorkItems({
         participants={participants}
         canWrite={canWrite}
         showCreateButton={canCreateWorkItem}
+        activeViewMode={viewMode}
         activeView={viewMeta.activeView}
+        views={data.views}
         canEditActiveView={viewMeta.canEditActiveView}
         isActiveViewCreator={viewMeta.isActiveViewCreator}
         viewBusy={viewHandlers.viewBusy}
+        onSelectLayout={handleSelectLayout}
+        onSelectSavedView={handleApplySavedView}
         onSearchChange={setSearchQuery}
         onFilterChange={updateFilter}
         onResetFilters={resetFilters}

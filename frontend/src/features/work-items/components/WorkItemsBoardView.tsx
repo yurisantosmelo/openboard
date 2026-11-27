@@ -1,41 +1,19 @@
-import { Calendar, GripVertical, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { ProjectEra, ProjectStatus, StatusGroup } from '@/features/projects';
+import { IconButton } from '@/components/ui/icon-button';
+import { PriorityBadge } from '@/components/ui/priority-badge';
+import { Tag } from '@/components/ui/tag';
+import type { ProjectEra, ProjectStatus } from '@/features/projects';
 import { cn } from '@/lib/utils';
 import type { WorkItem } from '../api/workItemsApi';
 import { workItemPath } from '../paths';
-import { formatEstimate, priorityLabels, priorityVariants } from './workItemLabels';
+import { initialsOf, resolveStatusTone, typeDotClass } from './statusTone';
+import { formatEstimate } from './workItemLabels';
 
 const DRAG_ITEM_MIME = 'application/x-openboard-work-item';
-
-const STATUS_DOT_CLASS: Record<StatusGroup, string> = {
-  not_committed: 'bg-muted-foreground',
-  planned: 'bg-info',
-  started: 'bg-warning',
-  completed: 'bg-success',
-};
-
-function typeDotClass(name: string): string {
-  const lower = name.trim().toLowerCase();
-  if (lower === 'epic') return 'bg-primary';
-  if (lower === 'bug') return 'bg-destructive';
-  if (lower === 'task') return 'bg-info';
-  return 'bg-success';
-}
-
-function initialsOf(name: string, username: string): string {
-  const source = (name || username).trim();
-  const parts = source.split(/\s+/).filter(Boolean);
-  const first = parts[0];
-  if (!first) return '?';
-  const second = parts[1];
-  if (!second) return first.slice(0, 2).toUpperCase();
-  return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
-}
 
 interface DragPayload {
   id: string;
@@ -86,26 +64,55 @@ interface BoardCardProps {
   onTransition: (workItemId: string, statusId: string) => void;
 }
 
+function BoardCardAssignee({ name, username }: { name: string; username: string }) {
+  if (!name && !username) return null;
+  const displayName = name || `@${username}`;
+  return (
+    <div
+      data-slot="card-assignee"
+      className="flex items-center gap-1.5 text-2xs text-muted-foreground"
+    >
+      <Avatar size="xs">
+        <AvatarFallback className="text-3xs font-semibold">
+          {initialsOf(name, username)}
+        </AvatarFallback>
+      </Avatar>
+      <span className="truncate">{displayName}</span>
+    </div>
+  );
+}
+
 function BoardCardFooter({
   item,
   statuses,
+  estimate,
   canWrite,
   busy,
   onTransition,
 }: {
   item: WorkItem;
   statuses: ProjectStatus[];
+  estimate: string | null;
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
 }) {
-  const hasAssignee = Boolean(item.assigneeUsername);
+  if (!estimate && !canWrite) return null;
+
   return (
-    <div className="flex items-center justify-between gap-2 pt-0.5">
-      {canWrite ? (
+    <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+      {estimate ? (
+        <span className="rounded-xs border border-border bg-secondary px-1.5 py-0.5 text-2xs text-muted-foreground tabular-nums">
+          {estimate}
+        </span>
+      ) : (
+        <span />
+      )}
+
+      {canWrite && (
         <select
           aria-label={`Status for ${item.title}`}
-          className="h-7 max-w-36 rounded-md border border-border bg-muted/40 px-2 text-2xs font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+          className="h-6 max-w-32 cursor-pointer rounded-xs border border-transparent bg-transparent px-1.5 text-2xs font-medium text-muted-foreground transition-colors outline-none hover:border-input hover:bg-secondary/60 hover:text-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:text-foreground disabled:opacity-50"
           value={item.statusId}
           disabled={busy}
           onChange={(e) => {
@@ -118,19 +125,6 @@ function BoardCardFooter({
             </option>
           ))}
         </select>
-      ) : (
-        <span />
-      )}
-
-      {hasAssignee && (
-        <div className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-          <Avatar size="sm" className="size-5">
-            <AvatarFallback className="text-3xs font-semibold">
-              {initialsOf(item.assigneeName, item.assigneeUsername)}
-            </AvatarFallback>
-          </Avatar>
-          <span className="max-w-24 truncate">@{item.assigneeUsername}</span>
-        </div>
       )}
     </div>
   );
@@ -153,35 +147,31 @@ function BoardCard({
 
   return (
     <article
+      data-slot="work-item-card"
       draggable={canDrag}
       onDragStart={(event) => {
         if (canDrag) onDragStart(item, event);
       }}
       onDragEnd={onDragEnd}
       className={cn(
-        'flex flex-col gap-2.5 rounded-lg border border-border bg-card p-3 shadow-xs transition-all hover:border-input',
-        canDrag && 'cursor-grab hover:shadow-sm active:cursor-grabbing',
+        'flex flex-col gap-2 rounded-sm border border-transparent bg-card p-3 shadow-card transition-[border-color,box-shadow,opacity,transform] hover:border-input',
+        canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'scale-[0.98] opacity-50',
       )}
     >
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5 font-medium">
-          {canDrag && (
-            <GripVertical
-              className="size-3.5 shrink-0 text-muted-foreground/60"
-              aria-hidden="true"
-            />
-          )}
-          <span className={cn('size-2 rounded-xs', typeDotClass(typeName))} aria-hidden="true" />
-          {typeName}
+      {/* Row 1: Type identity & Priority badge */}
+      <div className="flex items-center justify-between gap-2 text-2xs text-muted-foreground">
+        <span className="inline-flex min-w-0 items-center gap-1.5 font-medium">
+          <span
+            className={cn('size-1.5 shrink-0 rounded-xs', typeDotClass(typeName))}
+            aria-hidden="true"
+          />
+          <span className="truncate">{typeName}</span>
         </span>
-        {item.priority !== 'none' && (
-          <Badge variant={priorityVariants[item.priority]} className="h-5 px-1.5 text-2xs">
-            {priorityLabels[item.priority]}
-          </Badge>
-        )}
+        {item.priority !== 'none' && <PriorityBadge priority={item.priority} />}
       </div>
 
+      {/* Row 2: Clickable Title */}
       <Link
         to={workItemPath(item.id)}
         className="text-sm leading-snug font-medium break-words text-foreground hover:underline focus-visible:underline"
@@ -189,25 +179,21 @@ function BoardCard({
         {item.title}
       </Link>
 
-      {(estimate || era) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {era && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">
-              <Calendar className="size-3" aria-hidden="true" />
-              {era.name}
-            </span>
-          )}
-          {estimate && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-2xs tabular-nums">
-              {estimate}
-            </Badge>
-          )}
+      {/* Row 3: Assignee directly below Title, left-aligned */}
+      <BoardCardAssignee name={item.assigneeName} username={item.assigneeUsername} />
+
+      {/* Row 4: Era tag */}
+      {era && (
+        <div className="flex flex-wrap items-center gap-1">
+          <Tag tone="info">{era.name}</Tag>
         </div>
       )}
 
+      {/* Row 5: Quiet footer with estimate and border-on-hover status control */}
       <BoardCardFooter
         item={item}
         statuses={statuses}
+        estimate={estimate}
         canWrite={canWrite}
         busy={busy}
         onTransition={onTransition}
@@ -216,7 +202,122 @@ function BoardCard({
   );
 }
 
-/** Kanban board view displaying Status columns and draggable Work Item cards. */
+interface BoardColumnProps {
+  status: ProjectStatus;
+  items: WorkItem[];
+  statuses: ProjectStatus[];
+  eraMap: Map<string, ProjectEra>;
+  typeNames: Map<string, string>;
+  canWrite: boolean;
+  busy: boolean;
+  draggingId: string | null;
+  isDropTarget: boolean;
+  onDragOver: (event: DragEvent<HTMLElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLElement>) => void;
+  onDrop: (event: DragEvent<HTMLElement>) => void;
+  onCardDragStart: (item: WorkItem, event: DragEvent<HTMLElement>) => void;
+  onCardDragEnd: () => void;
+  onTransition: (workItemId: string, statusId: string) => void;
+  onStartCreate?: (statusId?: string) => void;
+}
+
+function BoardColumn({
+  status,
+  items,
+  statuses,
+  eraMap,
+  typeNames,
+  canWrite,
+  busy,
+  draggingId,
+  isDropTarget,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onCardDragStart,
+  onCardDragEnd,
+  onTransition,
+  onStartCreate,
+}: BoardColumnProps) {
+  const tone = resolveStatusTone(status);
+
+  return (
+    <section
+      data-slot="board-column"
+      data-column-tone={tone.key}
+      aria-label={status.name}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={cn(
+        'flex w-[280px] shrink-0 flex-col gap-2 rounded-md border p-2.5 transition-colors',
+        tone.surface,
+        isDropTarget && 'border-primary/60 ring-2 ring-primary/30',
+      )}
+    >
+      <div className="flex h-6 items-center justify-between gap-2 px-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={cn('size-2 shrink-0 rounded-xs', tone.dot)} aria-hidden="true" />
+          <h3 className="truncate text-xs font-medium text-foreground">{status.name}</h3>
+          <span className="text-2xs text-muted-foreground tabular-nums">{items.length}</span>
+        </div>
+        {canWrite && onStartCreate && (
+          <IconButton
+            size="sm"
+            variant="ghost"
+            aria-label={`Add Work Item to ${status.name}`}
+            onClick={() => {
+              onStartCreate(status.id);
+            }}
+          >
+            <Plus aria-hidden="true" />
+          </IconButton>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {items.length === 0 ? (
+          <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+            {isDropTarget ? 'Drop here' : 'No items'}
+          </p>
+        ) : (
+          items.map((item) => (
+            <BoardCard
+              key={item.id}
+              item={item}
+              statuses={statuses}
+              typeName={typeNames.get(item.workItemTypeId) ?? 'Item'}
+              era={item.eraId ? eraMap.get(item.eraId) : undefined}
+              canWrite={canWrite}
+              busy={busy}
+              isDragging={draggingId === item.id}
+              onDragStart={onCardDragStart}
+              onDragEnd={onCardDragEnd}
+              onTransition={onTransition}
+            />
+          ))
+        )}
+      </div>
+
+      {canWrite && onStartCreate && (
+        <Button
+          type="button"
+          size="compact"
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          onClick={() => {
+            onStartCreate(status.id);
+          }}
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          New work item
+        </Button>
+      )}
+    </section>
+  );
+}
+
+/** Kanban board view displaying status-tinted columns and floating draggable Work Item cards. */
 export function WorkItemsBoardView({
   items,
   statuses,
@@ -277,7 +378,7 @@ export function WorkItemsBoardView({
 
   return (
     <div
-      className="flex min-h-full items-start gap-4 overflow-x-auto p-4 md:p-6"
+      className="flex min-h-full items-start gap-3.5 overflow-x-auto px-6 py-4.5"
       role="region"
       aria-label="Work Items board"
     >
@@ -285,9 +386,17 @@ export function WorkItemsBoardView({
         const columnItems = items.filter((item) => item.statusId === status.id);
         const isDropTarget = dragOverStatusId === status.id && dragging?.statusId !== status.id;
         return (
-          <section
+          <BoardColumn
             key={status.id}
-            aria-label={status.name}
+            status={status}
+            items={columnItems}
+            statuses={statuses}
+            eraMap={eraMap}
+            typeNames={typeNames}
+            canWrite={canWrite}
+            busy={busy}
+            draggingId={dragging?.id ?? null}
+            isDropTarget={isDropTarget}
             onDragOver={(event) => {
               handleColumnDragOver(status.id, event);
             }}
@@ -297,79 +406,11 @@ export function WorkItemsBoardView({
             onDrop={(event) => {
               handleColumnDrop(status.id, event);
             }}
-            className={cn(
-              'flex w-76 shrink-0 flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-2.5 transition-colors',
-              isDropTarget && 'border-primary/50 bg-primary/5 ring-2 ring-primary/35',
-            )}
-          >
-            <div className="flex items-center justify-between gap-2 px-1.5 py-0.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <span
-                  className={cn(
-                    'size-2.5 shrink-0 rounded-full',
-                    STATUS_DOT_CLASS[status.statusGroup],
-                  )}
-                  aria-hidden="true"
-                />
-                <h3 className="truncate text-sm font-semibold">{status.name}</h3>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {columnItems.length}
-                </span>
-              </div>
-              {canWrite && onStartCreate && (
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={`Add Work Item to ${status.name}`}
-                  onClick={() => {
-                    onStartCreate(status.id);
-                  }}
-                >
-                  <Plus className="size-3.5" aria-hidden="true" />
-                </Button>
-              )}
-            </div>
-
-            <div className="grid gap-2">
-              {columnItems.length === 0 ? (
-                <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-                  {isDropTarget ? 'Drop here' : 'No items'}
-                </p>
-              ) : (
-                columnItems.map((item) => (
-                  <BoardCard
-                    key={item.id}
-                    item={item}
-                    statuses={statuses}
-                    typeName={typeNames.get(item.workItemTypeId) ?? 'Item'}
-                    era={item.eraId ? eraMap.get(item.eraId) : undefined}
-                    canWrite={canWrite}
-                    busy={busy}
-                    isDragging={dragging?.id === item.id}
-                    onDragStart={handleCardDragStart}
-                    onDragEnd={handleCardDragEnd}
-                    onTransition={onTransition}
-                  />
-                ))
-              )}
-            </div>
-
-            {canWrite && onStartCreate && (
-              <Button
-                type="button"
-                size="compact"
-                variant="ghost"
-                className="w-full justify-start text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  onStartCreate(status.id);
-                }}
-              >
-                <Plus className="size-3.5" aria-hidden="true" />
-                New work item
-              </Button>
-            )}
-          </section>
+            onCardDragStart={handleCardDragStart}
+            onCardDragEnd={handleCardDragEnd}
+            onTransition={onTransition}
+            onStartCreate={onStartCreate}
+          />
         );
       })}
     </div>

@@ -1,0 +1,43 @@
+---
+id: 0013-openboard-design-system
+name: "0013. The interface uses OpenBoard's own architectural design system over headless Radix UI primitives"
+version: 1.0.0
+summary: "OpenBoard owns its visual design system in frontend/src/components/ui/ and frontend/src/index.css using Tailwind CSS v4 semantic tokens, headless Radix UI accessibility primitives and Lucide icons, replacing shadcn/ui styling and CLI coupling (ADR 0012)."
+owners:
+  - maintainers
+decisionMakers:
+  - maintainers
+status: accepted
+date: 2026-11-27
+appliesTo:
+  - type: service
+    id: WebApp
+---
+
+## Context
+
+ADR 0012 adopted shadcn/ui to move away from an external GitHub design system package. As OpenBoard's dense work-management surfaces (Kanban boards, grouped list views, spreadsheet tables, timelines and multi-band work item modals) evolved in Penpot, shadcn/ui's default aesthetic — generously rounded corners (`rounded-lg`/`rounded-xl`), resting borders on inline fields, heavy sidebar wrappers and generic card chrome — clashed with OpenBoard's architectural visual identity.
+
+At the same time, OpenBoard does not want to reimplement low-level accessibility behaviors (focus traps, Escape/outside-click dismissal, portal layering, ARIA attributes and keyboard navigation) that headless Radix UI primitives already solve reliably.
+
+## Decision
+
+1. **OpenBoard Design System** (`frontend/src/components/ui/` and `frontend/src/index.css`) is the visual component system for the OpenBoard interface, superseding ADR 0012.
+2. **shadcn/ui visual defaults and CLI coupling (`frontend/components.json`) are removed.** Every UI primitive is owned, styled and evolved directly according to OpenBoard's Penpot design system:
+   - Sharp corner hierarchy (`--radius-xs: 2px`, `--radius-sm: 4px`, `--radius-md: 6px`).
+   - Light and true-black Dark semantic tokens, including status-tinted column tokens (`--color-column-*`) and soft floating card elevation (`--shadow-card`).
+   - `Inter` for all UI chrome (keys, counts, estimates, dates); `JetBrains Mono` strictly for code blocks (`pre`, `code`).
+   - Quiet resting inline fields with hairline borders appearing only on hover/focus (`InlineField`).
+3. **Headless `radix-ui` primitives** are kept solely for accessible interactive overlays (`Dialog`, `DropdownMenu`, `Popover`, `Tooltip`, `Slot`, `Label`), carrying zero third-party visual styling.
+4. **Tailwind CSS v4**, **`class-variance-authority`** and **Lucide (`lucide-react`)** remain the styling, variant and icon foundations.
+
+### Alternatives rejected
+
+- **Staying on shadcn/ui defaults (ADR 0012):** forces constant overrides against rounded default chrome and couples component evolution to an upstream template registry.
+- **Removing Radix UI and writing raw modal/popover accessibility from scratch:** introduces avoidable accessibility and keyboard-navigation bugs in modals, switchers and dropdowns without visual benefit.
+
+## Consequences
+
+- OpenBoard has a distinct, cohesive architectural visual language owned end-to-end between Penpot and code.
+- Accessibility guarantees for dialogs, popovers, dropdowns and tooltips remain backed by battle-tested headless Radix UI primitives.
+- Existing `src/components/ui/` components are refactored incrementally in small slices rather than rewritten in a single breaking change.

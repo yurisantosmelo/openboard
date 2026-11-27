@@ -34,7 +34,7 @@ import {
 } from './sidebar';
 import { useSidebar } from './sidebar-context';
 
-describe('shadcn/ui components', () => {
+describe('OpenBoard UI primitives', () => {
   it('renders Button as button or child via Slot', () => {
     render(
       <div>
@@ -190,9 +190,10 @@ describe('shadcn/ui components', () => {
     expect(() => render(<Orphan />)).toThrow('useSidebar must be used within a SidebarProvider.');
   });
 
-  it('merges compact typography classes with text colors in cn()', () => {
+  it('merges compact typography and card shadow classes in cn()', () => {
     expect(cn('text-2xs text-muted-foreground')).toBe('text-2xs text-muted-foreground');
     expect(cn('text-sm text-3xs')).toBe('text-3xs');
+    expect(cn('shadow-sm shadow-card')).toBe('shadow-card');
   });
 
   it('cycles theme preferences via ThemeToggle and syncs dark class', async () => {

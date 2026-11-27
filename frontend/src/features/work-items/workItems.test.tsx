@@ -215,8 +215,8 @@ describe('Work Items on ProjectPage', () => {
     expect(screen.queryByRole('link', { name: 'Implement OAuth' })).not.toBeInTheDocument();
     await user.clear(searchInput);
 
-    // Switch to Backlog (List) and filter by Priority via collapsible Notion-style filter bar
-    await user.click(screen.getByRole('button', { name: 'Backlog' }));
+    // Switch to Backlogs (List) and filter by Priority via collapsible Notion-style filter bar
+    await user.click(screen.getByRole('button', { name: 'Backlogs' }));
     await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
     const filtersRegion = screen.getByRole('region', { name: 'Filters' });
     await user.click(within(filtersRegion).getByRole('button', { name: 'Filter' }));
