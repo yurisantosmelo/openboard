@@ -319,4 +319,97 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     ).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('creates a Work Item from column + New work item and inline + Add item in List View for any status', async () => {
+    let counter = 0;
+    let items: ReturnType<typeof workItemDto>[] = [];
+    const customStatuses = [
+      ...statuses,
+      {
+        id: 's3',
+        project_id: 'p1',
+        name: 'QA Review',
+        status_group: 'started',
+        position: 2,
+        created_at: '2026-11-24T12:00:00Z',
+      },
+    ];
+
+    const fetchMock = stubApi({
+      'GET /api/v1/users/me': Response.json(
+        userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys' }),
+      ),
+      'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      'GET /api/v1/projects/p1': Response.json(projectDto()),
+      'GET /api/v1/projects/p1/statuses': Response.json({ items: customStatuses }),
+      'GET /api/v1/projects/p1/work-item-types': Response.json({ items: workItemTypes }),
+      'GET /api/v1/projects/p1/transition-rules': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/eras': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/views': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/teams': Response.json({ items: [] }),
+      'GET /api/v1/workspaces/w1/teams': Response.json({ items: [] }),
+      'GET /api/v1/projects/p1/work-items?page=1&page_size=20': () => pageOf(items),
+      'POST /api/v1/projects/p1/work-items': ({ body }: RequestInit) => {
+        counter += 1;
+        const parsed =
+          typeof body === 'string' ? (JSON.parse(body) as Record<string, unknown>) : {};
+        const created = workItemDto({
+          id: `wi-new-${String(counter)}`,
+          title: parsed.title,
+          description: parsed.description ?? '',
+          status_id: parsed.status_id ?? 's1',
+          work_item_type_id: parsed.work_item_type_id ?? 't1',
+        });
+        items = [created, ...items];
+        return Response.json(created, { status: 201 });
+      },
+    });
+
+    const { user } = renderRoute('/projects/p1');
+
+    // Click "+ New work item" button at the bottom of the Backlog column
+    const board = await screen.findByRole('region', { name: 'Work Items board' });
+    const backlogCol = within(board).getByRole('region', { name: 'Backlog' });
+    await user.click(within(backlogCol).getByRole('button', { name: 'New work item' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Title'), 'Board column item');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Work Item' }));
+    expect(
+      await within(backlogCol).findByRole('link', { name: 'Board column item' }),
+    ).toBeInTheDocument();
+
+    // Switch to List View -> inline + Add item works on Backlog and custom status QA Review
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    const listRegion = await screen.findByRole('region', { name: 'Work Items list' });
+
+    const backlogGroup = within(listRegion).getByRole('region', { name: 'Backlog' });
+    await user.click(within(backlogGroup).getByRole('button', { name: 'Add item' }));
+    const backlogInput = within(backlogGroup).getByLabelText('New Work Item title in Backlog');
+    await user.type(backlogInput, 'Top inline backlog item{Enter}');
+    expect(
+      await within(backlogGroup).findByRole('link', { name: 'Top inline backlog item' }),
+    ).toHaveAttribute('href', '/work-items/wi-new-2');
+
+    const qaGroup = within(listRegion).getByRole('region', { name: 'QA Review' });
+    await user.click(within(qaGroup).getByRole('button', { name: 'Add item' }));
+    const qaInput = within(qaGroup).getByLabelText('New Work Item title in QA Review');
+    await user.type(qaInput, 'Custom status inline item{Enter}');
+    expect(
+      await within(qaGroup).findByRole('link', { name: 'Custom status inline item' }),
+    ).toHaveAttribute('href', '/work-items/wi-new-3');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/projects/p1/work-items',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          work_item_type_id: 't1',
+          title: 'Custom status inline item',
+          description: '',
+          priority: 'none',
+          status_id: 's3',
+        }),
+      }),
+    );
+  });
 });

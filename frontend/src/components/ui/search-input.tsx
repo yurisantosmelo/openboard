@@ -22,7 +22,7 @@ export function SearchInput({
     <div
       data-slot="search-input"
       className={cn(
-        'relative flex h-7 w-full items-center gap-1.5 rounded-sm border border-input bg-background px-2 text-xs text-foreground transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20',
+        'relative flex h-7 w-full items-center gap-2 rounded-sm border border-input bg-background px-2.5 text-xs text-foreground transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20',
         containerClassName,
       )}
     >
@@ -47,7 +47,7 @@ export function SearchInput({
         </button>
       ) : null}
       {!hasValue && shortcut ? (
-        <kbd className="inline-flex h-4 shrink-0 items-center rounded-xs border border-border bg-secondary px-1 font-sans text-3xs font-medium text-muted-foreground">
+        <kbd className="inline-flex h-5 shrink-0 items-center rounded-xs border border-border bg-secondary px-[5px] font-sans text-2xs font-normal text-muted-foreground">
           {shortcut}
         </kbd>
       ) : null}

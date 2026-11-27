@@ -133,20 +133,76 @@ describe('OpenBoard navigation shell', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders GlobalHeader with ⌘K search, typing, clear action and config toggle', async () => {
+  it('renders GlobalHeader with Ctrl + / search, keyboard focus, utilities and avatar menu', async () => {
     const user = userEvent.setup();
-    const shell = makeShell({ searchQuery: 'CORE' });
-    renderWithShell(<GlobalHeader />, shell);
+    const shell = makeShell({ searchQuery: '' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['current-user'], {
+      id: 'u1',
+      username: 'alfredo',
+      name: 'Alfredo Melo',
+      isAdministrator: true,
+      mustChangePassword: false,
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ProjectShellContext.Provider value={{ shell, setShell: () => undefined }}>
+            <GlobalHeader />
+          </ProjectShellContext.Provider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
 
     const search = screen.getByLabelText('Global search work items');
-    expect(search).toHaveValue('CORE');
-    await user.type(search, '1');
-    expect(shell.onSearchChange).toHaveBeenCalledWith('CORE1');
+    expect(screen.getByText('Ctrl + /')).toBeInTheDocument();
 
+    await user.keyboard('{Control>}/{/Control}');
+    expect(search).toHaveFocus();
+
+    await user.type(search, 'C');
+    expect(shell.onSearchChange).toHaveBeenCalledWith('C');
+
+    await user.click(screen.getByRole('button', { name: 'Notifications' }));
+    expect(await screen.findByText(/all caught up/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Help and keyboard shortcuts' }));
+    expect(await screen.findByText('Keyboard shortcuts')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Alfredo Melo' }));
+    expect(await screen.findByText('@alfredo')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Management Portal' })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Project configuration' }));
+    expect(shell.onToggleConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the GlobalHeader search query via the clear button and renders single-word initials', async () => {
+    const user = userEvent.setup();
+    const shell = makeShell({ searchQuery: 'CORE' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['current-user'], {
+      id: 'u2',
+      username: 'bruno',
+      name: 'Bruno',
+      isAdministrator: false,
+      mustChangePassword: false,
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ProjectShellContext.Provider value={{ shell, setShell: () => undefined }}>
+            <GlobalHeader />
+          </ProjectShellContext.Provider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('BR')).toBeInTheDocument();
+    const search = screen.getByLabelText('Global search work items');
+    expect(search).toHaveValue('CORE');
     await user.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(shell.onSearchChange).toHaveBeenCalledWith('');
-
-    await user.click(screen.getByRole('button', { name: 'Toggle project configuration' }));
-    expect(shell.onToggleConfig).toHaveBeenCalledTimes(1);
   });
 });

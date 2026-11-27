@@ -1,5 +1,5 @@
-import { Monitor, Moon, Sun } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Contrast, Moon, Sun } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 import { useTheme, type ThemePreference } from '@/hooks/use-theme';
 
 const themeLabels: Record<ThemePreference, string> = {
@@ -11,7 +11,7 @@ const themeLabels: Record<ThemePreference, string> = {
 function ThemeIcon({ theme }: { theme: ThemePreference }) {
   if (theme === 'light') return <Sun aria-hidden="true" />;
   if (theme === 'dark') return <Moon aria-hidden="true" />;
-  return <Monitor aria-hidden="true" />;
+  return <Contrast aria-hidden="true" />;
 }
 
 /** Compact theme switcher cycling System, Light, and Dark modes. */
@@ -20,15 +20,15 @@ export function ThemeToggle() {
   const label = themeLabels[theme];
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
+    <IconButton
+      variant="outline"
+      size="md"
       aria-label={label}
       title={label}
+      className="[&_svg]:size-3.5"
       onClick={cycleTheme}
     >
       <ThemeIcon theme={theme} />
-    </Button>
+    </IconButton>
   );
 }
