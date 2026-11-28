@@ -30,7 +30,12 @@ import {
   useUpdateProjectView,
 } from '../../projects/hooks/useProjectViews';
 import type { Priority, WorkItem, WorkItemFilters } from '../api/workItemsApi';
-import { useCreateWorkItem, useTransitionWorkItem, useWorkItems } from '../hooks/useWorkItems';
+import {
+  useAssignWorkItem,
+  useCreateWorkItem,
+  useTransitionWorkItem,
+  useWorkItems,
+} from '../hooks/useWorkItems';
 import { CreateWorkItemDialog } from './CreateWorkItemForm';
 import { SaveViewBanner } from './ProjectViewsBar';
 import { ProjectWorkspaceHeader, type Participant } from './ProjectWorkspaceHeader';
@@ -121,11 +126,15 @@ interface BodyProps {
   statuses: ProjectStatus[];
   types: ProjectWorkItemType[];
   eras: ProjectEra[];
+  workspaceId: string;
+  participants: Participant[];
   canWrite: boolean;
   busy: boolean;
   onTransition: (workItemId: string, statusId: string) => void;
+  onAssign: (workItemId: string, assigneeId: string | null) => void;
   onStartCreate?: (statusId?: string) => void;
   onQuickCreate?: (statusId: string, title: string) => Promise<void>;
+  onOpenWorkItem?: (workItemId: string) => void;
 }
 
 function renderActiveLayout(props: Omit<BodyProps, 'isPending' | 'error'>) {
@@ -399,9 +408,11 @@ export function ProjectWorkItems({
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<WorkItemFilters>({});
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const { openWorkItem } = useProjectShell();
 
   const data = useProjectWorkItemsData(project.id, filters, page);
   const createWorkItem = useCreateWorkItem(project.id);
+  const assignWorkItem = useAssignWorkItem(project.id);
   const unarchive = useUnarchiveProject(project.id);
   const isReadOnly = Boolean(project.isReadOnly);
   const canWrite = project.currentUserRole !== 'viewer' && !isReadOnly;
@@ -595,6 +606,7 @@ export function ProjectWorkItems({
           if (!nextOpen) setCreateStatusId(undefined);
         }}
         projectId={project.id}
+        projectName={project.name}
         statuses={data.statuses}
         workItemTypes={data.types}
         existingItems={data.items}
@@ -623,13 +635,19 @@ export function ProjectWorkItems({
           statuses={data.statuses}
           types={data.types}
           eras={data.eras}
+          workspaceId={project.workspaceId}
+          participants={participants}
           canWrite={canWrite}
-          busy={data.transition.isPending}
+          busy={data.transition.isPending || assignWorkItem.isPending}
           onTransition={(workItemId, statusId) => {
             data.transition.mutate({ workItemId, statusId });
           }}
+          onAssign={(workItemId, assigneeId) => {
+            assignWorkItem.mutate({ workItemId, assigneeId });
+          }}
           onStartCreate={canCreateWorkItem ? handleStartCreate : undefined}
           onQuickCreate={canCreateWorkItem ? handleQuickCreate : undefined}
+          onOpenWorkItem={openWorkItem}
         />
         <WorkItemsPagination page={page} totalPages={data.totalPages} onPageChange={setPage} />
       </div>

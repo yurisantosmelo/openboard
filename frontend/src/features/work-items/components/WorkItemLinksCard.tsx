@@ -1,11 +1,11 @@
-import { AlertCircle, Link2, Loader2, Plus, Trash2 } from 'lucide-react';
-import { useId, useState, type SubmitEvent } from 'react';
+import { AlertCircle, Link2, Loader2, Plus, X } from 'lucide-react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { IconButton } from '@/components/ui/icon-button';
+import { cn } from '@/lib/utils';
 import { errorMessage } from '../../../shared/api/httpClient';
 import type { LinkKind, WorkItem, WorkItemLink } from '../api/workItemsApi';
 import {
@@ -14,7 +14,7 @@ import {
   useWorkItemLinks,
 } from '../hooks/useWorkItems';
 import { workItemPath } from '../paths';
-import { selectClassName } from './workItemLabels';
+import { quietEditorSelectClass } from './workItemLabels';
 
 const LINK_KINDS: LinkKind[] = ['blocks', 'duplicates', 'relates_to'];
 
@@ -29,12 +29,27 @@ function describeLink(link: WorkItemLink, currentItemId: string) {
   const otherId = isSource ? link.targetWorkItemId : link.sourceWorkItemId;
   const otherTitle = isSource ? link.targetTitle : link.sourceTitle;
   if (link.kind === 'blocks') {
-    return { label: isSource ? 'Blocks' : 'Blocked by', otherId, otherTitle };
+    return {
+      label: isSource ? 'Blocks' : 'Blocked by',
+      toneClass: 'text-destructive',
+      otherId,
+      otherTitle,
+    };
   }
   if (link.kind === 'duplicates') {
-    return { label: isSource ? 'Duplicates' : 'Duplicated by', otherId, otherTitle };
+    return {
+      label: isSource ? 'Duplicates' : 'Duplicated by',
+      toneClass: 'text-warning-foreground',
+      otherId,
+      otherTitle,
+    };
   }
-  return { label: 'Relates To', otherId, otherTitle };
+  return {
+    label: 'Relates To',
+    toneClass: 'text-muted-foreground',
+    otherId,
+    otherTitle,
+  };
 }
 
 function LinkAlert({ error }: { error: unknown }) {
@@ -61,59 +76,69 @@ function AddLinkForm({ candidates, busy, error, onSubmit, onCancel }: AddLinkFor
   const [kind, setKind] = useState<LinkKind>('blocks');
   const [targetWorkItemId, setTargetWorkItemId] = useState(candidates[0]?.id ?? '');
 
-  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function handleSave() {
     if (targetWorkItemId) onSubmit(targetWorkItemId, kind);
   }
 
   return (
-    <form className="grid gap-3 border-b p-6" aria-label="New Link" onSubmit={handleSubmit}>
+    <div
+      role="form"
+      aria-label="New Link"
+      className="flex flex-col gap-2.5 rounded-sm border border-border bg-secondary/40 p-3"
+    >
       <LinkAlert error={error} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor={kindId}>Kind</FieldLabel>
-          <select
-            id={kindId}
-            className={selectClassName}
-            value={kind}
-            onChange={(e) => {
-              setKind(e.target.value as LinkKind);
-            }}
-          >
-            {LINK_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {linkKindCreateLabels[k]}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={targetId}>Target Work Item</FieldLabel>
-          <select
-            id={targetId}
-            className={selectClassName}
-            value={targetWorkItemId}
-            onChange={(e) => {
-              setTargetWorkItemId(e.target.value);
-            }}
-          >
-            {candidates.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy || !targetWorkItemId}>
+      <Field>
+        <FieldLabel htmlFor={kindId} className="text-2xs text-muted-foreground">
+          Kind
+        </FieldLabel>
+        <select
+          id={kindId}
+          className={cn(quietEditorSelectClass, 'border-input bg-background')}
+          value={kind}
+          onChange={(e) => {
+            setKind(e.target.value as LinkKind);
+          }}
+        >
+          {LINK_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {linkKindCreateLabels[k]}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={targetId} className="text-2xs text-muted-foreground">
+          Target Work Item
+        </FieldLabel>
+        <select
+          id={targetId}
+          className={cn(quietEditorSelectClass, 'border-input bg-background')}
+          value={targetWorkItemId}
+          onChange={(e) => {
+            setTargetWorkItemId(e.target.value);
+          }}
+        >
+          {candidates.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.title}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="flex items-center gap-2 pt-0.5">
+        <Button
+          type="button"
+          size="compact"
+          disabled={busy || !targetWorkItemId}
+          onClick={handleSave}
+        >
           Add Link
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onCancel}>
+        <Button type="button" size="compact" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -138,58 +163,61 @@ function LinksBody({
 }: LinksBodyProps) {
   if (isPending) {
     return (
-      <CardContent className="py-6">
-        <span
-          role="status"
-          aria-label="Loading"
-          className="inline-flex items-center text-muted-foreground"
-        >
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        </span>
-      </CardContent>
+      <span
+        role="status"
+        aria-label="Loading"
+        className="inline-flex items-center py-2 text-muted-foreground"
+      >
+        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+      </span>
     );
   }
-  if (error) {
-    return (
-      <CardContent className="py-6">
-        <LinkAlert error={error} />
-      </CardContent>
-    );
-  }
+  if (error) return <LinkAlert error={error} />;
   if (links.length === 0) {
     return (
-      <CardContent className="py-6 text-sm text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         No Links yet. Connect related Work Items in this Project.
-      </CardContent>
+      </p>
     );
   }
   return (
-    <ul className="m-0 list-none divide-y p-0">
+    <ul className="m-0 flex list-none flex-col gap-2 p-0">
       {links.map((link) => {
         const desc = describeLink(link, currentItemId);
         return (
-          <li key={link.id} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Link2 className="size-4 text-muted-foreground" aria-hidden="true" />
-              <Badge variant="outline">{desc.label}</Badge>
-              <Link to={workItemPath(desc.otherId)} className="font-medium hover:underline">
+          <li
+            key={link.id}
+            className="flex items-start justify-between gap-2 rounded-sm border border-transparent px-1.5 py-1 transition-colors hover:border-border hover:bg-secondary/40"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 text-2xs font-medium',
+                  desc.toneClass,
+                )}
+              >
+                <Link2 className="size-3 shrink-0" aria-hidden="true" />
+                <span>{desc.label}</span>
+              </span>
+              <Link
+                to={workItemPath(desc.otherId)}
+                className="truncate text-xs font-medium text-foreground hover:underline"
+              >
                 {desc.otherTitle}
               </Link>
             </div>
             {canWrite && (
-              <Button
-                type="button"
+              <IconButton
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 disabled={busy}
                 aria-label={`Remove Link ${desc.label} ${desc.otherTitle}`}
                 onClick={() => {
                   onRemove(link.id);
                 }}
               >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-                Remove
-              </Button>
+                <X aria-hidden="true" />
+              </IconButton>
             )}
           </li>
         );
@@ -216,65 +244,60 @@ export function WorkItemLinksCard({ workItemId, projectItems, canWrite }: WorkIt
   const showAdd = canWrite && !adding && candidates.length > 0;
 
   return (
-    <section aria-labelledby={titleId}>
-      <Card className="gap-0 overflow-hidden py-0">
-        <CardHeader className="items-center border-b py-4">
-          <CardTitle>
-            <h2 id={titleId}>Links</h2>
-          </CardTitle>
-          {showAdd && (
-            <CardAction>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => {
-                  create.reset();
-                  setAdding(true);
-                }}
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                Add Link
-              </Button>
-            </CardAction>
-          )}
-        </CardHeader>
-        {adding && (
-          <AddLinkForm
-            candidates={candidates}
-            busy={create.isPending}
-            error={create.error}
-            onSubmit={(targetWorkItemId, kind) => {
-              create.mutate(
-                { targetWorkItemId, kind },
-                {
-                  onSuccess: () => {
-                    setAdding(false);
-                  },
+    <section aria-labelledby={titleId} className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+        <h2 id={titleId} className="text-sm font-semibold tracking-tight text-foreground">
+          Links
+        </h2>
+        {showAdd && (
+          <button
+            type="button"
+            onClick={() => {
+              create.reset();
+              setAdding(true);
+            }}
+            className="inline-flex cursor-pointer items-center gap-1 rounded-xs px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <Plus className="size-3" aria-hidden="true" />
+            <span>Add Link</span>
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <AddLinkForm
+          candidates={candidates}
+          busy={create.isPending}
+          error={create.error}
+          onSubmit={(targetWorkItemId, kind) => {
+            create.mutate(
+              { targetWorkItemId, kind },
+              {
+                onSuccess: () => {
+                  setAdding(false);
                 },
-              );
-            }}
-            onCancel={() => {
-              setAdding(false);
-            }}
-          />
-        )}
-        {remove.error && (
-          <div className="border-b p-4">
-            <LinkAlert error={remove.error} />
-          </div>
-        )}
-        <LinksBody
-          currentItemId={workItemId}
-          isPending={linksQuery.isPending}
-          error={linksQuery.error}
-          links={linksQuery.data ?? []}
-          canWrite={canWrite}
-          busy={remove.isPending}
-          onRemove={(linkId) => {
-            remove.mutate(linkId);
+              },
+            );
+          }}
+          onCancel={() => {
+            setAdding(false);
           }}
         />
-      </Card>
+      )}
+
+      <LinkAlert error={remove.error} />
+
+      <LinksBody
+        currentItemId={workItemId}
+        isPending={linksQuery.isPending}
+        error={linksQuery.error}
+        links={linksQuery.data ?? []}
+        canWrite={canWrite}
+        busy={remove.isPending}
+        onRemove={(linkId) => {
+          remove.mutate(linkId);
+        }}
+      />
     </section>
   );
 }

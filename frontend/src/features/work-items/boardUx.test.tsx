@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { clearNavigationContext } from '@/app/navigationContext';
 import { stubApi, userDto } from '../../test/fakeApi';
 import { renderRoute } from '../../test/renderRoute';
@@ -64,9 +64,9 @@ function workItemDto(overrides: object = {}) {
     project_id: 'p1',
     work_item_type_id: 't1',
     status_id: 's1',
-    parent_id: null,
-    era_id: null,
-    assignee_id: null,
+    parent_id: null as string | null,
+    era_id: null as string | null,
+    assignee_id: null as string | null,
     assignee_username: '',
     assignee_name: '',
     title: 'Ship board drag and drop',
@@ -249,9 +249,12 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     expect(await screen.findByRole('link', { name: 'Design Polish' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/projects/p3');
 
-    // Switch Organization -> jumps straight into Globex's first Board
+    // Switch Organization -> supports search input to filter organizations
     await user.click(screen.getByRole('button', { name: 'Switch Organization' }));
     expect(screen.queryByRole('menuitem', { name: 'Add Organization' })).not.toBeInTheDocument();
+    const orgSearch = await screen.findByLabelText('Search organizations');
+    await user.type(orgSearch, 'Glob');
+    expect(screen.queryByRole('menuitem', { name: 'Acme' })).not.toBeInTheDocument();
     await user.click(await screen.findByRole('menuitem', { name: 'Globex' }));
     expect(await screen.findByRole('link', { name: 'Globex Launch' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/projects/p2');
@@ -275,12 +278,14 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     expect(cardArticle).toHaveAttribute('draggable', 'true');
     expect(cardArticle).toHaveClass('cursor-grab');
 
-    // Drag card from Backlog column to In Progress column
+    // Drag card from Backlog column to In Progress column (renders real card drag image)
     const inProgressColumn = within(board).getByRole('region', { name: 'In Progress' });
     const dataMap = new Map<string, string>();
+    const setDragImage = vi.fn();
     const dataTransfer = {
       effectAllowed: 'move',
       dropEffect: 'move',
+      setDragImage,
       setData: (type: string, value: string) => {
         dataMap.set(type, value);
       },
@@ -288,8 +293,13 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
     };
 
     if (!cardArticle) throw new Error('expected draggable card article');
-    fireEvent.dragStart(cardArticle, { dataTransfer });
-    fireEvent.dragOver(inProgressColumn, { dataTransfer });
+    fireEvent.dragStart(cardArticle, { dataTransfer, clientX: 120, clientY: 160 });
+    expect(setDragImage).toHaveBeenCalledTimes(1);
+    const preview = document.querySelector('[data-slot="board-drag-preview"]');
+    expect(preview).toBeInTheDocument();
+    expect(preview).toHaveClass('opacity-100');
+    expect(cardArticle).toHaveClass('opacity-100');
+    fireEvent.dragOver(inProgressColumn, { dataTransfer, clientX: 420, clientY: 160 });
     fireEvent.drop(inProgressColumn, { dataTransfer });
     fireEvent.dragEnd(cardArticle, { dataTransfer });
 
@@ -411,5 +421,237 @@ describe('Direct-to-Board navigation, Header Switchers, Board Drag-and-Drop and 
         }),
       }),
     );
+  });
+
+  it('opens the 80% resizable & maximizable 01C Work Item card dialog from Board card, supports board assignee picker, and omits Open full page', async () => {
+    let currentItem = workItemDto();
+    const p1Stub = projectApiStubs('p1', [currentItem]);
+
+    stubApi({
+      'GET /api/v1/users/me': Response.json(
+        userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys' }),
+      ),
+      'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      'GET /api/v1/workspaces/w1/memberships?page=1&page_size=20': pageOf([
+        {
+          workspace_id: 'w1',
+          organization_id: 'o1',
+          user_id: 'u1',
+          username: 'thamirys',
+          name: 'Thamirys',
+          role: 'owner',
+          created_at: '2026-11-24T12:00:00Z',
+        },
+        {
+          workspace_id: 'w1',
+          organization_id: 'o1',
+          user_id: 'u2',
+          username: 'bruno',
+          name: 'Bruno Silva',
+          role: 'contributor',
+          created_at: '2026-11-24T12:00:00Z',
+        },
+      ]),
+      ...p1Stub.routes,
+      'GET /api/v1/work-items/wi1': () => Response.json(currentItem),
+      'GET /api/v1/work-items/wi1/links': Response.json({ items: [] }),
+      'PATCH /api/v1/work-items/wi1': ({ body }: RequestInit) => {
+        const parsed =
+          typeof body === 'string' ? (JSON.parse(body) as Record<string, unknown>) : {};
+        currentItem = {
+          ...currentItem,
+          title: typeof parsed.title === 'string' ? parsed.title : currentItem.title,
+          assignee_id:
+            'assignee_id' in parsed
+              ? (parsed.assignee_id as string | null)
+              : currentItem.assignee_id,
+          assignee_name: parsed.assignee_id === 'u2' ? 'Bruno Silva' : currentItem.assignee_name,
+          assignee_username: parsed.assignee_id === 'u2' ? 'bruno' : currentItem.assignee_username,
+        };
+        return Response.json(currentItem);
+      },
+    });
+
+    const { user, router } = renderRoute('/projects/p1');
+    const board = await screen.findByRole('region', { name: 'Work Items board' });
+    const cardLink = await within(board).findByRole('link', { name: 'Ship board drag and drop' });
+    const cardArticle = cardLink.closest('article');
+    if (!cardArticle) throw new Error('expected board card article');
+
+    // Board card renders type icon, 8-digit numeric key, Unassigned picker below title, and no status select
+    const cardKey = cardArticle.querySelector('[data-slot="work-item-key"]');
+    expect(cardKey?.textContent).toMatch(/^\d{8}$/);
+    expect(cardArticle.querySelector('[data-slot="work-item-type-icon"]')).toBeInTheDocument();
+    expect(
+      within(cardArticle).queryByLabelText('Status for Ship board drag and drop'),
+    ).not.toBeInTheDocument();
+
+    // Assign a user directly from the Board card searchable popover
+    await user.click(
+      within(cardArticle).getByRole('button', { name: 'Assign Ship board drag and drop' }),
+    );
+    const assigneeSearch = await screen.findByLabelText('Search assignee');
+    await user.type(assigneeSearch, 'Bruno');
+    await user.click(await screen.findByRole('button', { name: /Bruno Silva/i }));
+    expect(screen.queryByRole('dialog', { name: 'Work Item details' })).not.toBeInTheDocument();
+
+    // Click card body (key badge) -> opens 80% x 80% resizable & maximizable 01C dialog without Open full page
+    if (!cardKey) throw new Error('expected work-item-key element');
+    await user.click(cardKey);
+    const dialog = await screen.findByRole('dialog', { name: 'Work Item details' });
+    const backdrop = document.querySelector('[data-slot="work-item-detail-backdrop"]');
+    expect(backdrop).toHaveClass('z-[55]');
+    expect(dialog).toHaveClass('z-[60]', 'w-[80vw]', 'h-[80svh]');
+    expect(router.state.location.pathname).toBe('/projects/p1');
+    expect(dialog).toHaveAttribute('data-maximized', 'false');
+    expect(within(dialog).getByText(cardKey.textContent)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: 'Open full page' })).not.toBeInTheDocument();
+
+    // Resize vertically via top and bottom border handles
+    const bottomHandle = within(dialog).getByRole('separator', {
+      name: 'Resize card bottom border',
+    });
+    fireEvent.pointerDown(bottomHandle, { clientY: 700 });
+    fireEvent.pointerMove(window, { clientY: 740 });
+    fireEvent.pointerUp(window);
+    expect(dialog.style.height).not.toBe('');
+
+    const topHandle = within(dialog).getByRole('separator', { name: 'Resize card top border' });
+    fireEvent.pointerDown(topHandle, { clientY: 90 });
+    fireEvent.pointerMove(window, { clientY: 130 });
+    fireEvent.pointerUp(window);
+
+    // Maximize hides resize handles, Restore brings them back
+    await user.click(within(dialog).getByRole('button', { name: 'Maximize work item' }));
+    expect(dialog).toHaveAttribute('data-maximized', 'true');
+    expect(
+      within(dialog).queryByRole('separator', { name: 'Resize card bottom border' }),
+    ).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Restore work item size' }));
+    expect(dialog).toHaveAttribute('data-maximized', 'false');
+
+    // Save & Close updates the Work Item and closes the dialog
+    const titleInput = within(dialog).getByLabelText('Title');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Ship maximizable card modal');
+    await user.click(within(dialog).getByRole('button', { name: 'Save & Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Work Item details' })).not.toBeInTheDocument();
+  });
+
+  it('reorders cards above or below another card in the same column with visual insertion indicator', async () => {
+    const p1Stub = projectApiStubs('p1', [
+      workItemDto({ id: 'wi1', title: 'First card', status_id: 's1' }),
+      workItemDto({ id: 'wi2', title: 'Second card', status_id: 's1' }),
+      workItemDto({ id: 'wi3', title: 'Third card', status_id: 's1' }),
+    ]);
+
+    stubApi({
+      'GET /api/v1/users/me': Response.json(
+        userDto({ id: 'u1', name: 'Thamirys', username: 'thamirys' }),
+      ),
+      'GET /api/v1/projects?workspace_id=w1&page=1&page_size=20': pageOf([projectDto()]),
+      ...p1Stub.routes,
+    });
+
+    renderRoute('/projects/p1');
+    const board = await screen.findByRole('region', { name: 'Work Items board' });
+    const backlogCol = within(board).getByRole('region', { name: 'Backlog' });
+    const firstCard = (await within(backlogCol).findByRole('link', { name: 'First card' })).closest(
+      'article',
+    );
+    const thirdCard = within(backlogCol)
+      .getByRole('link', { name: 'Third card' })
+      .closest('article');
+    if (!firstCard || !thirdCard) throw new Error('expected board cards');
+
+    vi.spyOn(firstCard, 'getBoundingClientRect').mockReturnValue({
+      top: 100,
+      bottom: 200,
+      height: 100,
+      left: 20,
+      right: 280,
+      width: 260,
+      x: 20,
+      y: 100,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(thirdCard, 'getBoundingClientRect').mockReturnValue({
+      top: 320,
+      bottom: 420,
+      height: 100,
+      left: 20,
+      right: 280,
+      width: 260,
+      x: 20,
+      y: 320,
+      toJSON: () => ({}),
+    });
+
+    const dataMap = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: 'move',
+      dropEffect: 'move',
+      setDragImage: vi.fn(),
+      setData: (type: string, value: string) => {
+        dataMap.set(type, value);
+      },
+      getData: (type: string) => dataMap.get(type) ?? '',
+    };
+
+    function fireDrag(
+      type: 'dragStart' | 'dragOver' | 'drop' | 'dragEnd',
+      target: Element,
+      clientY: number,
+    ) {
+      const event = createEvent[type](target);
+      Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+      Object.defineProperty(event, 'clientX', { value: 60 });
+      Object.defineProperty(event, 'clientY', { value: clientY });
+      fireEvent(target, event);
+    }
+
+    // Drag Third card ABOVE First card (top half of First card: clientY = 110 < 150)
+    fireDrag('dragStart', thirdCard, 350);
+    fireDrag('dragOver', firstCard, 110);
+    expect(
+      backlogCol.querySelector('[data-slot="board-drop-indicator"][data-position="before"]'),
+    ).toBeInTheDocument();
+    fireDrag('drop', firstCard, 110);
+    fireDrag('dragEnd', thirdCard, 110);
+
+    const afterBeforeDrop = within(backlogCol)
+      .getAllByRole('link')
+      .map((el) => el.textContent);
+    expect(afterBeforeDrop).toEqual(['Third card', 'First card', 'Second card']);
+
+    // Drag Third card BELOW Second card (bottom half of Second card: clientY = 390 > 370)
+    const secondCard = within(backlogCol)
+      .getByRole('link', { name: 'Second card' })
+      .closest('article');
+    if (!secondCard) throw new Error('expected second card');
+    vi.spyOn(secondCard, 'getBoundingClientRect').mockReturnValue({
+      top: 320,
+      bottom: 420,
+      height: 100,
+      left: 20,
+      right: 280,
+      width: 260,
+      x: 20,
+      y: 320,
+      toJSON: () => ({}),
+    });
+
+    fireDrag('dragStart', thirdCard, 120);
+    fireDrag('dragOver', secondCard, 390);
+    expect(
+      backlogCol.querySelector('[data-slot="board-drop-indicator"][data-position="after"]'),
+    ).toBeInTheDocument();
+    fireDrag('drop', secondCard, 390);
+    fireDrag('dragEnd', thirdCard, 390);
+
+    const afterBottomDrop = within(backlogCol)
+      .getAllByRole('link')
+      .map((el) => el.textContent);
+    expect(afterBottomDrop).toEqual(['First card', 'Second card', 'Third card']);
   });
 });

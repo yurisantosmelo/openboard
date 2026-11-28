@@ -279,4 +279,61 @@ describe('OpenBoard List, Table and Timeline views', () => {
     await user.click(screen.getByRole('button', { name: 'Months' }));
     expect(screen.getByRole('button', { name: 'Months' })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('allows searching and assigning users directly in List and Table views', async () => {
+    const user = userEvent.setup();
+    const onAssign = vi.fn();
+    const participants = [
+      { id: 'u1', name: 'Alfredo Melo', username: 'alfredo' },
+      { id: 'u2', name: 'Bruno Silva', username: 'bruno' },
+    ];
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <WorkItemsListView
+          items={items}
+          statuses={statuses}
+          eras={eras}
+          typeNames={typeNames}
+          statusNames={statusNames}
+          participants={participants}
+          canWrite={true}
+          busy={false}
+          onTransition={vi.fn()}
+          onAssign={onAssign}
+        />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Assign Cursor-based pagination API' }));
+    const listSearch = await screen.findByLabelText('Search assignee');
+    await user.type(listSearch, 'Bruno');
+    expect(screen.queryByRole('button', { name: /Alfredo Melo/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Bruno Silva/i }));
+    expect(onAssign).toHaveBeenCalledWith('wi2', 'u2');
+
+    rerender(
+      <MemoryRouter>
+        <WorkItemsTableView
+          items={items}
+          statuses={statuses}
+          eras={eras}
+          typeNames={typeNames}
+          statusNames={statusNames}
+          participants={participants}
+          canWrite={true}
+          busy={false}
+          onTransition={vi.fn()}
+          onAssign={onAssign}
+        />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Assign Custom OpenBoard UI components' }));
+    const tableSearch = await screen.findByLabelText('Search assignee');
+    await user.type(tableSearch, 'nobody-here');
+    expect(screen.getByText('No matching users')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Unassigned' }));
+    expect(onAssign).toHaveBeenCalledWith('wi1', null);
+  });
 });

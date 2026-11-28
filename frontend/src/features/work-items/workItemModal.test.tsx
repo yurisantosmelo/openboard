@@ -6,6 +6,7 @@ import type { ProjectStatus, ProjectWorkItemType } from '@/features/projects';
 import type { WorkItem } from './api/workItemsApi';
 import { CreateWorkItemDialog } from './components/CreateWorkItemForm';
 import { WorkItemsBoardView } from './components/WorkItemsBoardView';
+import { WorkItemTypeIcon } from './components/WorkItemTypeIcon';
 
 const statuses: ProjectStatus[] = [
   {
@@ -115,15 +116,17 @@ describe('BoardColumn semantic tones and WorkItemModal maximize toggle', () => {
 
     render(
       <QueryClientProvider client={client}>
-        <CreateWorkItemDialog
-          open={true}
-          onOpenChange={vi.fn()}
-          projectId="p1"
-          statuses={statuses}
-          workItemTypes={types}
-          existingItems={[sampleItem]}
-          participants={[{ id: 'u1', name: 'Alfredo Melo', username: 'alfredo' }]}
-        />
+        <MemoryRouter>
+          <CreateWorkItemDialog
+            open={true}
+            onOpenChange={vi.fn()}
+            projectId="p1"
+            statuses={statuses}
+            workItemTypes={types}
+            existingItems={[sampleItem]}
+            participants={[{ id: 'u1', name: 'Alfredo Melo', username: 'alfredo' }]}
+          />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -139,5 +142,89 @@ describe('BoardColumn semantic tones and WorkItemModal maximize toggle', () => {
     expect(minBtn).toHaveTextContent('');
     await user.click(minBtn);
     expect(dialog).not.toHaveAttribute('data-maximized');
+  });
+
+  it('inserts markdown formatting, displays project and Era dates, and supports Create & Open', async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <CreateWorkItemDialog
+            open={true}
+            onOpenChange={vi.fn()}
+            projectId="p1"
+            projectName="Core Platform"
+            statuses={statuses}
+            workItemTypes={types}
+            existingItems={[sampleItem]}
+            eras={[
+              {
+                id: 'e1',
+                projectId: 'p1',
+                name: 'Sprint 14',
+                goal: 'Ship UI',
+                startDate: '2026-11-18',
+                endDate: '2026-12-01',
+                state: 'active',
+                closedAt: null,
+                createdAt: '2026-11-18T00:00:00Z',
+                updatedAt: '2026-11-18T00:00:00Z',
+              },
+            ]}
+            participants={[{ id: 'u1', name: 'Alfredo Melo', username: 'alfredo' }]}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Core Platform')).toBeInTheDocument();
+    expect(screen.getByText('Markdown enabled')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create & Open' })).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Era'), 'e1');
+    expect(screen.getByText('2026-11-18')).toBeInTheDocument();
+    expect(screen.getByText('2026-12-01')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Bold' }));
+    expect(screen.getByLabelText('Description')).toHaveValue('**bold**');
+
+    // Collapsible Planning & Details toggle
+    await user.click(screen.getByRole('button', { name: 'Planning & Details' }));
+    expect(screen.queryByText('2026-11-18')).not.toBeInTheDocument();
+  });
+
+  it('maps each Work Item Type to its exact Lucide icon (Crown, Bug, Trophy, FileCheck, BookOpenText)', () => {
+    const { container } = render(
+      <div>
+        <WorkItemTypeIcon typeName="Epic" />
+        <WorkItemTypeIcon typeName="Bug" />
+        <WorkItemTypeIcon typeName="Feature" />
+        <WorkItemTypeIcon typeName="Task" />
+        <WorkItemTypeIcon typeName="User Story" />
+        <WorkItemTypeIcon typeName="Spike" />
+      </div>,
+    );
+
+    expect(container.querySelector('.lucide-crown')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-bug')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-trophy')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-file-check')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-book-open-text')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-layers')).toBeInTheDocument();
+
+    const wrappers = Array.from(container.querySelectorAll('[data-slot="work-item-type-icon"]'));
+    expect(wrappers).toHaveLength(6);
+    for (const wrapper of wrappers) {
+      expect(wrapper.className).not.toMatch(/\bbg-/);
+    }
+
+    const svgClasses = wrappers.map((el) => el.querySelector('svg')?.getAttribute('class') ?? '');
+    expect(new Set(svgClasses).size).toBe(6);
+    for (const cls of svgClasses) {
+      expect(cls).toMatch(/\btext-/);
+      expect(cls).toMatch(/\bfill-/);
+    }
   });
 });

@@ -198,15 +198,10 @@ describe('Work Items on ProjectPage', () => {
     expect(await screen.findByRole('link', { name: 'Write unit tests' })).toBeInTheDocument();
     expect(screen.getByText('3 h')).toBeInTheDocument();
 
-    // Board view transitions Status
+    // Board view shows Backlog column without inline status dropdowns (drag-and-drop moves cards)
     const board = await screen.findByRole('region', { name: 'Work Items board' });
     expect(within(board).getByRole('heading', { name: 'Backlog' })).toBeInTheDocument();
-    await user.selectOptions(within(board).getByLabelText('Status for Implement OAuth'), 's2');
-    expect(
-      within(within(board).getByRole('region', { name: 'In Progress' })).getByRole('link', {
-        name: 'Implement OAuth',
-      }),
-    ).toBeInTheDocument();
+    expect(within(board).queryByLabelText('Status for Implement OAuth')).not.toBeInTheDocument();
 
     // Live search filters items client-side
     const searchInput = screen.getByLabelText('Search work items');
@@ -215,8 +210,15 @@ describe('Work Items on ProjectPage', () => {
     expect(screen.queryByRole('link', { name: 'Implement OAuth' })).not.toBeInTheDocument();
     await user.clear(searchInput);
 
-    // Switch to Backlogs (List) and filter by Priority via collapsible Notion-style filter bar
+    // Switch to Backlogs (List), transition Status inline and filter by Priority
     await user.click(screen.getByRole('button', { name: 'Backlogs' }));
+    const listRegion = await screen.findByRole('region', { name: 'Work Items list' });
+    await user.selectOptions(within(listRegion).getByLabelText('Status for Implement OAuth'), 's2');
+    expect(
+      within(within(listRegion).getByRole('region', { name: 'In Progress' })).getByRole('link', {
+        name: 'Implement OAuth',
+      }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
     const filtersRegion = screen.getByRole('region', { name: 'Filters' });
     await user.click(within(filtersRegion).getByRole('button', { name: 'Filter' }));

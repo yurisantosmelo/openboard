@@ -25,6 +25,8 @@ export interface ProjectShellState {
 export interface ProjectShellContextValue {
   shell: ProjectShellState | null;
   setShell: (shell: ProjectShellState | null) => void;
+  openWorkItem?: (workItemId: string) => void;
+  closeWorkItem?: () => void;
 }
 
 export const ProjectShellContext = createContext<ProjectShellContextValue>({

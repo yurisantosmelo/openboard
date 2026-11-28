@@ -9,6 +9,9 @@ import type {
   ViewVisibility,
 } from '@/features/projects';
 import type { Priority, WorkItem } from '@/features/work-items/api/workItemsApi';
+import { formatShortKey } from '@/features/work-items/components/workItemLabels';
+
+export { formatShortKey };
 
 export type PaletteTab = 'all' | 'work-items' | 'projects-views' | 'commands';
 
@@ -17,10 +20,6 @@ export type UpdatedWindow = 'any' | 'today' | '7d' | '30d' | 'active-era';
 export interface PaletteActionEntry {
   id: string;
   run: () => void;
-}
-
-export function formatShortKey(id: string): string {
-  return `#${id.slice(0, 6).toUpperCase()}`;
 }
 
 export interface PaletteParticipant {

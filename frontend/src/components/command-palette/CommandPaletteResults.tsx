@@ -8,12 +8,9 @@ import type {
   ProjectWorkItemType,
 } from '@/features/projects';
 import type { WorkItem } from '@/features/work-items/api/workItemsApi';
-import {
-  initialsOf,
-  resolveStatusTone,
-  typeDotClass,
-} from '@/features/work-items/components/statusTone';
+import { initialsOf, resolveStatusTone } from '@/features/work-items/components/statusTone';
 import { formatEstimate } from '@/features/work-items/components/workItemLabels';
+import { WorkItemTypeIcon } from '@/features/work-items/components/WorkItemTypeIcon';
 import { cn } from '@/lib/utils';
 import {
   formatShortKey,
@@ -152,11 +149,8 @@ function AllWorkItemsSection({
             )}
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span
-                className={cn('size-[7px] shrink-0 rounded-xs', typeDotClass(typeName))}
-                aria-hidden="true"
-              />
-              <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
+              <WorkItemTypeIcon typeName={typeName} />
+              <span className="shrink-0 font-mono text-2xs font-medium text-muted-foreground tabular-nums">
                 {formatShortKey(item.id)}
               </span>
               <span className={cn('truncate text-xs text-foreground', selected && 'font-medium')}>
@@ -392,11 +386,8 @@ function WorkItemsTabResults(props: CommandPaletteResultsProps) {
             >
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span
-                    className={cn('size-[7px] shrink-0 rounded-xs', typeDotClass(typeName))}
-                    aria-hidden="true"
-                  />
-                  <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
+                  <WorkItemTypeIcon typeName={typeName} />
+                  <span className="shrink-0 font-mono text-2xs font-medium text-muted-foreground tabular-nums">
                     {formatShortKey(item.id)}
                   </span>
                   <span

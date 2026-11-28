@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Building2, Check, ChevronDown, FolderKanban } from 'lucide-react';
+import { Building2, Check, ChevronDown, FolderKanban, Search } from 'lucide-react';
 import { useState, useSyncExternalStore } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
@@ -184,8 +184,44 @@ interface ReadOnlySwitcherProps<T extends { id: string; name: string }> {
   label?: string;
   menuTitle: string;
   ariaLabel: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
   icon: typeof Building2;
   onSelect: (item: T) => void;
+}
+
+function ContextSearchInput({
+  menuTitle,
+  placeholder,
+  value,
+  onChange,
+}: {
+  menuTitle: string;
+  placeholder?: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div className="px-1.5 pb-1.5">
+      <div className="flex h-7 items-center gap-1.5 rounded-xs border border-input bg-background px-2">
+        <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <input
+          type="search"
+          autoFocus
+          aria-label={`Search ${menuTitle.toLowerCase()}`}
+          placeholder={placeholder ?? `Search ${menuTitle.toLowerCase()}...`}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') e.stopPropagation();
+          }}
+          className="w-full min-w-0 bg-transparent text-xs text-foreground outline-none placeholder:text-placeholder [&::-webkit-search-cancel-button]:hidden"
+        />
+      </div>
+    </div>
+  );
 }
 
 function ReadOnlyContextControl<T extends { id: string; name: string }>({
@@ -194,18 +230,32 @@ function ReadOnlyContextControl<T extends { id: string; name: string }>({
   label,
   menuTitle,
   ariaLabel,
+  searchable = false,
+  searchPlaceholder,
   icon: Icon,
   onSelect,
 }: ReadOnlySwitcherProps<T>) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const resolvedLabel = items.find((item) => item.id === activeId)?.name ?? label;
+  const trimmed = query.trim().toLowerCase();
+  const visibleItems =
+    searchable && trimmed
+      ? items.filter((item) => item.name.toLowerCase().includes(trimmed))
+      : items;
 
   if (items.length <= 1) {
     return null;
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setQuery('');
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -219,21 +269,40 @@ function ReadOnlyContextControl<T extends { id: string; name: string }>({
           <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-60">
+      <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel>{menuTitle}</DropdownMenuLabel>
-        {items.map((item) => (
-          <DropdownMenuItem
-            key={item.id}
-            onSelect={() => {
-              setOpen(false);
-              onSelect(item);
-            }}
-          >
-            <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-            <span className="flex-1 truncate">{item.name}</span>
-            {item.id === activeId && <Check className="size-3.5 text-primary" aria-hidden="true" />}
-          </DropdownMenuItem>
-        ))}
+        {searchable && (
+          <ContextSearchInput
+            menuTitle={menuTitle}
+            placeholder={searchPlaceholder}
+            value={query}
+            onChange={setQuery}
+          />
+        )}
+        <div className="max-h-60 overflow-y-auto">
+          {visibleItems.length === 0 ? (
+            <p className="px-2 py-3 text-center text-2xs text-muted-foreground">
+              No matching {menuTitle.toLowerCase()}
+            </p>
+          ) : (
+            visibleItems.map((item) => (
+              <DropdownMenuItem
+                key={item.id}
+                onSelect={() => {
+                  setOpen(false);
+                  setQuery('');
+                  onSelect(item);
+                }}
+              >
+                <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                <span className="flex-1 truncate">{item.name}</span>
+                {item.id === activeId && (
+                  <Check className="size-3.5 text-primary" aria-hidden="true" />
+                )}
+              </DropdownMenuItem>
+            ))
+          )}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -269,6 +338,8 @@ function ContextBar({ userId, orgs, workspaces, active }: ContextBarProps) {
           label={firstFallbackName(orgs, active.organizationName)}
           menuTitle="Organizations"
           ariaLabel="Switch Organization"
+          searchable
+          searchPlaceholder="Search organizations..."
           icon={Building2}
           onSelect={(org) => {
             void resolveOrganizationDestination(org, userId).then((dest) => navigate(dest));
